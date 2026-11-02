@@ -38,6 +38,14 @@
     projectLock.stop();
   });
 
+  // A full document unload (reload, closed tab) never runs that teardown:
+  // give the server a best-effort goodbye so the lock frees at once instead
+  // of waiting out the lease, then stop polling a dead document.
+  function handlePageHide(): void {
+    void projectLock.release();
+    projectLock.stop();
+  }
+
   $effect(() => {
     const id = data.projectId;
     if (id === loadedId) return;
@@ -68,6 +76,8 @@
 <svelte:head>
   <title>{tabTitle}</title>
 </svelte:head>
+
+<svelte:window onpagehide={handlePageHide} />
 
 {#if loading}
   <div class="flex-1 flex items-center justify-center text-base-content/60">

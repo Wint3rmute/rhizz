@@ -198,6 +198,17 @@ after `node:fs/promises`) is the only thing pages use; the id-based
   elsewhere the write is refused) — so one tab can no longer overwrite or
   delete another tab's projects. (`PUT /api/vfs` is gone and answers 410.)
 
+Collaboration runs on those locks (proposal 0004, implemented): the open
+project polls `GET .../state` every 4 seconds (backing off to 30 s while the
+server is unreachable), the holder renews its 15 s lease with a heartbeat
+every 10 seconds, and a minute without edits frees the project even while
+heartbeats arrive. A page whose project is held by someone else goes
+read-only — editors refuse input, creation buttons hide or disable, and a
+refused write reloads and names the holder in a toast. A lock badge (🔒 +
+holder, with a display-name rename) sits in the navbar and in the status bar.
+A closing tab says goodbye with a best-effort `POST .../release`; the lease
+lapsing covers the rest.
+
 The server does not invent a container format for that payload: it expands a
 project into a **directory of ordinary files** — `system.hcl`, `views/*.hcl`,
 `docs/*.md`, plus anything else the project contains — one directory per

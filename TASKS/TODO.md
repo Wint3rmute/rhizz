@@ -186,21 +186,6 @@ Definition of done:
 ---
 
 
-## Task <N> — 0004.5 Lock/poll timing tune + hardening
-
-Final pass over 0004.1-0004.4. Mark [0004](book/src/proposals/0004-locking-and-collab.md) implemented.
-
-- Tune lease length, heartbeat interval, poll interval, 60s idle (proposal leaves timings to implementation). Document chosen values in proposal + `SPEC/frontend.md`/`SPEC/architecture.md`.
-- Harden: same-user two-tab self-lockout decision (`user#tabId` vs shared holder), heartbeat stops on `pagehide`, poll backoff on failure, `pagehide` best-effort heartbeat-stop/release.
-- Flip proposal status draft → implemented, close open questions (project-list icons yes/no).
-- Full validation: `just test`, `just lint`, `just build`, relevant e2e re-run.
-
-Definition of done:
-
-- Timings documented, proposal status flipped, full suite green.
-
----
-
 ## Task <NUMBER> — Task template
 
 - Task description here

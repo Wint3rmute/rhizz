@@ -1,6 +1,6 @@
 # 0004: Locking and Collaboration
 
-- **Status:** draft
+- **Status:** implemented
 - **Author:** @wint3rmute
 - **Created:** 2026.10.19
 
@@ -38,11 +38,32 @@ edits it; everyone else sees it read-only and follows the editor's changes.
 - **Identity (PoC):** the username is kept in `localStorage` and sent with each
   request. The server trusts it. There is no authentication. MCP-using entities get a hardcoded `AI` username.
 - **No override:** there is no force-unlock. A stuck lock clears itself.
+- **Voluntary release:** a closing tab says goodbye with a best-effort
+  `POST /api/projects/{id}/release` (only the holder can release their own
+  lock), so the address is reusable at once instead of waiting out the
+  lease. The lease still lapses on its own if the request never lands.
 - **Losing the lock:** if a save is refused because the lock was lost, the
   client discards its unsaved edits, reloads the project and becomes read-only.
 
-**UI:** a locked project shows a lock icon (🔒) in the navbar. Clicking it shows
-who holds the lock.
+**UI:** a locked project shows a lock icon (🔒) in the navbar and in the
+status bar. Clicking it shows who holds the lock and offers a display-name
+rename.
+
+## Tuned timings
+
+| Knob | Value | Where |
+| ---- | ----- | ----- |
+| Lease length | 15 s | server (`LockManager::LEASE_DURATION`) |
+| Heartbeat interval | 10 s | web (`LOCK_HEARTBEAT_MS`) |
+| Poll interval | 4 s, backing off to 30 s while the server is unreachable | web (`LOCK_POLL_MS`, `LOCK_POLL_MAX_MS`) |
+| Idle release | 60 s without edits | server (`LockManager::IDLE_TIMEOUT`) |
+
+Heartbeats renew the lease but never the idle timer, so an abandoned-yet-open
+tab still lets go after a minute without edits. Polls are plain `setTimeout`
+chains (no push channel yet — see Alternatives). Two tabs under one username
+share a holder string on purpose: the PoC cannot tell tabs apart, and
+self-lockout would be worse than sharing. A `user#tabId` suffix can be
+adopted later without changing the protocol.
 
 ## Diagnostics
 
@@ -74,6 +95,7 @@ dir) are not covered by locks. They show up to watchers as a version change.
 
 ## Open questions
 
-- Should a project list show lock icons too?
-- Lock and poll timings (lease length, poll interval) are tuned during
-  implementation.
+- ~~Should a project list show lock icons too?~~ No: deferred. The badge
+  lives in the navbar and the status bar, where the project is open.
+- ~~Lock and poll timings (lease length, poll interval) are tuned during
+  implementation.~~ Tuned — see above.

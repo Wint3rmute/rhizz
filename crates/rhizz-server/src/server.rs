@@ -245,10 +245,7 @@ async fn release_lock(
         }
         Err(storage::ProjectError::Io(err)) => {
             tracing::error!(?err, "failed to read project");
-            return error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to read project",
-            );
+            return error_response(StatusCode::INTERNAL_SERVER_ERROR, "failed to read project");
         }
     }
     if state.locks.release_if_held_by(&id, &user) {
@@ -1431,7 +1428,11 @@ mod tests {
         // Alice holds it …
         let response = app
             .clone()
-            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("alice")))
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -1450,14 +1451,15 @@ mod tests {
 
         // Bob takes it right away.
         let response = app
-            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("bob")))
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("bob"),
+            ))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            body_json(response).await["lockedBy"],
-            json!("bob")
-        );
+        assert_eq!(body_json(response).await["lockedBy"], json!("bob"));
     }
 
     #[tokio::test]
@@ -1481,7 +1483,11 @@ mod tests {
         // no force-unlock.
         let response = app
             .clone()
-            .oneshot(lock_request("POST", "/api/projects/drone/lock", Some("alice")))
+            .oneshot(lock_request(
+                "POST",
+                "/api/projects/drone/lock",
+                Some("alice"),
+            ))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
