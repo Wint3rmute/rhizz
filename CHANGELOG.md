@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: fold lock badge into project title trigger
 - **server,web**: tune and harden project locks, mark 0004 implemented
 - **server**: add voluntary lock release endpoint
 - **mcp**: enforce AI project lock on writes, echo version and lock on reads
