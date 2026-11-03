@@ -219,16 +219,6 @@ export class ProjectLock {
 export const projectLock = new ProjectLock();
 
 /**
- * The base version the HTTP backend attaches to per-project writes, or
- * null when there is nothing fresh to compare against (local backends,
- * never polled). Same-user tabs share one holder, so this compare-and-swap
- * token is what protects them from silently overwriting each other.
- */
-export function getLockBaseVersion(): string | null {
-  return projectLock.active ? projectLock.version : null;
-}
-
-/**
  * Handles a refused write: re-reads the lock state, reloads the caller, and
  * tells the user what happened. The caller passes its own reload (and, for
  * draft-holding editors, draft cleanup first): the shared cache was already

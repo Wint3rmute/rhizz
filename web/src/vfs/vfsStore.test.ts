@@ -5,7 +5,6 @@
 // "VfsProjectStore read cache" suite at the bottom of this file, and the
 // create/delete console announcements are in the suite after it.
 import { describe, expect, it, vi } from "vitest";
-import { getLockBaseVersion, projectLock } from "../collab/projectLock.svelte";
 import {
   LocalStorageProjectStore,
   memoryBackend,
@@ -178,6 +177,25 @@ function makeFakeFetch(options: FakeServerFetchOptions = {}): FakeServerFetch {
       return Promise.resolve(new Response("not found", { status: 404 }));
     }
     const user = userOf(init);
+    if (action === "state") {
+      const entry = projects.get(projectId);
+      if (entry === undefined) {
+        return Promise.resolve(
+          new Response("unknown project", { status: 404 }),
+        );
+      }
+      const holder = locks.get(projectId);
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            version: versionOf(projectId),
+            lockedBy: holder ?? null,
+            ...(holder === undefined ? {} : { lockExpiresAt: "t1" }),
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        ),
+      );
+    }
     if (action === "lock" || action === "heartbeat") {
       if (user === null || user === "") {
         return Promise.resolve(new Response("missing user", { status: 400 }));
@@ -288,18 +306,23 @@ describe("ServerProjectStore HTTP behavior", () => {
       getUser: () => "alice",
     });
     await store.createProject("drone");
-    expect(fake.calls.map((c) => c.method)).toEqual(["GET", "PUT"]);
+    // Bootstrap, then a version read plus the project write.
+    expect(fake.calls.map((c) => c.method)).toEqual(["GET", "GET", "PUT"]);
     expect(fake.calls[0]?.url).toBe("http://rhizz-server/api/vfs");
     expect(fake.calls[1]?.url).toBe(
+      "http://rhizz-server/api/projects/drone/state",
+    );
+    expect(fake.calls[2]?.url).toBe(
       "http://rhizz-server/api/projects/drone/files",
     );
-    expect(fake.calls[1]?.user).toBe("alice");
+    expect(fake.calls[2]?.user).toBe("alice");
 
-    const putBody = JSON.parse(fake.calls[1]?.body ?? "{}") as {
+    const putBody = JSON.parse(fake.calls[2]?.body ?? "{}") as {
       base_version?: string;
       files: unknown[];
     };
-    // A fresh project holds no nodes yet; the version is lock-only.
+    // A fresh project holds no nodes yet, and the server had no state for
+    // it — so the write carries no version.
     expect(putBody.base_version).toBeUndefined();
     expect(putBody.files).toEqual([]);
   });
@@ -316,6 +339,7 @@ describe("ServerProjectStore HTTP behavior", () => {
     const put = [...fake.calls].reverse().find((c) => c.method === "PUT");
     expect(put?.url).toBe("http://rhizz-server/api/projects/drone/files");
     expect(JSON.parse(put?.body ?? "{}")).toEqual({
+      base_version: "v1",
       files: [{ path: "system.hcl", content: "system {}" }],
     });
   });
@@ -395,29 +419,106 @@ describe("ServerProjectStore HTTP behavior", () => {
     expect(await tabB.listNodes(project.id)).toHaveLength(1);
   });
 
-  it("attaches the lock version as the write's base version", async () => {
+  it("versions each write against a freshly read state", async () => {
     const fake = makeFakeFetch();
     const store = new ServerProjectStore("http://rhizz-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
-      getBaseVersion: getLockBaseVersion,
       now: () => "t0",
     });
-    projectLock.me = "alice";
-    projectLock.projectId = "drone";
-    projectLock.serverUrl = "http://rhizz-server";
-    try {
-      const project = await store.createProject("drone");
-      // The polled version (here, the fake's counter after the create).
-      projectLock.version = "v1";
-      await store.createFile(project.id, null, "system.hcl", "system {}");
-      const put = [...fake.calls].reverse().find((c) => c.method === "PUT");
-      expect(JSON.parse(put?.body ?? "{}")).toMatchObject({
-        base_version: "v1",
-      });
-    } finally {
-      projectLock.stop();
-    }
+    const project = await store.createProject("drone");
+    // The create found no state (404), so it wrote without a version.
+    const created = [...fake.calls].reverse().find((c) => c.method === "PUT");
+    expect(JSON.parse(created?.body ?? "{}")).not.toHaveProperty(
+      "base_version",
+    );
+    // The next write re-reads: it carries v1, not a cached token.
+    await store.createFile(project.id, null, "system.hcl", "system {}");
+    const updated = [...fake.calls].reverse().find((c) => c.method === "PUT");
+    expect(JSON.parse(updated?.body ?? "{}")).toMatchObject({
+      base_version: "v1",
+    });
+  });
+
+  it("refuses the write when the state read fails", async () => {
+    const fake = makeFakeFetch({ status: 500 });
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    // The version read fails before any PUT goes out.
+    await expect(store.createProject("drone")).rejects.toThrow(/500/);
+    expect(fake.calls.some((c) => c.method === "PUT")).toBe(false);
+  });
+
+  it("never touches projects the mutation did not change", async () => {
+    // Regression test: per-mutation writes used to PUT every project in the
+    // blob with one shared base version, so an edit in one project was
+    // refused by another project's version — and could even fail to persist
+    // at all when the foreign project sorted first.
+    const fake = makeFakeFetch({
+      blob: {
+        version: 1,
+        projects: [
+          {
+            id: "apollo",
+            name: "apollo",
+            createdAt: "t0",
+            updatedAt: "t0",
+          },
+          {
+            id: "drone",
+            name: "drone",
+            createdAt: "t0",
+            updatedAt: "t0",
+          },
+        ],
+        nodes: [
+          {
+            id: "a-sys",
+            projectId: "apollo",
+            parentId: null,
+            name: "system.hcl",
+            kind: "file",
+            content: 'system "a" {}\n',
+            revision: 0,
+            updatedAt: "t0",
+          },
+          {
+            id: "d-sys",
+            projectId: "drone",
+            parentId: null,
+            name: "system.hcl",
+            kind: "file",
+            content: 'system "d" {}\n',
+            revision: 0,
+            updatedAt: "t0",
+          },
+        ],
+      },
+    });
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      getUser: () => "alice",
+      now: () => "t0",
+    });
+    // The fake serves path-derived ids, like the real server.
+    await store.updateFileContent(
+      "drone",
+      "drone/system.hcl",
+      'system "d2" {}\n',
+    );
+
+    const projectUrls = fake.calls
+      .map((c) => c.url)
+      .filter((url) => url.includes("/api/projects/"));
+    expect(projectUrls).toEqual([
+      "http://rhizz-server/api/projects/drone/state",
+      "http://rhizz-server/api/projects/drone/files",
+    ]);
+    // Apollo's tree is byte-identical on the fake server.
+    expect(await store.listNodes("apollo")).toHaveLength(1);
   });
 
   it("strips trailing slashes from the base url", async () => {
