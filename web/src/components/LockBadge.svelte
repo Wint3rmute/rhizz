@@ -1,7 +1,9 @@
-<!-- A locked project's badge: who holds it, and (for us) a display-name
-     rename. Reads nothing on its own — the holder comes in as a prop so
-     stories stay deterministic; the app passes the shared lock state.
-     Renders nothing when the project is free. -->
+<!-- The project lock affordance: an optional label (the project name) with
+     an inline lock icon when held — no badge chrome. The whole thing is one
+     dropdown trigger opening the holder menu (who holds it, your name, and
+     the rename row). Reads the holder as a prop so stories stay
+     deterministic; the app passes the shared lock state. Renders nothing
+     without a holder and without a label. -->
 <script lang="ts">
   import { projectLock } from "../collab/projectLock.svelte";
   import { setUsername } from "../collab/identity";
@@ -11,13 +13,19 @@
     holder,
     me = projectLock.me,
     direction = "bottom",
+    label = null,
   }: {
-    /** Who holds the project, or null when it is free (renders nothing). */
+    /** Who holds the project, or null when it is free (no icon then). */
     holder: string | null;
     /** Our own username, for the "you" label and the rename row. */
     me?: string | null;
     /** Which way the details pop over opens. */
     direction?: "top" | "bottom";
+    /**
+     * Leading label (the project name). The label plus the optional lock
+     * icon form a single dropdown trigger.
+     */
+    label?: string | null;
   } = $props();
 
   const mine = $derived(holder !== null && holder === me);
@@ -46,31 +54,47 @@
   }
 </script>
 
-{#if holder !== null}
+{#if holder !== null || label !== null}
   <div
-    class="dropdown {direction === 'top' ? 'dropdown-top' : ''}"
+    class="dropdown {direction === 'top' ? 'dropdown-top' : ''} min-w-0"
     data-testid="lock-badge"
   >
     <div
       tabindex="0"
       role="button"
-      class="badge badge-warning badge-sm gap-1 shrink-0"
-      title="Locked by {holder} — select for details"
-      aria-label="Locked by {holder}"
+      class="flex items-center gap-1 min-w-0 cursor-pointer"
+      title={holder !== null
+        ? `Locked by ${holder} — select for details`
+        : "Project details"}
+      aria-label={holder !== null
+        ? `Locked by ${holder}`
+        : (label ?? "Project details")}
     >
-      🔒 {mine ? "you" : holder}
+      {#if label !== null}
+        <span class="truncate">{label}</span>
+      {/if}
+      {#if holder !== null}
+        <span aria-hidden="true">🔒</span>
+      {/if}
     </div>
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
       tabindex="0"
-      class="dropdown-content z-50 card bg-base-100 shadow-xl border border-base-300 p-3 w-64 text-left text-sm"
+      class="dropdown-content z-50 card bg-base-100 shadow-xl border border-base-300 p-3 w-64 text-left text-sm font-normal"
     >
-      <p class="font-semibold">🔒 Locked by {mine ? "you" : holder}</p>
-      <p class="text-base-content/60 mt-1">
-        {mine
-          ? "Your edits hold the project. Anyone else sees it read-only."
-          : "The project is read-only until they let go."}
-      </p>
+      {#if holder !== null}
+        <p class="font-semibold">🔒 Locked by {mine ? "you" : holder}</p>
+        <p class="text-base-content/60 mt-1">
+          {mine
+            ? "Your edits hold the project. Anyone else sees it read-only."
+            : "The project is read-only until they let go."}
+        </p>
+      {:else}
+        <p class="font-semibold">Not locked</p>
+        <p class="text-base-content/60 mt-1">
+          Nobody holds this project. Your first edit takes the lock.
+        </p>
+      {/if}
       <div class="mt-2 flex items-center gap-2">
         <span class="text-base-content/60 truncate">
           You are {me ?? "unknown"}
