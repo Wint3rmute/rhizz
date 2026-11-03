@@ -135,7 +135,12 @@ export const LockedProject: Story = {
     try {
       const canvas = within(canvasElement);
       const badge = await canvas.findByTestId("lock-badge");
-      await expect(badge).toHaveTextContent("🔒 bob");
+      // The project name and the lock icon are one trigger.
+      await expect(badge).toHaveTextContent(NAVBAR_PROJECT_NAME);
+      await expect(badge).toHaveTextContent("🔒");
+      await expect(
+        await canvas.findByText(/Locked by bob/),
+      ).toBeInTheDocument();
     } finally {
       projectLock.stop();
     }

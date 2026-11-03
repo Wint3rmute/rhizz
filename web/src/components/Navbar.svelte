@@ -114,13 +114,14 @@
       </div>
     </div>
 
-    <!-- Center: project title, truly centered regardless of side widths -->
+    <!-- Center: project title, truly centered regardless of side widths.
+         The title and the lock icon are one dropdown trigger opening the
+         holder menu. -->
     {#if activeProject}
       <span
         class="absolute left-1/2 -translate-x-1/2 hidden sm:flex items-center gap-2 max-w-35 sm:max-w-50"
       >
-        <span class="truncate">{activeProject.name}</span>
-        <LockBadge holder={projectLock.lockedBy} />
+        <LockBadge holder={projectLock.lockedBy} label={activeProject.name} />
       </span>
     {/if}
 
@@ -204,7 +205,10 @@
       class="md:hidden border-t border-base-300 bg-base-100 p-3 flex flex-col gap-2 shadow-lg"
     >
       {#if activeProjectId}
-        <LockBadge holder={projectLock.lockedBy} />
+        <LockBadge
+          holder={projectLock.lockedBy}
+          label={activeProject?.name ?? activeProjectId}
+        />
         <div class="flex flex-col gap-1">
           {#each NAV_LINKS as link (link.label)}
             <a

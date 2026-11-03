@@ -11,6 +11,7 @@
 
 ### Fix
 
+- **web**: log rejected project saves to Sentry
 - **web**: scope server writes to changed projects with fresh versions
 - anchor single-knee connection labels to the longer leg
 - render connection labels as pills like port labels

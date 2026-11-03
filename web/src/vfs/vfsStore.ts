@@ -205,6 +205,11 @@ export function httpBackend(
       headers: { ...userHeaders() },
     });
     if (!response.ok) {
+      // Same Sentry treatment as rejected saves (see putProject above).
+      console.error(
+        `Project delete failed: HTTP ${String(response.status)} for project "${projectId}"`,
+        { projectId, status: response.status },
+      );
       throw statusError(
         `Project delete failed: HTTP ${String(response.status)}`,
         response.status,
