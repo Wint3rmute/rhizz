@@ -186,6 +186,12 @@ export function httpBackend(
       },
     );
     if (!response.ok) {
+      // Forwarded to Sentry Logs in prod (see hooks.client.ts): lock and
+      // version refusals are otherwise only visible as toasts.
+      console.error(
+        `Project save failed: HTTP ${String(response.status)} for project "${projectId}"`,
+        { projectId, status: response.status },
+      );
       throw statusError(
         `Project save failed: HTTP ${String(response.status)}`,
         response.status,
