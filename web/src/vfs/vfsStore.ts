@@ -12,7 +12,6 @@ import type { ProjectStore } from "./store";
 import type { FsDirectory, FsFile, FsNode, Project } from "./types";
 import { projectFiles } from "./tree";
 import { getOrCreateUsername } from "../collab/identity";
-import { getLockBaseVersion } from "../collab/projectLock.svelte";
 
 /** An HTTP failure carrying its status, so callers can tell a lock refusal (409) from other failures. */
 export function statusError(message: string, status: number): Error {
@@ -110,15 +109,16 @@ export function localStorageBackend(
  * A backend over the rhizz-server HTTP API. Reads bootstrap from the
  * whole-VFS `GET /api/vfs`; writes go per project, so one client can never
  * overwrite or delete another's projects the way the old whole-blob PUT
- * could:
+ * could — and a project you never touched is never written at all.
  *
- * - every project in the blob is replaced through
- *   `PUT /api/projects/{id}/files` (the lock auto-acquires server-side;
- *   a 409 names the holder and rejects the whole mutation, like any other
- *   failed write);
- * - projects the blob no longer names are removed through
- *   `DELETE /api/projects/{id}` (this is what project deletes and renames
- *   — renames move the id — funnel through).
+ * Each mutation PUTs only the projects whose file set changed since the
+ * last read or write (new projects, changed files, removed ones — renames
+ * move the id, so they read as a removal plus a creation), and removes
+ * projects the blob no longer names through
+ * `DELETE /api/projects/{id}`. Every PUT is compare-and-swapped against a
+ * version read just before it (`GET .../state`), so the token can never go
+ * stale between the poll and the write; a 409 names the holder and rejects
+ * the whole mutation, like any other failed write.
  *
  * With the server unavailable every operation rejects, so callers see the
  * same rejected-promise surface as elsewhere.
@@ -127,7 +127,6 @@ export function httpBackend(
   baseUrl: string,
   fetchImpl: FetchLike = globalThis.fetch,
   getUser: () => string = getOrCreateUsername,
-  getBaseVersion: () => string | null = getLockBaseVersion,
 ): VfsBackend {
   const origin = baseUrl.replace(/\/+$/, "");
   // Resolved once: without persistence every `getUser()` call mints a fresh
@@ -138,25 +137,52 @@ export function httpBackend(
     me ??= getUser();
     return { "x-rhizz-user": me };
   };
-  // Project ids the server last saw from this backend, so removals (and
-  // renames, which move the id) delete the directory the blob no longer
-  // names. Seeded on read; a backend that never read deletes nothing.
-  let knownIds: Set<string> | null = null;
+  // Last-written file set per project, as canonical JSON. Seeded on read;
+  // a backend that never read writes everything once.
+  let knownFiles: Map<string, string> | null = null;
+  const snapshotFiles = (data: VfsData): Map<string, string> => {
+    const snapshot = new Map<string, string>();
+    for (const project of data.projects) {
+      snapshot.set(
+        project.id,
+        JSON.stringify(projectFiles(project.id, data.nodes)),
+      );
+    }
+    return snapshot;
+  };
+
+  const projectVersion = async (projectId: string): Promise<string | null> => {
+    // Null when the server does not know the project yet (creation skips
+    // the version check); anything else failing rejects the write rather
+    // than writing blind.
+    const response = await fetchImpl(
+      `${origin}/api/projects/${projectId}/state`,
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      throw new Error(
+        `Project version fetch failed: HTTP ${String(response.status)}`,
+      );
+    }
+    const state = (await response.json()) as { version?: unknown };
+    return typeof state.version === "string" ? state.version : null;
+  };
 
   const putProject = async (
     projectId: string,
     files: { path: string; content?: string }[],
   ): Promise<void> => {
-    const baseVersion = getBaseVersion();
+    const baseVersion = await projectVersion(projectId);
     const response = await fetchImpl(
       `${origin}/api/projects/${projectId}/files`,
       {
         method: "PUT",
         headers: { "content-type": "application/json", ...userHeaders() },
-        body: JSON.stringify({
-          files,
-          ...(baseVersion === null ? {} : { base_version: baseVersion }),
-        }),
+        body: JSON.stringify(
+          baseVersion === null
+            ? { files }
+            : { files, base_version: baseVersion },
+        ),
       },
     );
     if (!response.ok) {
@@ -187,20 +213,27 @@ export function httpBackend(
         throw new Error(`VFS fetch failed: HTTP ${String(response.status)}`);
       }
       const data = sanitizeVfsData(await response.json());
-      knownIds = new Set(data.projects.map((p) => p.id));
+      knownFiles = snapshotFiles(data);
       return data;
     },
     write: async (data) => {
-      const current = new Set(data.projects.map((p) => p.id));
-      for (const project of data.projects) {
-        await putProject(project.id, projectFiles(project.id, data.nodes));
+      const current = snapshotFiles(data);
+      for (const [id, filesJson] of current) {
+        if (knownFiles?.get(id) === filesJson) continue;
+        await putProject(
+          id,
+          JSON.parse(filesJson) as {
+            path: string;
+            content?: string;
+          }[],
+        );
       }
-      if (knownIds !== null) {
-        for (const id of knownIds) {
+      if (knownFiles !== null) {
+        for (const id of knownFiles.keys()) {
           if (!current.has(id)) await deleteProjectOnServer(id);
         }
       }
-      knownIds = current;
+      knownFiles = current;
     },
   };
 }
@@ -473,12 +506,11 @@ export class ServerProjectStore extends VfsProjectStore {
       now?: () => string;
       fetch?: FetchLike;
       getUser?: () => string;
-      getBaseVersion?: () => string | null;
       onPersisted?: (bytes: number) => void;
     } = {},
   ) {
     super(
-      httpBackend(baseUrl, opts.fetch, opts.getUser, opts.getBaseVersion),
+      httpBackend(baseUrl, opts.fetch, opts.getUser),
       opts.now,
       undefined,
       opts.onPersisted,

@@ -569,6 +569,8 @@ function makeFakeServerFetch(): (
   init?: RequestInit,
 ) => Promise<Response> {
   const projects = new Map<string, Map<string, string | null>>();
+  const versions = new Map<string, number>();
+  const versionOf = (id: string): string => `v${String(versions.get(id) ?? 0)}`;
   return (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url =
       typeof input === "string"
@@ -624,16 +626,44 @@ function makeFakeServerFetch(): (
         ),
       );
     }
-    const match = /\/api\/projects\/([^/]+)(\/files)?$/.exec(url);
+    const match = /\/api\/projects\/([^/]+)(\/(files|state))?$/.exec(url);
     if (match !== null) {
-      const [, projectId, files] = match;
+      const [, projectId, endpoint] = match;
       if (projectId === undefined) {
         return Promise.resolve(new Response("not found", { status: 404 }));
       }
-      if (init?.method === "PUT" && files !== undefined) {
+      if (init?.method === "GET" && endpoint === "/state") {
+        // Project state: only the version matters to the contract run.
+        if (!projects.has(projectId)) {
+          return Promise.resolve(
+            new Response("unknown project", { status: 404 }),
+          );
+        }
+        return Promise.resolve(
+          new Response(JSON.stringify({ version: versionOf(projectId) }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }),
+        );
+      }
+      if (init?.method === "PUT" && endpoint === "/files") {
         const parsed = JSON.parse(
           (typeof init.body === "string" ? init.body : null) ?? "{}",
-        ) as { files?: { path: string; content?: string }[] };
+        ) as {
+          base_version?: string;
+          files?: { path: string; content?: string }[];
+        };
+        if (
+          parsed.base_version !== undefined &&
+          parsed.base_version !== versionOf(projectId)
+        ) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ version: versionOf(projectId) }), {
+              status: 409,
+              headers: { "content-type": "application/json" },
+            }),
+          );
+        }
         const entry =
           projects.get(projectId) ?? new Map<string, string | null>();
         entry.clear();
@@ -641,20 +671,25 @@ function makeFakeServerFetch(): (
           entry.set(file.path, file.content ?? null);
         }
         projects.set(projectId, entry);
+        versions.set(projectId, (versions.get(projectId) ?? 0) + 1);
         return Promise.resolve(
-          new Response(JSON.stringify({ lockedBy: "fake", version: "v1" }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
+          new Response(
+            JSON.stringify({
+              lockedBy: "fake",
+              version: versionOf(projectId),
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
         );
       }
-      if (init?.method === "DELETE" && files === undefined) {
+      if (init?.method === "DELETE" && endpoint !== "/files") {
         if (!projects.has(projectId)) {
           return Promise.resolve(
             new Response("unknown project", { status: 404 }),
           );
         }
         projects.delete(projectId);
+        versions.delete(projectId);
         return Promise.resolve(new Response(null, { status: 204 }));
       }
     }
