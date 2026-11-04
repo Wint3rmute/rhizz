@@ -4360,6 +4360,7 @@
           component={selectedComponentData}
           {projectId}
           textAlign={selectedBox?.textAlign ?? DEFAULT_TEXT_ALIGN}
+          {readonly}
           onupdate={(patch) =>
             void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
           onrename={(newLabel) =>
@@ -4376,6 +4377,7 @@
         <AnnotationInspector
           bind:this={annotationInspector}
           annotation={selectedAnnotation}
+          {readonly}
           ontexteditstart={() => recordUndoPoint()}
           ontextcommitted={() => noteDiagramEdited()}
           onscaleeditstart={() => recordUndoPoint()}
@@ -4400,6 +4402,7 @@
           protocolReason={selectedConnectionInspector.protocolReason}
           protocolUsage={selectedConnectionInspector.protocolUsage}
           placedLabels={systemConnections.map((row) => row.label)}
+          {readonly}
           onupdate={(patch) =>
             void handleUpdateSelectedConnection(patch).catch(
               reportDiagramError,
@@ -4727,9 +4730,15 @@
             onSelectComponent={(index) => selectOnly(index)}
             filterSystemLabel={effectiveSystem}
             isChecked={(index) => checkedIndices.has(index)}
-            onToggleChecked={(index) => toggleComponentChecked(index)}
-            onDeleteComponent={(index) =>
-              void deleteComponentFromModel(index).catch(reportDiagramError)}
+            onToggleChecked={readonly
+              ? undefined
+              : (index) => toggleComponentChecked(index)}
+            onDeleteComponent={readonly
+              ? undefined
+              : (index) =>
+                  void deleteComponentFromModel(index).catch(
+                    reportDiagramError,
+                  )}
           />
           {#if hiddenForeignCount > 0}
             <p class="text-xs text-warning mt-2">

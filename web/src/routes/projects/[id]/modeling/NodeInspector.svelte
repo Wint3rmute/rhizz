@@ -29,6 +29,12 @@
      * no source row at all — a link with nowhere to point is worse than none.
      */
     projectId?: string | undefined;
+    /**
+     * Freezes every editing control via a disabled fieldset around the whole
+     * panel. The source link stays live — fieldsets do not disable anchors —
+     * so the definition behind the instance remains reachable.
+     */
+    readonly?: boolean;
   }
 
   // Which file each panel's attributes are written to, named the way the user
@@ -47,6 +53,7 @@
     onopendocumentation,
     showName = true,
     projectId = undefined,
+    readonly = false,
   }: Props = $props();
 
   // Where "Source" goes. Inventory addresses a definition by its bare label, so
@@ -129,7 +136,15 @@
   }
 </script>
 
-<div class="space-y-4 text-sm" data-testid="node-inspector">
+<!-- A fieldset (not a div) for the root: `disabled` freezes every editing
+     control inside at once, with no per-input plumbing. Borders, padding,
+     and the fieldset's minimum content width are zeroed so it lays out
+     exactly like the div it replaces. -->
+<fieldset
+  disabled={readonly}
+  class="space-y-4 text-sm border-0 p-0 m-0 min-w-0"
+  data-testid="node-inspector"
+>
   <!-- Component Info -->
   <div class="space-y-2">
     <div
@@ -421,4 +436,4 @@
       Remove from View
     </button>
   {/if}
-</div>
+</fieldset>

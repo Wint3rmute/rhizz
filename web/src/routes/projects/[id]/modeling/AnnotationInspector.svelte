@@ -25,6 +25,11 @@
     onscalechange: (scale: number) => void;
     /** Fired when scale editing ends (blur) so the diagram persists. */
     onscalecommitted: () => void;
+    /**
+     * Freezes the textarea and the scale input via a disabled fieldset.
+     * Nothing in this panel navigates, so the whole panel goes inert.
+     */
+    readonly?: boolean;
   }
 
   let {
@@ -34,6 +39,7 @@
     onscaleeditstart,
     onscalechange,
     onscalecommitted,
+    readonly = false,
   }: Props = $props();
 
   let textarea: HTMLTextAreaElement | null = $state(null);
@@ -99,7 +105,15 @@
   }
 </script>
 
-<div class="space-y-4 text-sm" data-testid="annotation-inspector">
+<!-- A fieldset (not a div) for the root: `disabled` freezes the textarea
+     and the scale input at once. Borders, padding, and the fieldset's
+     minimum content width are zeroed so it lays out exactly like the div
+     it replaces. -->
+<fieldset
+  disabled={readonly}
+  class="space-y-4 text-sm border-0 p-0 m-0 min-w-0"
+  data-testid="annotation-inspector"
+>
   <div>
     <div class="text-[11px] text-base-content/50 font-mono uppercase">
       Annotation
@@ -157,4 +171,4 @@
       data-testid="annotation-scale-input"
     />
   </div>
-</div>
+</fieldset>

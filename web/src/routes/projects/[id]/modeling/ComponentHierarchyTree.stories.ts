@@ -112,3 +112,33 @@ export const FilteredUnknownSystem: Story = {
     await expect(canvas.getByText("No components found.")).toBeInTheDocument();
   },
 };
+
+/**
+ * Locked by someone else (no toggle/delete callbacks): checkboxes render
+ * disabled but still show placement, the trash button is gone, and row
+ * clicks still select.
+ */
+export const Readonly: Story = {
+  args: {
+    onToggleChecked: undefined,
+    onDeleteComponent: undefined,
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // Placement still visible, but no checkbox is interactive.
+    const boxes = canvas.getAllByRole("checkbox");
+    await expect(boxes).toHaveLength(3);
+    for (const box of boxes) await expect(box).toBeDisabled();
+
+    // No deletion affordance at all, even on hover.
+    await userEvent.hover(canvas.getByText("imu"));
+    await expect(
+      canvas.queryByLabelText("Delete component imu"),
+    ).not.toBeInTheDocument();
+
+    // Row clicks still select — read-only navigation.
+    await userEvent.click(canvas.getByText("imu"));
+    await expect(args.onSelectComponent).toHaveBeenLastCalledWith(2);
+  },
+};

@@ -128,6 +128,47 @@ export const AttributeScopes: Story = {
 };
 
 /**
+ * Locked by someone else: every editing control is disabled, but the values
+ * stay readable and navigation (the source link) stays live.
+ */
+export const Readonly: Story = {
+  args: {
+    projectId: "drone-story",
+    component: {
+      ...meta.args.component,
+      source: "flight-controller",
+    },
+    readonly: true,
+  },
+  globals: {
+    viewport: { value: "phone" },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Values still readable...
+    await expect(canvas.getByDisplayValue("flight-controller")).toBeTruthy();
+    // ...but nothing editable.
+    await expect(canvas.getByLabelText(/instance name/i)).toBeDisabled();
+    await expect(canvas.getByLabelText(/tags/i)).toBeDisabled();
+    await expect(canvas.getByLabelText(/atomic leaf/i)).toBeDisabled();
+    await expect(
+      canvas.getByRole("button", { name: "+ Add Port" }),
+    ).toBeDisabled();
+    await expect(canvas.getByRole("button", { name: "Center" })).toBeDisabled();
+    await expect(
+      canvas.getByRole("button", { name: "Open documentation" }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByRole("button", { name: "Remove from View" }),
+    ).toBeDisabled();
+    // ...while the definition behind the instance stays one click away.
+    await expect(
+      canvas.getByRole("link", { name: "flight-controller" }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
  * An instance, placed under a name of its own, cloned from a shared
  * definition: the source row links to that definition's Inventory page.
  */

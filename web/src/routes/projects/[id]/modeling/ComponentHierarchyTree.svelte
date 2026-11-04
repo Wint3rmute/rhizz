@@ -40,10 +40,14 @@
     filterSystemLabel?: string | null;
     /** True when the given arena index is currently placed on the canvas. */
     isChecked: (index: number) => boolean;
-    /** Fired when a row's checkbox is toggled; ModelingPage.svelte places/unplaces it. */
-    onToggleChecked: (index: number) => void;
+    /**
+     * Fired when a row's checkbox is toggled; ModelingPage.svelte
+     * places/unplaces it. Omitted while someone else holds the project —
+     * the checkbox then renders disabled (state still visible) instead.
+     */
+    onToggleChecked?: ((index: number) => void) | undefined;
     /** Fired when a row's trash button is clicked; ModelingPage.svelte removes it from the model (after a confirm). */
-    onDeleteComponent?: (index: number) => void;
+    onDeleteComponent?: ((index: number) => void) | undefined;
   } = $props();
 
   let nodes = $derived(
@@ -94,7 +98,8 @@
       type="checkbox"
       class="checkbox checkbox-xs shrink-0"
       checked={isChecked(index)}
-      onchange={() => onToggleChecked(index)}
+      disabled={onToggleChecked === undefined}
+      onchange={() => onToggleChecked?.(index)}
     />
   {:else}
     <span class="w-4 shrink-0"></span>
