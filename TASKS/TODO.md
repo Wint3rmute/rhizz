@@ -186,6 +186,74 @@ Definition of done:
 ---
 
 
+## Task <N> — Follower auto-reload on remote version change
+
+Followers of a locked project see the lock badge flip but never the holder's
+edits — they sit on a stale snapshot until they write (409) or reload by
+hand. This implements the watchers-reload half of 0004's design (which
+already says watchers "reload when the version changes"): when the polled
+project version changes, reload in the background, silently.
+
+- **Mechanism:** `projectLock` gains a monotonically increasing poll counter
+  bumped after every completed poll. Each page keeps a plain (non-reactive)
+  `appliedVersion` and runs one `$effect` on `(version, pollCounter)`:
+  seed on first sight, skip while busy, otherwise advance-then-reload.
+  Advancing before the async reload (not after) keeps the logic race-free;
+  reload failures reconcile on the next change or navigation.
+- **Busy (skip this cycle, retry next poll — the version stays different, so
+  it retries by itself):** an open non-blocking modal
+  (`isCreateModalOpen`/`isNewViewModal`/`newConnectionRequest`/
+  `deleteConnectionRequest` in Modeling; the three create modals in
+  Inventory), an active canvas gesture (`interaction.type !== "idle"`) or a
+  running auto-layout in Modeling. Native `confirm()`/`prompt()` block the
+  thread, so timers and effects can't fire mid-prompt — no handling needed.
+  Code needs no busy check beyond its write gate.
+- **Reload = drop the store cache first, or it re-reads stale data:** add
+  `VfsProjectStore.invalidate()` (clears `cached`, bumps an epoch so an
+  in-flight read can't repopulate it) to the `ProjectStore` interface, then
+  per page: Code (`projectModel.reload()` + `refreshEntries()` + re-read the
+  open file into `content`/`lastWrittenContent`), Modeling (`reload()` +
+  `refreshDiagramEntries()` + re-run the current view's load path, same as
+  switching to it), Inventory (`reload()` + re-read the open doc).
+- **Cancel, don't flush, pending debounced writes on reload** (add
+  `cancel()` to `createDebounced`, with tests): Code's `scheduleFileWrite`,
+  Modeling's `scheduleLayoutWrite`, Inventory's `DetailPane`
+  `scheduleDocSave`. Flushing would persist text composed against the old
+  revision on top of the remote edit (last-writer-wins clobber); dropping
+  ≤700 ms of typing is the accepted cost. Draft buffers are cleared with the
+  write (`clearDraft*` alongside).
+- **Silence:** no toast on routine reloads (a holder typing steadily would
+  spam one every poll) — the changed content is the signal. Deleted project
+  is the exception: on 404-after-version in the project layout, toast
+  "Project was deleted" and `goto("/projects")`.
+- **Out of scope / deliberately not built:** draft preservation or merge UI
+  (dropped, per directive); per-keystroke push (still polling); presence
+  ("who's watching"); per-write version echo (writes already CAS via
+  fresh-GET in 0004.4's follow-up); touching `handleLockLost` (unchanged —
+  refusals still go through it).
+- **Tests:** vitest for a `shouldReloadForVersion(applied, current, busy)`
+  decision helper (seed/change/busy/free matrix) + `createDebounced.cancel`
+  + contract coverage for `invalidate()` (second writer visible only after
+  invalidate, not before); `just vrt-quick` must stay unchanged (no UI
+  changes); manual two-browser checklist (below) is the real gate since e2e
+  runs the localStorage backend with no server.
+- **Manual verification** (two browsers, different usernames): edit in A →
+  B reloads silently within ~5 s with badge intact; drag in B while A edits
+  (no canvas yank, reload lands after); type continuously in B while A edits
+  (no spam toast, A's edit survives unless B's pending write lands after —
+  last-writer-wins, unchanged); delete in A → B toasts and lands on
+  /projects; background A's tab for a minute (lease lapses, B can take the
+  lock, A re-acquires cleanly on next edit).
+- **Docs:** one paragraph in `SPEC/frontend.md` under the collaboration
+  text. No 0004 proposal change (it already describes this behavior).
+
+Definition of done:
+
+- `just test`, `just lint`, `just build` pass; `just vrt-quick` unchanged
+  (334); manual two-browser checklist above verified.
+
+---
+
 ## Task <NUMBER> — Task template
 
 - Task description here
