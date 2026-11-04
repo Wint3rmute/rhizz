@@ -75,4 +75,11 @@ export interface ProjectStore {
   ): Promise<void>;
   /** Recursively deletes `nodeId` and everything nested under it. Rejects if it doesn't exist. */
   deleteNode(projectId: string, nodeId: string): Promise<void>;
+  /**
+   * Drops the session read cache so the next read starts from the backend
+   * truth again. Used when something else may have written behind this
+   * store's back (a collaborator's edit observed by polling): without it a
+   * follower tab would keep rendering its stale snapshot forever.
+   */
+  invalidate(): void;
 }

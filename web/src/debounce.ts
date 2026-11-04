@@ -29,6 +29,12 @@ export interface Debounced<Args extends unknown[]> {
    * (unmount/navigation). Flushing with nothing pending does nothing.
    */
   flush(): void;
+  /**
+   * Drops the pending call without running it. For a follower tab that just
+   * learned the server moved on: the queued write was composed against the
+   * old state, and flushing it would silently clobber the remote change.
+   */
+  cancel(): void;
   /** Whether a call is waiting on the timer. */
   readonly pending: boolean;
 }
@@ -65,6 +71,11 @@ export function createDebounced<Args extends unknown[]>(
   debounced.flush = (): void => {
     disarm();
     invoke();
+  };
+
+  debounced.cancel = (): void => {
+    disarm();
+    pendingArgs = undefined;
   };
 
   // `pending` is a getter, which TypeScript can't see through, hence the cast.

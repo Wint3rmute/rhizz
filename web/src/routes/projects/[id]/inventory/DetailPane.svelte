@@ -13,6 +13,10 @@
   // `DetailPane` does not become a second reason to load Monaco.
   import type * as monaco from "monaco-editor";
   import { onDestroy } from "svelte";
+  import {
+    projectLock,
+    shouldReloadForVersion,
+  } from "../../../../collab/projectLock.svelte";
   import type { ComponentPatch, SystemPatch } from "../../../../actionLog";
   import { createDebounced } from "../../../../debounce";
   import type { InventoryDefinition } from "./inventory";
@@ -141,6 +145,35 @@
       deleteConfirmText = "";
       lastScheduledDocText = null;
     }
+  });
+
+  // Follower reload for the doc editor: the parent re-reads the file, but
+  // only this pane can reach its own debouncer. On a remote version (never
+  // the holder's own writes) cancel the queued save — it was composed
+  // against the old revision — and drop to view mode so the fresh doc
+  // shows. At most one debounce window of typing is lost, by directive.
+  let docAppliedVersion: string | null = $state(null);
+  $effect(() => {
+    const current = projectLock.version;
+    void projectLock.pollSeq;
+    if (current === null) {
+      docAppliedVersion = null;
+      return;
+    }
+    if (docAppliedVersion === null) {
+      docAppliedVersion = current;
+      return;
+    }
+    const mine =
+      projectLock.lockedBy !== null && projectLock.lockedBy === projectLock.me;
+    if (
+      !shouldReloadForVersion(docAppliedVersion, current, { mine, busy: false })
+    )
+      return;
+    docAppliedVersion = current;
+    scheduleDocSave.cancel();
+    lastScheduledDocText = null;
+    docMode = "view";
   });
   onDestroy(() => scheduleDocSave.flush());
 

@@ -32,6 +32,7 @@
   import {
     handleLockLost,
     projectLock,
+    shouldReloadForVersion,
   } from "../../../../collab/projectLock.svelte";
   import { isLockRefusal } from "../../../../vfs/vfsStore";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
@@ -102,6 +103,12 @@
   async function handleInventoryLockLost(): Promise<void> {
     await handleLockLost(() => projectModel.reload());
   }
+
+  // The version this page has applied. Null seeds on mount and on project
+  // switch (never reloads); the follower effect advances it only when it
+  // actually reloads, so a busy skip retries on the next poll.
+  let appliedVersion: string | null = $state(null);
+  let lastFollowerProjectId: string | null | undefined = undefined;
   let model = $derived(projectModel.model);
   let raw = $derived(projectModel.raw);
   // Whether the model has been read (or found unreadable) — see `modelReady`
@@ -479,6 +486,55 @@
   let isCreateModalOpen = $state(false);
   let isCreateSystemModalOpen = $state(false);
   let isCreateProtocolModalOpen = $state(false);
+
+  // Follower reload: another tab wrote and the poll saw a new version.
+  // Invalidates the store cache first so the model and the doc re-read
+  // from the truth, then reloads both. Silent — the badge names the
+  // holder. The doc's pending debounced write is owned by DetailPane,
+  // which watches the version itself and drops to view mode; the parent
+  // cannot reach that debouncer, so it only re-reads the file.
+  async function reloadForFollower(): Promise<void> {
+    const idAtStart = projectId;
+    if (!idAtStart) return;
+    const labelAtStart = selectedDefinition?.label ?? null;
+    projectStore.invalidate();
+    await projectModel.reload();
+    if (projectId !== idAtStart) return;
+    if (labelAtStart === null) return;
+    if (selectedDefinition?.label !== labelAtStart) return;
+    const fs = openProjectFs(projectStore, idAtStart);
+    const fresh = await fs
+      .readFile(`docs/${labelAtStart}.md`)
+      .catch(() => null);
+    if (projectId !== idAtStart) return;
+    if (selectedDefinition?.label !== labelAtStart) return;
+    selectedDoc = fresh;
+    selectedDocLabel = labelAtStart;
+  }
+
+  $effect(() => {
+    const id = projectId ?? null;
+    if (id !== lastFollowerProjectId) {
+      lastFollowerProjectId = id;
+      appliedVersion = null;
+    }
+    const current = projectLock.version;
+    // Bumped after every poll so a busy-skipped reload retries even when
+    // the version itself did not move again.
+    void projectLock.pollSeq;
+    if (appliedVersion === null) {
+      if (current !== null) appliedVersion = current;
+      return;
+    }
+    const mine =
+      projectLock.lockedBy !== null && projectLock.lockedBy === projectLock.me;
+    const busy =
+      isCreateModalOpen || isCreateSystemModalOpen || isCreateProtocolModalOpen;
+    if (!shouldReloadForVersion(appliedVersion, current, { mine, busy }))
+      return;
+    appliedVersion = current;
+    void reloadForFollower();
+  });
 
   // Parents the modal's inspector shows alongside the new definition's key.
   // Nothing is ever placed under them from here — the modal needs the list,

@@ -125,4 +125,29 @@ describe("createDebounced", () => {
     vi.advanceTimersByTime(0);
     expect(fn).toHaveBeenCalledExactlyOnceWith("a");
   });
+
+  it("cancels a pending call without running it", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500);
+
+    debounced("a");
+    expect(debounced.pending).toBe(true);
+    debounced.cancel();
+    expect(debounced.pending).toBe(false);
+
+    vi.advanceTimersByTime(1000);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("cancelling with nothing pending is a no-op", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500);
+
+    debounced.cancel();
+    debounced("a");
+    debounced.cancel();
+
+    vi.advanceTimersByTime(1000);
+    expect(fn).not.toHaveBeenCalled();
+  });
 });

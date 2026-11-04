@@ -6,6 +6,7 @@ import {
   LOCK_POLL_MAX_MS,
   LOCK_POLL_MS,
   ProjectLock,
+  shouldReloadForVersion,
 } from "./projectLock.svelte";
 
 interface FakeServer {
@@ -79,6 +80,34 @@ describe("ProjectLock", () => {
     expect(lock.readonly).toBe(false);
     expect(lock.version).toBeNull();
     lock.stop();
+  });
+
+  it("bumps the poll counter after every completed poll", async () => {
+    const fake = makeFakeServer();
+    const lock = new ProjectLock();
+    lock.me = "alice";
+    lock.start("drone", "http://server", fake.fetch);
+    const first = lock.pollSeq;
+    await vi.advanceTimersByTimeAsync(LOCK_POLL_MS);
+    expect(lock.pollSeq).toBeGreaterThan(first);
+    lock.stop();
+  });
+
+  it("decides follower reloads from version, holder, and busyness", () => {
+    // Unknown or unchanged versions never reload; the holder never
+    // reloads (they only ever see their own writes); a busy page defers
+    // and the next poll retries.
+    const idleFollower = { mine: false, busy: false };
+    expect(shouldReloadForVersion(null, "v2", idleFollower)).toBe(false);
+    expect(shouldReloadForVersion("v1", null, idleFollower)).toBe(false);
+    expect(shouldReloadForVersion("v1", "v1", idleFollower)).toBe(false);
+    expect(
+      shouldReloadForVersion("v1", "v2", { mine: true, busy: false }),
+    ).toBe(false);
+    expect(
+      shouldReloadForVersion("v1", "v2", { mine: false, busy: true }),
+    ).toBe(false);
+    expect(shouldReloadForVersion("v1", "v2", idleFollower)).toBe(true);
   });
 
   it("polls the state and derives readonly for foreign holders", async () => {

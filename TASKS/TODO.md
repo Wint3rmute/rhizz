@@ -188,62 +188,66 @@ Definition of done:
 
 ## Task <N> — Follower auto-reload on remote version change
 
-Followers of a locked project see the lock badge flip but never the holder's
-edits — they sit on a stale snapshot until they write (409) or reload by
-hand. This implements the watchers-reload half of 0004's design (which
-already says watchers "reload when the version changes"): when the polled
-project version changes, reload in the background, silently.
+Watchers poll the project version but never act on it: a follower tab sits
+on a stale snapshot until it writes (409) or reloads by hand. Implement the
+reload half of 0004's "watchers reload when the version changes".
 
-- **Mechanism:** `projectLock` gains a monotonically increasing poll counter
-  bumped after every completed poll. Each page keeps a plain (non-reactive)
-  `appliedVersion` and runs one `$effect` on `(version, pollCounter)`:
-  seed on first sight, skip while busy, otherwise advance-then-reload.
-  Advancing before the async reload (not after) keeps the logic race-free;
-  reload failures reconcile on the next change or navigation.
-- **Busy (skip this cycle, retry next poll — the version stays different, so
-  it retries by itself):** an open non-blocking modal
-  (`isCreateModalOpen`/`isNewViewModal`/`newConnectionRequest`/
-  `deleteConnectionRequest` in Modeling; the three create modals in
-  Inventory), an active canvas gesture (`interaction.type !== "idle"`) or a
-  running auto-layout in Modeling. Native `confirm()`/`prompt()` block the
-  thread, so timers and effects can't fire mid-prompt — no handling needed.
-  Code needs no busy check beyond its write gate.
-- **Reload = drop the store cache first, or it re-reads stale data:** add
-  `VfsProjectStore.invalidate()` (clears `cached`, bumps an epoch so an
-  in-flight read can't repopulate it) to the `ProjectStore` interface, then
+- **Reload rule (per page, no cross-page coordinator):** each of Code,
+  Modeling, and Inventory keeps a local `appliedVersion` (starts null =
+  seed on mount and on project switch, never reload) and an `$effect` on
+  `(projectLock.version, projectLock.pollSeq)`: reload iff version is known,
+  differs from applied, the holder is someone else (`lockedBy !== me` — a
+  holder only ever sees their own writes, so followers never self-trigger),
+  and the page is not busy. Advance the tracked version only when actually
+  reloading; busy skips retry automatically on the next poll because the
+  version still differs.
+- **Poll counter:** `projectLock` bumps a monotonic `pollSeq` after every
+  completed poll so effects re-run even when the version is unchanged
+  (otherwise a busy skip would never be retried).
+- **Busy means:** an open non-blocking modal (Inventory/Modeling create
+  modals, Modeling connection/delete modals), an active canvas gesture
+  (`interaction.type !== "idle"`), or a running auto-layout. Native
+  `confirm()`/`prompt()` block the thread, so no guard is needed for them.
+  No draft-preservation UI: dropping ≤700 ms of typing is accepted.
+- **Reload = invalidate the store first, or it re-reads the cache:**
+  add `VfsProjectStore.invalidate()` (clears `cached`, bumps an epoch so an
+  in-flight read cannot repopulate it) to the `ProjectStore` interface, then
   per page: Code (`projectModel.reload()` + `refreshEntries()` + re-read the
-  open file into `content`/`lastWrittenContent`), Modeling (`reload()` +
-  `refreshDiagramEntries()` + re-run the current view's load path, same as
-  switching to it), Inventory (`reload()` + re-read the open doc).
+  open file, resetting `content`/`lastWrittenContent`; missing file after
+  reload clears the selection), Modeling (`projectModel.reload()` +
+  `refreshDiagramEntries()` + re-read the current view's layout through the
+  existing load path + `resetUndoHistory()`, since stored undo steps name
+  the pre-remote model), Inventory (`projectModel.reload()` + re-read the
+  open doc).
 - **Cancel, don't flush, pending debounced writes on reload** (add
-  `cancel()` to `createDebounced`, with tests): Code's `scheduleFileWrite`,
-  Modeling's `scheduleLayoutWrite`, Inventory's `DetailPane`
-  `scheduleDocSave`. Flushing would persist text composed against the old
-  revision on top of the remote edit (last-writer-wins clobber); dropping
-  ≤700 ms of typing is the accepted cost. Draft buffers are cleared with the
-  write (`clearDraft*` alongside).
-- **Silence:** no toast on routine reloads (a holder typing steadily would
-  spam one every poll) — the changed content is the signal. Deleted project
-  is the exception: on 404-after-version in the project layout, toast
-  "Project was deleted" and `goto("/projects")`.
-- **Out of scope / deliberately not built:** draft preservation or merge UI
-  (dropped, per directive); per-keystroke push (still polling); presence
-  ("who's watching"); per-write version echo (writes already CAS via
-  fresh-GET in 0004.4's follow-up); touching `handleLockLost` (unchanged —
-  refusals still go through it).
-- **Tests:** vitest for a `shouldReloadForVersion(applied, current, busy)`
-  decision helper (seed/change/busy/free matrix) + `createDebounced.cancel`
-  + contract coverage for `invalidate()` (second writer visible only after
-  invalidate, not before); `just vrt-quick` must stay unchanged (no UI
-  changes); manual two-browser checklist (below) is the real gate since e2e
-  runs the localStorage backend with no server.
+  `cancel()` to `createDebounced`): Code's `scheduleFileWrite`, Modeling's
+  `scheduleLayoutWrite`, Inventory's `DetailPane.scheduleDocSave`
+  (DetailPane watches the version itself and drops to view mode — it owns
+  that debouncer; the parent cannot reach it). Flushing would persist text
+  composed against the old revision on top of the remote edit and silently
+  destroy it; canceling loses at most one debounce window.
+- **Deleted project:** project layout watches for version-known → 404 and
+  then toasts "This project was deleted" and navigates to `/projects`.
+  (Reads and writes already 404/409 through the normal paths.)
+- **No holder tracking beyond `lockedBy === me`:** same-user tabs share one
+  holder by design (see 0004.5), so a second tab acts as one more follower
+  of the first — no per-tab identity is introduced here.
+- **Out of scope:** draft preservation or merge UI (dropped, per directive);
+  push channels (still polling); presence ("who's watching"); reacting to
+  outside-git edits while holding the lock (holder skips reload, same as
+  today — 0004 leaves those uncovered).
+- **Tests:** vitest for the decision helper (`seed / changed / busy /
+  holder / unknown`), `createDebounced.cancel()`, `invalidate()` (second
+  writer visible only after invalidate), DetailPane drop-to-view on version
+  change; `just vrt-quick` unchanged (no UI changes); manual two-browser
+  checklist below is the real gate since e2e runs the localStorage backend.
 - **Manual verification** (two browsers, different usernames): edit in A →
-  B reloads silently within ~5 s with badge intact; drag in B while A edits
-  (no canvas yank, reload lands after); type continuously in B while A edits
-  (no spam toast, A's edit survives unless B's pending write lands after —
-  last-writer-wins, unchanged); delete in A → B toasts and lands on
-  /projects; background A's tab for a minute (lease lapses, B can take the
-  lock, A re-acquires cleanly on next edit).
+  B reloads silently within ~5 s with badge intact (a holder never
+  self-reloads); drag in B while A edits (no yank, reload lands after);
+  type continuously in B while A edits (B's in-progress keystrokes are
+  dropped on reload, no toast, A's edit survives); delete in A → B toasts
+  and lands on /projects; background B's tab past the lease (A can take the
+  lock, B re-syncs on foreground with no errors).
 - **Docs:** one paragraph in `SPEC/frontend.md` under the collaboration
   text. No 0004 proposal change (it already describes this behavior).
 

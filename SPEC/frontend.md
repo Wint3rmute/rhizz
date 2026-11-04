@@ -207,7 +207,13 @@ read-only — editors refuse input, creation buttons hide or disable, and a
 refused write reloads and names the holder in a toast. A lock badge (🔒 +
 holder, with a display-name rename) sits in the navbar and in the status bar.
 A closing tab says goodbye with a best-effort `POST .../release`; the lease
-lapsing covers the rest.
+lapsing covers the rest. Followers also reload without writing: each page
+tracks the polled version and, when it moves under someone else's hold,
+silently re-reads (store cache invalidated first, pending debounced writes
+cancelled rather than flushed so they cannot clobber the remote edit) —
+skipped while a modal, canvas gesture, or auto-layout is in flight and
+retried on the next poll; a version that disappears means the project was
+deleted, which toasts and returns to the project list.
 
 The server does not invent a container format for that payload: it expands a
 project into a **directory of ordinary files** — `system.hcl`, `views/*.hcl`,
