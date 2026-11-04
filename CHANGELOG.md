@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: follower auto-reload on remote version change
 - **web**: fold lock badge into project title trigger
 - **server,web**: tune and harden project locks, mark 0004 implemented
 - **server**: add voluntary lock release endpoint
