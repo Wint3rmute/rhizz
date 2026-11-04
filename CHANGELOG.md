@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: freeze Modeling inspectors and tree while locked by another user
 - **web**: freeze Modeling canvas while locked by another user
 - **web**: follower auto-reload on remote version change
 - **web**: fold lock badge into project title trigger
