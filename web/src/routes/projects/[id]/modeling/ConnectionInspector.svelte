@@ -50,6 +50,12 @@
     onsetstartside: (side: ConnectionSide | undefined) => void;
     onsetendside: (side: ConnectionSide | undefined) => void;
     ondelete: () => void;
+    /**
+     * Disables every mutating control (inputs, side pickers, realization
+     * add/remove, delete) but leaves navigation live: the "Show" row buttons
+     * and the "Edit protocol" link keep working.
+     */
+    readonly?: boolean;
   }
 
   // Which file each panel's attributes are written to, named the way the user
@@ -92,6 +98,7 @@
     onsetstartside,
     onsetendside,
     ondelete,
+    readonly = false,
   }: Props = $props();
 
   // Editable fields mirror the model until committed. Committing on blur keeps
@@ -180,6 +187,7 @@
   title: string,
   current: ConnectionSide | undefined,
   onchange: (side: ConnectionSide | undefined) => void,
+  disabled: boolean,
 )}
   <!-- One endpoint's routing override. Keyed on the label because `value` is
        undefined for "Auto". -->
@@ -195,6 +203,7 @@
           class="btn btn-xs {current === option.value
             ? 'btn-primary'
             : 'btn-ghost border border-base-300'}"
+          {disabled}
           onclick={() => onchange(option.value)}
         >
           {option.label}
@@ -385,6 +394,7 @@
         type="text"
         bind:value={editFullName}
         onblur={commitFullName}
+        disabled={readonly}
         class="input input-sm input-bordered w-full"
       />
     </div>
@@ -401,6 +411,7 @@
         type="text"
         bind:value={editTags}
         onblur={commitTags}
+        disabled={readonly}
         class="input input-sm input-bordered w-full"
       />
     </div>
@@ -418,6 +429,7 @@
         step="1"
         bind:value={editLevel}
         onchange={commitLevel}
+        disabled={readonly}
         class="input input-sm input-bordered w-full"
       />
     </div>
@@ -479,6 +491,7 @@
                 class="btn btn-xs btn-ghost text-error"
                 aria-label="Remove realization {row.ref.label}"
                 title="Remove realization"
+                disabled={readonly}
                 onclick={() => removeRealization(connectionRefKey(row.ref))}
                 >×</button
               >
@@ -490,7 +503,7 @@
       <select
         class="select select-xs w-full"
         aria-label="Add realization"
-        disabled={realizationCandidates.length === 0}
+        disabled={readonly || realizationCandidates.length === 0}
         onchange={(event) => {
           const value = event.currentTarget.value;
           event.currentTarget.value = "";
@@ -521,13 +534,20 @@
       `${fromLabel} starting point`,
       startSide,
       onsetstartside,
+      readonly,
     )}
-    {@render sidePicker(`${toLabel} starting point`, endSide, onsetendside)}
+    {@render sidePicker(
+      `${toLabel} starting point`,
+      endSide,
+      onsetendside,
+      readonly,
+    )}
   </div>
 
   <div class="divider my-2"></div>
   <button
     class="btn btn-xs btn-outline btn-error w-full"
+    disabled={readonly}
     onclick={() => ondelete()}
   >
     Delete connection

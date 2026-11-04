@@ -154,6 +154,45 @@ export const PortConnectionStatus: Story = {
 };
 
 /**
+ * Locked by someone else: every editing control is disabled, while
+ * navigation (the "Show" row button, the protocol link) stays live.
+ */
+export const Readonly: Story = {
+  args: {
+    readonly: true,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    // Values still readable...
+    await expect(canvas.getByDisplayValue("Fund transfer")).toBeTruthy();
+    // ...but nothing editable.
+    await expect(canvas.getByLabelText(/full name/i)).toBeDisabled();
+    await expect(canvas.getByLabelText(/tags/i)).toBeDisabled();
+    await expect(canvas.getByLabelText(/^level$/i)).toBeDisabled();
+    // Side pickers (one per endpoint): every routing button disabled.
+    for (const side of await canvas.findAllByRole("button", {
+      name: /^(auto|top|right|bottom|left)$/i,
+    })) {
+      await expect(side).toBeDisabled();
+    }
+    await expect(
+      canvas.getByRole("button", { name: /remove realization/i }),
+    ).toBeDisabled();
+    await expect(
+      canvas.getByRole("button", { name: "Delete connection" }),
+    ).toBeDisabled();
+    await expect(canvas.getByLabelText(/add realization/i)).toBeDisabled();
+    // ...while jumping to a realization still works.
+    await expect(
+      canvas.getByRole("button", { name: /select .* on canvas/i }),
+    ).toBeEnabled();
+    await expect(
+      canvas.getByRole("link", { name: /edit protocol/i }),
+    ).toBeInTheDocument();
+  },
+};
+
+/**
  * The split itself: protocol and connection attributes in their own panels,
  * the view panel holding only the side pickers, and each heading naming the
  * file it writes to, on hover.
