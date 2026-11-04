@@ -207,7 +207,11 @@ read-only — editors refuse input, creation buttons hide or disable, and a
 refused write reloads and names the holder in a toast. A lock badge (🔒 +
 holder, with a display-name rename) sits in the navbar and in the status bar.
 A closing tab says goodbye with a best-effort `POST .../release`; the lease
-lapsing covers the rest. Followers also reload without writing: each page
+lapsing covers the rest. On the Modeling canvas the freeze is total while
+held elsewhere: node/annotation drags, resizes, port and connection
+gestures, mutating shortcuts, and mutating context-menu rows never start
+(the canvas shows `not-allowed`), while selection, panning, zooming, and
+detail-view jumps stay live as read-only navigation. Followers also reload without writing: each page
 tracks the polled version and, when it moves under someone else's hold,
 silently re-reads (store cache invalidated first, pending debounced writes
 cancelled rather than flushed so they cannot clobber the remote edit) —

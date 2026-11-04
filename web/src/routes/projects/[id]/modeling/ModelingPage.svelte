@@ -21,6 +21,7 @@
   } from "../../../../collab/projectLock.svelte";
   import { isLockRefusal } from "../../../../vfs/vfsStore";
   import { createDebounced } from "../../../../debounce";
+  import { canvasCursor } from "./canvasCursor";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
   import { projectStore } from "../../../../ProjectState.svelte";
   import { primaryHclPath } from "../../../../vfs/compile";
@@ -1740,6 +1741,10 @@
     const key = event.key.toLowerCase();
 
     if (primary) {
+      // Frozen while someone else holds the project: with nothing editable
+      // there is nothing meaningful to undo or redo (stacks are reset on
+      // lock loss; this covers the no-refusal path that leaves them stale).
+      if (readonly) return;
       if (key === "z" && !event.shiftKey) {
         event.preventDefault();
         void undoDiagramEdit();
@@ -1754,7 +1759,9 @@
     // in a modal, or with a modifier held (see shortcutsArmed above). The
     // arrow-key nudge shares that guard, so the arrows belong to the text
     // caret (or an open autocomplete) whenever the focus is in a text field.
-    if (shortcutsArmed(event)) {
+    // All of these mutate, so the read-only freeze opts out wholesale —
+    // navigation keys (below) keep their own branch.
+    if (!readonly && shortcutsArmed(event)) {
       const nudge = NUDGE_DIRECTIONS[key];
       if (nudge) {
         event.preventDefault();
@@ -1767,8 +1774,10 @@
 
     // Delete key: delete the selection — the selected notes and/or component,
     // or the selected connection (never part of a mixed selection). Never
-    // fires while typing in the inspector or HCL editor.
+    // fires while typing in the inspector or HCL editor. Frozen while
+    // someone else holds the project.
     if (
+      !readonly &&
       deleteConnectionRequest === null &&
       !isEditableTarget(event) &&
       (event.key === "Delete" || event.key === "Backspace")
@@ -1780,12 +1789,16 @@
     // Context-menu shortcuts (global on this page, same guard as above): H hides
     // the node from this view, O opens docs, V opens (or creates) the node's
     // detail view, N/C/F/R/G mirror the empty-space menu (note/component/zoom/
-    // reset/grid).
+    // reset/grid). The mutating rows (H, S, N, C-create) freeze while someone
+    // else holds the project; O/J/V-jump/F-zoom/R/G are navigation and stay
+    // live. V's create-half is guarded inside handleDetailView, which every
+    // V path (key, middle-click, menu row) funnels through.
     // C/F double as color/font cycling with a selection — the cycling branch
     // above already preventDefaulted, so only fire the menu meaning here when
     // nothing is selected (below, `selected.size === 0`).
     if (shortcutsArmed(event)) {
       if (key === "h" || key === "d") {
+        if (readonly) return;
         event.preventDefault();
         void hideSelectedFromView();
       } else if (key === "o" || key === "j") {
@@ -1808,9 +1821,11 @@
         // being a selection at all, since with none the key could only write an
         // empty view — the prompt would still appear, so the guard is the
         // difference between asking a pointless question and staying quiet.
+        if (readonly) return;
         event.preventDefault();
         void handleCreateViewFromSelection();
       } else if (key === "n") {
+        if (readonly) return;
         event.preventDefault();
         addAnnotationHandler();
       } else if (key === "c") {
@@ -1818,6 +1833,7 @@
         // create a component when nothing is selected, so one keypress never
         // fires both actions.
         if (selected.size === 0) {
+          if (readonly) return;
           event.preventDefault();
           openCreateComponentModal();
         }
@@ -1856,13 +1872,15 @@
 
   // The detail view of the component at `index`: opens the existing one, or
   // creates it when there is none. `V` and the context-menu row share this, so
-  // the shortcut means the same thing the menu offers.
+  // the shortcut means the same thing the menu offers. Creating is an edit:
+  // frozen while someone else holds the project (jumping stays live).
   async function handleDetailView(index: number): Promise<void> {
     const target = detailTarget(index);
     if (target.kind === "jump") {
       selectView(target.path);
       return;
     }
+    if (readonly) return;
     await createDetailedView(index, target.path);
   }
 
@@ -2528,6 +2546,8 @@
     // lands. A right-click lands on the node's context menu, which used to open
     // over a connection this had already started drawing.
     if (event.button !== 0) return;
+    // Frozen while someone else holds the project: no connection starts.
+    if (readonly) return;
     event.stopPropagation();
     event.preventDefault();
     interaction = {
@@ -2549,7 +2569,7 @@
     portLabel: string,
   ): void {
     if (event.button !== 0) return;
-    if (autoLayoutRunning) return;
+    if (autoLayoutRunning || readonly) return;
     event.stopPropagation();
     event.preventDefault();
     focusCanvas();
@@ -2710,35 +2730,50 @@
     if (!selected.has(index)) selectOnly(index);
     selectedConnection = null;
     const target = detailTarget(index);
+    // Frozen while someone else holds the project: navigation rows (docs,
+    // jumping to an existing detail view) stay, mutating rows go.
     contextMenu = {
       x: event.clientX,
       y: event.clientY,
       items: [
-        {
-          label: "Hide from this view",
-          shortcut: "H",
-          action: () => void hideSelectedFromView(),
-        },
+        ...(readonly
+          ? []
+          : [
+              {
+                label: "Hide from this view",
+                shortcut: "H",
+                action: () => void hideSelectedFromView(),
+              },
+            ]),
         {
           label: "Jump to documentation",
           shortcut: "O",
           action: () =>
             void handleOpenDocumentation().catch(reportDiagramError),
         },
-        {
-          label:
-            target.kind === "create"
-              ? "Create a detailed view"
-              : "Jump to detailed view",
-          shortcut: "V",
-          action: () => void handleDetailView(index).catch(reportDiagramError),
-        },
-        {
-          // About the whole selection, not the node under the pointer.
-          label: "Create new view from selection",
-          shortcut: "S",
-          action: () => void handleCreateViewFromSelection(),
-        },
+        ...(!readonly || target.kind === "jump"
+          ? [
+              {
+                label:
+                  target.kind === "create"
+                    ? "Create a detailed view"
+                    : "Jump to detailed view",
+                shortcut: "V",
+                action: () =>
+                  void handleDetailView(index).catch(reportDiagramError),
+              },
+            ]
+          : []),
+        ...(readonly
+          ? []
+          : [
+              {
+                // About the whole selection, not the node under the pointer.
+                label: "Create new view from selection",
+                shortcut: "S",
+                action: () => void handleCreateViewFromSelection(),
+              },
+            ]),
       ],
     };
   }
@@ -2749,6 +2784,9 @@
     focusCanvas();
     if (!selectedAnnotations.has(index)) selectAnnotation(index);
     selectedConnection = null;
+    // The only row deletes: frozen while someone else holds the project,
+    // so there is no menu at all (selection above still lands).
+    if (readonly) return;
     contextMenu = {
       x: event.clientX,
       y: event.clientY,
@@ -2769,6 +2807,9 @@
     focusCanvas();
     selectedConnection = label;
     clearSelection();
+    // The only row hides: frozen while someone else holds the project,
+    // so there is no menu at all (selection above still lands).
+    if (readonly) return;
     contextMenu = {
       x: event.clientX,
       y: event.clientY,
@@ -2789,23 +2830,29 @@
     // rather than through the tracked pointer, which the menu may already be
     // covering) — the same placement as the `C`/`N` keys they advertise.
     const world = svgPoint(root_svg, event.clientX, event.clientY);
+    // Frozen while someone else holds the project: creation rows go,
+    // view rows (zoom, reset, grid) stay — they are navigation.
     contextMenu = {
       x: event.clientX,
       y: event.clientY,
       items: [
-        {
-          label: "New component",
-          shortcut: "C",
-          action: () =>
-            openCreateComponentModal(
-              nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
-            ),
-        },
-        {
-          label: "New annotation",
-          shortcut: "N",
-          action: () => addAnnotationHandler(world),
-        },
+        ...(readonly
+          ? []
+          : [
+              {
+                label: "New component",
+                shortcut: "C",
+                action: () =>
+                  openCreateComponentModal(
+                    nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+                  ),
+              },
+              {
+                label: "New annotation",
+                shortcut: "N",
+                action: () => addAnnotationHandler(world),
+              },
+            ]),
         { label: "Zoom to fill", shortcut: "F", action: () => zoomToFill() },
         {
           label: "Reset view",
@@ -2867,10 +2914,6 @@
     if (event.button !== 0) return;
     event.preventDefault();
 
-    // One undo point per drag *gesture* (not per mousemove) — recorded here,
-    // at mousedown, before anything moves.
-    recordUndoPoint();
-
     // Shift+click toggles the node in/out of the selection (multi-select).
     // A plain click on a node that isn't already part of the selection
     // replaces the selection with just that node; clicking a node that's
@@ -2885,6 +2928,15 @@
     } else if (!selected.has(index)) {
       selectOnly(index);
     }
+
+    // Frozen while someone else holds the project: selection (read-only
+    // navigation) still works, but no drag starts and no undo point is
+    // recorded. Middle-click detail view and Space-pan return above.
+    if (readonly) return;
+
+    // One undo point per drag *gesture* (not per mousemove) — recorded here,
+    // at mousedown, before anything moves.
+    recordUndoPoint();
 
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
     const startPositions = snapshotNodePositions();
@@ -2922,7 +2974,6 @@
     if (event.button !== 0) return;
     event.preventDefault();
     focusCanvas();
-    recordUndoPoint();
 
     if (event.shiftKey) {
       if (selectedAnnotations.has(index)) {
@@ -2935,6 +2986,11 @@
     } else if (!selectedAnnotations.has(index)) {
       selectAnnotation(index);
     }
+
+    // Frozen while someone else holds the project: selection still works,
+    // but the note never starts moving and no undo point is recorded.
+    if (readonly) return;
+    recordUndoPoint();
 
     const svgCoords = svgPoint(root_svg, event.clientX, event.clientY);
     const anchor = annotations[index] ?? { x: 0, y: 0 };
@@ -3002,6 +3058,9 @@
     event.stopPropagation();
     if (autoLayoutRunning) return;
     if (event.button !== 0) return;
+    // Frozen while someone else holds the project: the note keeps its
+    // selection behavior via its label handler, but never starts resizing.
+    if (readonly) return;
     event.preventDefault();
     if (!selectedAnnotations.has(index)) selectAnnotation(index);
     recordUndoPoint();
@@ -3063,6 +3122,9 @@
     // which starts panning instead of a resize — keeps "how to start a pan"
     // in one place.
     if (isSpaceHeld()) return;
+    // Frozen while someone else holds the project: panning (above) still
+    // works, resizing never starts.
+    if (readonly) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -4418,15 +4480,11 @@
         onmouseleave={onSvgMouseLeave}
         onwheel={onWheel}
         oncontextmenu={openCanvasContextMenu}
-        style="cursor: {autoLayoutRunning
-          ? 'wait'
-          : interaction.type === 'dragging' ||
-              interaction.type === 'resizing' ||
-              interaction.type === 'panning'
-            ? 'grabbing'
-            : interaction.type === 'marquee'
-              ? 'crosshair'
-              : 'grab'}"
+        style="cursor: {canvasCursor({
+          autoLayoutRunning,
+          readonly,
+          interactionType: interaction.type,
+        })}"
       >
         <defs>
           <!--
