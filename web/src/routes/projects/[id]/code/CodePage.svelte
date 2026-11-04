@@ -5,6 +5,7 @@
   import {
     handleLockLost,
     projectLock,
+    shouldReloadForVersion,
   } from "../../../../collab/projectLock.svelte";
   import { createDebounced } from "../../../../debounce";
   import { getProjectModel } from "../../../../ProjectModel.svelte";
@@ -56,6 +57,11 @@
   let selectedPath = $state<string | null>(null);
   let loadedProjectId: string | null = null;
 
+  // The version this page has applied. Null seeds on mount and on project
+  // switch (never reloads); the follower effect below advances it only
+  // when it actually reloads, so a busy skip retries on the next poll.
+  let appliedVersion: string | null = $state(null);
+
   async function refreshEntries(): Promise<void> {
     entries = await fs.readdir(".", { recursive: true });
   }
@@ -86,6 +92,9 @@
     if (id === loadedProjectId) return;
     loadedProjectId = id;
     selectedPath = null;
+    // A new project starts unseen: without the reset the follower effect
+    // below would read the old version against the new one.
+    appliedVersion = null;
     void refreshEntries().then(() => {
       selectedPath = firstHclPath();
     });
@@ -141,6 +150,54 @@
     },
     WRITE_DEBOUNCE_MS,
   );
+
+  // Follower reload: another tab wrote, the poll saw a new version, and
+  // this tab holds no lock. Drops at most one debounce window of typing
+  // (cancel, never flush — the queued text was composed against the old
+  // revision and flushing it would silently destroy the remote edit),
+  // invalidates the store cache first so every re-read hits the truth,
+  // then reloads the model, the tree, and the open file. A file missing
+  // after reload clears the selection. Silent: no toast, the badge already
+  // names the holder.
+  async function reloadForFollower(): Promise<void> {
+    const idAtStart = projectId;
+    const pathAtStart = loadedPath;
+    scheduleFileWrite.cancel();
+    if (pathAtStart !== null) projectModel.clearDraft(pathAtStart);
+    projectStore.invalidate();
+    await projectModel.reload();
+    if (projectId !== idAtStart) return;
+    await refreshEntries();
+    if (projectId !== idAtStart) return;
+    if (pathAtStart === null) return;
+    const fresh = await fs.readFile(pathAtStart).catch(() => null);
+    if (loadedPath !== pathAtStart) return;
+    if (fresh === null) {
+      selectedPath = null;
+      return;
+    }
+    content = fresh;
+    lastWrittenContent = fresh;
+  }
+
+  $effect(() => {
+    const current = projectLock.version;
+    // Bumped after every poll so a busy-skipped reload retries even when
+    // the version itself did not move again.
+    void projectLock.pollSeq;
+    if (appliedVersion === null) {
+      if (current !== null) appliedVersion = current;
+      return;
+    }
+    const mine =
+      projectLock.lockedBy !== null && projectLock.lockedBy === projectLock.me;
+    // The Code page has no non-blocking modals and no canvas gestures:
+    // prompts/confirms block the thread, so nothing is ever busy here.
+    if (!shouldReloadForVersion(appliedVersion, current, { mine, busy: false }))
+      return;
+    appliedVersion = current;
+    void reloadForFollower();
+  });
 
   // Loads the selected file's content into the editor whenever the
   // selection changes identity. Missing files fall back to empty content

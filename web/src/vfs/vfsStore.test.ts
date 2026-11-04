@@ -611,6 +611,30 @@ describe("ServerProjectStore HTTP behavior", () => {
     expect(nodes.map((n) => n.name)).toEqual(["system.hcl"]);
   });
 
+  it("sees another writer's changes only after invalidate", async () => {
+    // Two tabs on one fake server: the follower keeps its cached snapshot
+    // until it invalidates, then reads the truth.
+    const fake = makeFakeFetch();
+    const first = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      now: () => "t0",
+    });
+    const second = new ServerProjectStore("http://rhizz-server", {
+      fetch: fake.fetch,
+      now: () => "t0",
+    });
+    const project = await first.createProject("drone");
+    // The follower reads the empty project and caches that snapshot.
+    expect(await second.listNodes(project.id)).toEqual([]);
+    await first.createFile(project.id, null, "system.hcl", "system {}");
+
+    // Without an invalidate it keeps seeing the empty snapshot.
+    expect(await second.listNodes(project.id)).toEqual([]);
+    // Invalidating drops the cache; the next read sees the file.
+    second.invalidate();
+    expect(await second.listNodes(project.id)).toHaveLength(1);
+  });
+
   it("forgivingly drops malformed entries returned by the server", async () => {
     const blob = {
       version: 1,

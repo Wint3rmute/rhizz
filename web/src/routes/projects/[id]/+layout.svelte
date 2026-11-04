@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
   import { onDestroy } from "svelte";
@@ -11,6 +12,7 @@
     setCurrentProject,
   } from "../../../ProjectState.svelte";
   import { projectLock } from "../../../collab/projectLock.svelte";
+  import { toastState } from "../../../ToastState.svelte";
   import ProjectTour from "../../../tour/ProjectTour.svelte";
   import PaletteHost from "../../../commands/PaletteHost.svelte";
   import {
@@ -46,17 +48,42 @@
     projectLock.stop();
   }
 
+  // Set once a version has been seen: a later version-less poll means the
+  // project was deleted out from under this tab.
+  let sawVersion = false;
+
   $effect(() => {
     const id = data.projectId;
     if (id === loadedId) return;
     loadedId = id;
     loading = true;
+    // A new project starts unseen: without this, the null version between
+    // stop() and the first poll would read as a deletion of the old one.
+    sawVersion = false;
     setCurrentProject(id).then(() => {
       loading = false;
     });
     // Track this project's lock (a no-op poller for local/memory
     // backends): the badge and every editor's read-only flag follow it.
     projectLock.start(id, getServerBaseUrl());
+  });
+
+  // A version that was known and goes missing means the project was
+  // deleted elsewhere (the state endpoint 404s): toast and leave for the
+  // project list. Local backends never report a version, so they never
+  // trigger this. pollSeq is read so a 404 that persists across polls
+  // still re-runs this effect after a project switch resets the flag.
+  $effect(() => {
+    const version = projectLock.version;
+    void projectLock.pollSeq;
+    if (version !== null) {
+      sawVersion = true;
+      return;
+    }
+    if (!sawVersion) return;
+    sawVersion = false;
+    toastState.show("This project was deleted", "warning");
+    void goto(resolve("/projects"));
   });
 
   // Diagram embeds are project-scoped, so they sit under this layout like

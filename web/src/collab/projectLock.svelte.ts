@@ -42,6 +42,8 @@ export class ProjectLock {
   lockedBy: string | null = $state(null);
   /** When the current lease runs out (RFC 3339), if held. */
   lockExpiresAt: string | null = $state(null);
+  /** Bumped after every completed poll so followers can retry. */
+  pollSeq: number = $state(0);
 
   /** True when someone else holds the project: editors go read-only. */
   readonly = $derived(
@@ -116,6 +118,16 @@ export class ProjectLock {
 
   /** Re-reads the project's lock state. Never throws. */
   async refresh(): Promise<void> {
+    try {
+      await this.refreshInner();
+    } finally {
+      // Followers key off this to retry a busy-skipped reload: it must
+      // advance even when the poll itself failed.
+      if (this.projectId !== null) this.pollSeq += 1;
+    }
+  }
+
+  private async refreshInner(): Promise<void> {
     const { projectId, serverUrl } = this;
     if (projectId === null || serverUrl === null) return;
     let response: Response;
@@ -217,6 +229,24 @@ export class ProjectLock {
  * this module singleton; the project layout starts it per open project.
  */
 export const projectLock = new ProjectLock();
+
+/**
+ * Whether a follower tab should reload on a polled version: the version is
+ * known, it moved since the follower last applied one, the follower does
+ * not hold the lock itself (a holder only ever sees their own writes), and
+ * the page is not in the middle of something uninterruptible. A busy page
+ * skips, and the next poll retries since the version still differs.
+ */
+export function shouldReloadForVersion(
+  applied: string | null,
+  current: string | null,
+  opts: { mine: boolean; busy: boolean },
+): boolean {
+  if (current === null || applied === null) return false;
+  if (current === applied) return false;
+  if (opts.mine || opts.busy) return false;
+  return true;
+}
 
 /**
  * Handles a refused write: re-reads the lock state, reloads the caller, and

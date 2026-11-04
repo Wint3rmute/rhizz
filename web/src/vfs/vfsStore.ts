@@ -288,6 +288,9 @@ export class VfsProjectStore implements ProjectStore {
   // result. Without this, two overlapping mutations both read the same
   // snapshot and the second save erases the first one's change.
   private writeChain: Promise<unknown> = Promise.resolve();
+  // Bumped by invalidate(): a read that started before the invalidation
+  // must not repopulate the cache with the state it just discarded.
+  private epoch = 0;
 
   constructor(
     backend: VfsBackend,
@@ -304,10 +307,13 @@ export class VfsProjectStore implements ProjectStore {
   /** The VFS blob, read from the backend on first use and cached after. */
   private async load(): Promise<VfsData> {
     if (this.cached !== null) return this.cached;
+    const epoch = this.epoch;
     this.pending ??= this.backend.read();
     try {
       const data = await this.pending;
-      this.cached = data;
+      // A read that started before an invalidate() must not repopulate the
+      // cache with the state that invalidation just discarded.
+      if (this.epoch === epoch) this.cached = data;
       return data;
     } finally {
       // Cleared by whichever caller settles first; anyone else already
@@ -315,6 +321,21 @@ export class VfsProjectStore implements ProjectStore {
       // finds `cached` set.
       this.pending = null;
     }
+  }
+
+  /**
+   * Drops the session read cache so the next read starts from the backend
+   * truth again. A caller that just learned the server moved on (a
+   * collaborator's edit observed by polling) calls this before re-reading.
+   * In-flight reads resolve normally but no longer repopulate the cache.
+   */
+  invalidate(): void {
+    // A caller that just learned the server moved on (a collaborator's
+    // edit observed by polling) drops the snapshot so the next read —
+    // including an in-flight one — starts from the backend truth again.
+    this.cached = null;
+    this.pending = null;
+    this.epoch += 1;
   }
 
   /** Read-only op: project the cached blob, never write back. */

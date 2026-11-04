@@ -17,6 +17,7 @@
   import {
     handleLockLost,
     projectLock,
+    shouldReloadForVersion,
   } from "../../../../collab/projectLock.svelte";
   import { isLockRefusal } from "../../../../vfs/vfsStore";
   import { createDebounced } from "../../../../debounce";
@@ -4162,6 +4163,98 @@
       activityHintVisible = false;
     }, ACTIVITY_HINT_SUSTAIN_MS);
     return () => clearTimeout(timeout);
+  });
+
+  // ── Follower auto-reload on remote version change ─────────────────────────
+  //
+  // Another tab wrote and the poll saw a new version while this tab holds no
+  // lock: invalidate the store cache first (or every re-read hits the stale
+  // snapshot), reload the model and the view list, then re-read the open
+  // view's layout through the same apply path as the load effect. Silent —
+  // no toast; the badge already names the holder. At most one debounce
+  // window of layout writes is lost: the queued write is cancelled, never
+  // flushed, since it was composed against the old revision.
+  let appliedVersion: string | null = $state(null);
+  let lastFollowerProjectId: string | null | undefined = undefined;
+
+  async function reloadForFollower(): Promise<void> {
+    const idAtStart = projectId;
+    const pathAtStart = fullDiagramPath;
+    // Drop the queued layout write: it belongs to the old revision.
+    scheduleLayoutWrite.cancel();
+    projectStore.invalidate();
+    await projectModel.reload();
+    if (projectId !== idAtStart) return;
+    await refreshDiagramEntries();
+    if (projectId !== idAtStart) return;
+    // The open view may have been deleted remotely: fall back through the
+    // normal view-resolution path, which also rewrites the URL.
+    if (
+      pathAtStart !== null &&
+      !diagramEntries.some(
+        (e) => e.isFile() && `${VIEW_LAYOUT_DIR}/${e.path}` === pathAtStart,
+      )
+    ) {
+      resetUndoHistory();
+      selectView(firstDiagramPath(), true);
+      return;
+    }
+    if (pathAtStart === null) return;
+    const stampAtStart = diagramEditStamp;
+    const layout = await readDiagramLayoutFile(fs, pathAtStart).catch(
+      () => null,
+    );
+    if (projectId !== idAtStart) return;
+    if (loadedDiagramPath !== pathAtStart) return;
+    if (layout === null) return;
+    // A gesture that started while the read was in flight owns the canvas
+    // now: keep its state so the save effect can persist it (last-writer
+    // wins), rather than yanking it away mid-drag.
+    if (diagramEditStamp !== stampAtStart) return;
+    checked = layout.checked;
+    savedLayout = { ...layout.checked };
+    savedConnections = layout.connections ?? {};
+    portPositions = layout.ports ?? {};
+    annotations = layout.annotations ?? [];
+    carriedMeta = {
+      fullName: layout.fullName,
+      tags: layout.tags,
+      filter: layout.filter,
+    };
+    selectedSystem = layout.system ?? "";
+    diagramLayoutLoaded = true;
+    // Stored undo steps name the pre-remote model; keeping them would let
+    // Ctrl+Z paint the old diagram over the new one.
+    resetUndoHistory();
+  }
+
+  $effect(() => {
+    const id = projectId ?? null;
+    if (id !== lastFollowerProjectId) {
+      lastFollowerProjectId = id;
+      appliedVersion = null;
+    }
+    const current = projectLock.version;
+    // Bumped after every poll so a busy-skipped reload retries even when
+    // the version itself did not move again.
+    void projectLock.pollSeq;
+    if (appliedVersion === null) {
+      if (current !== null) appliedVersion = current;
+      return;
+    }
+    const mine =
+      projectLock.lockedBy !== null && projectLock.lockedBy === projectLock.me;
+    const busy =
+      isCreateModalOpen ||
+      isNewViewModalOpen ||
+      newConnectionRequest !== null ||
+      deleteConnectionRequest !== null ||
+      interaction.type !== "idle" ||
+      autoLayoutRunning;
+    if (!shouldReloadForVersion(appliedVersion, current, { mine, busy }))
+      return;
+    appliedVersion = current;
+    void reloadForFollower();
   });
 </script>
 
