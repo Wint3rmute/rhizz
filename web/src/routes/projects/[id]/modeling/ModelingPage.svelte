@@ -2844,7 +2844,11 @@
                 shortcut: "C",
                 action: () =>
                   openCreateComponentModal(
-                    nodeTopLeftAt(world, DEFAULT_NODE_WIDTH, DEFAULT_NODE_HEIGHT),
+                    nodeTopLeftAt(
+                      world,
+                      DEFAULT_NODE_WIDTH,
+                      DEFAULT_NODE_HEIGHT,
+                    ),
                   ),
               },
               {
