@@ -4,6 +4,34 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Follower auto-reload on remote version change
+
+Watchers polled the project version but never acted on it. Implemented the
+reload half of 0004's "watchers reload when the version changes" — merged in
+PR #495 (`feat(web): follower auto-reload on remote version change`).
+
+- Reload rule (per page, no cross-page coordinator): Code, Modeling, and
+  Inventory each keep a local `appliedVersion` (null seeds on mount/project
+  switch) and an `$effect` on `(projectLock.version, projectLock.pollSeq)`:
+  reload iff version known, differs, holder is someone else, and page not
+  busy. `pollSeq` bumps after every completed poll so busy skips retry.
+- Busy: open non-blocking modals, active canvas gesture, running auto-layout.
+  Code page never busy (prompts block). No draft preservation (≤700 ms drop).
+- Reload invalidates the store first (`VfsProjectStore.invalidate()` with
+  epoch guard); pending debounced writes are cancelled, never flushed.
+  Modeling also resets undo history; missing file/view falls back; deleted
+  project toasts and navigates to `/projects`.
+- DetailPane watches the version itself and drops to view mode (owns its
+  debouncer).
+- Tests: `shouldReloadForVersion` matrix, `createDebounced.cancel()`,
+  `invalidate()` second-writer test; `just vrt-quick` 334 unchanged.
+
+Validation: `just test` green, `just lint` clean, `just build` green,
+`just vrt-quick` 334 unchanged. Live two-browser checklist to be verified on
+final deployment.
+
+---
+
 ## Task <N> — 0004.5 Lock/poll timing tune + hardening
 
 Final pass over 0004.1–0004.4. Proposal
