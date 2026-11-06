@@ -16,23 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0005.0 Projection resolver (foundation, no UI)
-
-Pure helper implementing `SPEC.md` §6.3–§6.4 + §6.7 item 2, next to
-`web/src/routes/projects/[id]/modeling/connectionVisibility.ts`
-(the existing shared drawn-predicate both sidebar and canvas consume).
-
-- Input: resolved connections (`from`/`to` component ids, label), parent links,
-  placed set, `hidden` lookup. Output per connection copy: `direct` (both ends
-  directly placed) | `projected` (resolved visible ancestors + projected port
-  names `<rel-path>/<port>`) | `omitted` (no ancestor, or projected self-edge:
-  both resolve to same ancestor with ≥1 endpoint projected).
-- Slash rule (`SPEC.md` §3): real labels never contain `/`, so projected names
-  can't collide — no special-casing in the resolver.
-- Red/green TDD, colocated unit tests (direct, mixed direct/projected,
-  omitted, `B/C/input`, copies sharing a name → same toggle).
-- Definition of done: unit tests green; no UI change; `just test`, `just lint`.
-
 ## Task <N> — 0005.1 Sidebar lists all connections + Projected badge
 
 End state bullet 1 + 2: the modeling inspector (right side) always shows every
