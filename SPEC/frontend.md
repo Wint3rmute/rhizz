@@ -121,7 +121,10 @@ impl CompileResultJS {
 2. Sources are compiled via `rhizz-wasm` → `CompileResult`.
 3. The resolved `Model` is fed to the layout engine, which positions components
    in a grid (non-leaf components expand to contain children).
-4. Three.js `SVGRenderer` draws the scene: rectangles for components, lines with
+4. For the active view, the renderer derives projected connections and projected
+   ports from `Model` + `ViewDefinition` per SPEC.md §6.2–§6.8 (nearest visible
+   ancestor per endpoint, omission when unresolvable, original identity
+   preserved) and then draws the scene: rectangles for components, lines with
    arrowheads for connections.
 5. Pan/zoom via mouse drag and scroll wheel.
 6. Hover hit-testing shows component details (full_name, tags, ports) in an
