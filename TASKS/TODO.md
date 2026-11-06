@@ -16,6 +16,97 @@ How to work on this file:
 
 ---
 
+## Task <N> — 0005.0 Projection resolver (foundation, no UI)
+
+Pure helper implementing `SPEC.md` §6.3–§6.4 + §6.7 item 2, next to
+`web/src/routes/projects/[id]/modeling/connectionVisibility.ts`
+(the existing shared drawn-predicate both sidebar and canvas consume).
+
+- Input: resolved connections (`from`/`to` component ids, label), parent links,
+  placed set, `hidden` lookup. Output per connection copy: `direct` (both ends
+  directly placed) | `projected` (resolved visible ancestors + projected port
+  names `<rel-path>/<port>`) | `omitted` (no ancestor, or projected self-edge:
+  both resolve to same ancestor with ≥1 endpoint projected).
+- Slash rule (`SPEC.md` §3): real labels never contain `/`, so projected names
+  can't collide — no special-casing in the resolver.
+- Red/green TDD, colocated unit tests (direct, mixed direct/projected,
+  omitted, `B/C/input`, copies sharing a name → same toggle).
+- Definition of done: unit tests green; no UI change; `just test`, `just lint`.
+
+## Task <N> — 0005.1 Sidebar lists all connections + Projected badge
+
+End state bullet 1 + 2: the modeling inspector (right side) always shows every
+defined connection of the view's system, with a small `Projected` badge on
+ones the resolver marks projected under current visibility.
+
+- Extend `sidebarConnectionRows` (currently only lists placed connections):
+  list all in-system connections; per-name state `drawn | projected | hidden |
+  omitted` from the 0005.0 resolver. Copies sharing a name stay one row (same
+  hide/show semantics as today).
+- UI: DaisyUI badge (prefer `badge-ghost`), Storybook stories for each state
+  (VRT). Interaction logic (badge reactivity on show/hide) covered by e2e.
+- Definition of done: high-level view lists `low-link` with badge; hiding via
+  existing `connection` block still works; `just test`, `just lint`, `just build`.
+
+## Task <N> — 0005.2 Canvas draws projected edges
+
+Projected connections render between visible ancestors under their original
+name/identity (`SPEC.md` §6.2, §6.6).
+
+- Edge list (`drawnConnections` consumers) emits projected edges with resolved
+  endpoints; `hidden`/`start_side`/`end_side` apply unchanged; multiples
+  preserved (no merging); projected self-edges omitted (0005.0).
+- Direction arrowheads from original roles (§6.1).
+- e2e first: view with only `A`,`C` shows `A—C` for `B/input—D/output`;
+  hidden flag hides it; two connections onto same pair render twice.
+- Definition of done: e2e green; `just test`, `just lint`, `just build`.
+
+## Task <N> — 0005.3 Draggable projected ports + persistence
+
+End state bullet 3: projected port dots move like any other port, position
+persisted per view.
+
+- Port dots for projected names reuse existing drag gesture; writes go through
+  `persistence.ts` as `node "sys/A" { port "B/input" { side offset } }`
+  (existing HCL convention, §2.10/§6.5). Direct layout wins when present.
+- Verify `parse_views`/serializer round-trip of `/`-containing port labels
+  (`persistence.test.ts`); e2e drag test for a projected dot.
+- Definition of done: reload keeps position; `just test`, `just lint`.
+
+## Task <N> — 0005.4 Reveal/hide transitions (jump) + stale handling
+
+End state bullet 4: connection added as projected, then inner component shown
+→ edge jumps from projected rendering to the real inner port. Hiding reverses it.
+
+- Must fall out of shared-resolver reactivity (0005.0): visibility change
+  re-resolves; no position transfer (projected layout ignored once direct
+  applies; direct falls back to its own block or role default — state this in
+  e2e assertions).
+- Stale `port` blocks (renamed/removed descendant): ignored with fallback, no
+  diagnostic (per scoping decision) — e2e covers fallback, no warning asserted.
+- e2e: project → reveal inner → attached to real port → hide inner → projected
+  again.
+- Definition of done: e2e green; `just test`, `just lint`, `just build`.
+
+## Task <N> — Slash-in-label compiler error (Rust)
+
+Enforce the `SPEC.md` §3 rule (block labels must be non-empty, must not contain
+`/`; `/` is the path separator) in `rhizz-core` instead of relying on
+incidental resolution failure + the editor-only `mutation/connect.ts:check_label`
+guard. Motivating case: guarantees projected names (`B/input`) can never
+collide with a real single label.
+
+- New diagnostic file under `SPEC/diagnostics/` (error code; `build.rs` picks it
+  up — follow `diagnostics.md` format rules), emitted at parse/resolution for
+  any block label containing `/` (system, component, instance, port,
+  connection, protocol, message, field, view). Check what `E000`/`E001`
+  already cover first and reuse if fitting; otherwise mint the new code.
+- Assert the exact new code (not just counts) in tests, per repo convention.
+- Red/green TDD in `crates/rhizz-core`; `just test`, `just lint`, `just build`;
+  `just format`. No frontend change.
+
+---
+
 ## Task <N> - exploring diagrams in embed mode
 
 When browsing system diagrams in Embed mode (/modeling/embed/), it's not
