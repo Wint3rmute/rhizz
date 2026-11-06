@@ -882,7 +882,11 @@ visibility. It never requires explicit intermediate connections or manually
 declared forwarding ports.
 
 If either endpoint has no suitable visible ancestor, the connection is
-**omitted** from that view by default. There is no contextual-node fallback:
+**omitted** from that view by default. A connection is also omitted when
+projection would render it as a self-edge: both endpoints resolve to the same
+visible component but at least one endpoint was projected (see §6.7, item 2).
+Direct self-connections — both endpoints directly on the placed component with
+no projection — still render normally. There is no contextual-node fallback:
 the existing view model draws a connection only when both ends resolve to
 placed components, and projection generalizes that rule without adding a new
 mechanism. The `hidden` flag on the view's `connection` block still applies
@@ -1027,11 +1031,14 @@ original ports.
    (projected as needed), and independent `connection`-block customization.
    The renderer must not silently merge them, even when their projected routes
    overlap.
-2. **Both endpoints project onto the same visible component:** represent the
-   result as a self-connection (self-edge) on that visible component, under
-   the original connection name and direction. This creates no system-model
-   self-connection and does not by itself emit W005, which applies to
-   system-declared self-connections only.
+2. **Both endpoints resolve to the same visible component via projection:**
+   omit the connection. Projected self-edges are not rendered: when at least
+   one endpoint was projected and both resolve to the same ancestor, the view
+   draws nothing for that connection. This avoids ambiguous duplicate-name
+   loops (e.g. `f1/inner` and `f2/inner` cloning the same definition under one
+   placed ancestor `A`) and keeps projection sound — place the descendants to
+   see internal connections. Direct self-connections declared in the system
+   model still render and are subject to W005 as before.
 3. **Multiple descendant ports with identical names:** relative component paths
    distinguish projected ports (for example `B1/data` vs `B2/data`). The full
    relative path is mandatory, never just the leaf port name.
