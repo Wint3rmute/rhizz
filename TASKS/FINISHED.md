@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0005.1 Sidebar lists all connections + Projected badge
+
+`sidebarProjectionRows` in `connectionProjection.ts` (unit-tested: unplaced
+listing, projected/direct/hidden/omitted states, copies grouped + sorted) feeds
+the ModelingPage sidebar: every in-system connection is listed, `shown` keeps
+the old drawn rule so the checkbox stays truthful to the canvas, and a DaisyUI
+`badge-ghost` `Projected` badge marks resolver-projected rows. Inspector
+`placedLabels` preserved via a separate `isPlacedInSystem` derived so Show
+buttons never target undrawable edges. Red/green TDD incl. new
+`e2e/projected-sidebar.spec.ts` (listed → badged → placed/drawn) and updated
+`e2e/connection-visibility.spec.ts` (unplaced rows stay listed unchecked).
+No dedicated story: badge state is covered by e2e, page VRT unchanged.
+
+---
+
 ## Task <N> — 0005.0 Projection resolver (foundation, no UI)
 
 Pure helper `web/src/routes/projects/[id]/modeling/connectionProjection.ts`

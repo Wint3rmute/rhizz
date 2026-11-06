@@ -16,21 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0005.1 Sidebar lists all connections + Projected badge
-
-End state bullet 1 + 2: the modeling inspector (right side) always shows every
-defined connection of the view's system, with a small `Projected` badge on
-ones the resolver marks projected under current visibility.
-
-- Extend `sidebarConnectionRows` (currently only lists placed connections):
-  list all in-system connections; per-name state `drawn | projected | hidden |
-  omitted` from the 0005.0 resolver. Copies sharing a name stay one row (same
-  hide/show semantics as today).
-- UI: DaisyUI badge (prefer `badge-ghost`), Storybook stories for each state
-  (VRT). Interaction logic (badge reactivity on show/hide) covered by e2e.
-- Definition of done: high-level view lists `low-link` with badge; hiding via
-  existing `connection` block still works; `just test`, `just lint`, `just build`.
-
 ## Task <N> — 0005.2 Canvas draws projected edges
 
 Projected connections render between visible ancestors under their original
