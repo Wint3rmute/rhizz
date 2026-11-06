@@ -99,9 +99,11 @@ block (`start_side` / `end_side` / `hidden`, keyed by system connection name)
 applies to the projected rendering unchanged.
 
 If either endpoint has no suitable visible ancestor, the connection is
-**omitted** from that view. No contextual-node fallback: this generalizes the
-existing rule (draw only when both ends resolve to placed components) without
-a new mechanism.
+**omitted** from that view. A connection is also omitted when projection would
+render it as a self-edge: both endpoints resolve to the same visible component
+but at least one endpoint was projected. Direct self-connections still render.
+No contextual-node fallback: this generalizes the existing rule (draw only when
+both ends resolve to placed components) without a new mechanism.
 
 ### 3. Projected ports
 
@@ -182,9 +184,12 @@ inference all operate on the system connection and its original ports.
 1. **Multiple connections between the same visible pair:** preserve each one
    with its own name and `connection`-block customization. Never silently
    merge, even when routes overlap.
-2. **Both ends project onto one component:** render a self-edge on that
-   component under the original name/direction. Creates no system
-   self-connection; W005 applies to system declarations only.
+2. **Both ends resolve to one component via projection:** omit. Projected
+   self-edges are not rendered — when at least one endpoint was projected and
+   both resolve to the same ancestor, the view draws nothing (avoids ambiguous
+   duplicate-name loops such as `f1/inner` + `f2/inner` under one placed `A`;
+   place the descendants to see internals). Direct self-connections still render
+   under W005 as before.
 3. **Identical descendant port names:** full relative paths distinguish them;
    leaf-only names are never used.
 4. **Explicit high-level plus low-level onto the same visible pair:** render
@@ -215,12 +220,12 @@ while projection relates one system connection to its per-view rendering.
 
 No new codes.
 
-- Omission when unresolvable needs no diagnostic; it follows the existing
-  draw-only-when-placed rule.
+- Omission when unresolvable — or when projection would yield a self-edge —
+  needs no diagnostic; it follows the existing draw-only-when-placed rule.
 - Stale projected-port `port` blocks are ignored like stale `node` paths
   (W016 conventions), without a dedicated code.
-- Projected self-edges do not emit W005; W005 covers system-declared
-  self-connections only.
+- Projected self-edges never render, so they cannot emit W005; W005 covers
+  system-declared self-connections only.
 - W010, W019, W020, W021, E017–E019 operate on the system graph only and are
   unaffected by projection; missing intermediates are not errors.
 
