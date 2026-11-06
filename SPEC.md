@@ -581,6 +581,13 @@ Markdown files under `docs/` document components (`docs/plane.md` ↔ `component
 
 > **Impl:** see [Resolution pass](SPEC/models.md#resolution-pass) in models.md.
 
+Block labels (`system`, `component`, `instance`, `port`, `connection`,
+`protocol`, `message`, `field`, `view`) must be non-empty and must not contain
+`/`. `/` is reserved as the path separator. A label containing `/` is never
+treated as a single segment — it is split during path resolution and therefore
+fails to resolve — and mutations refuse it outright. This guarantees a
+projected name such as `B/input` can never collide with a real single label.
+
 All references use **name-based or UNIX-style path notation**:
 
 | Context                                           | Reference resolves to                                                  |

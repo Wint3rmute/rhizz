@@ -1,6 +1,6 @@
 # 0005: Projected Connections
 
-- **Status:** implemented
+- **Status:** in progress
 - **Author:** @wint3rmute
 - **Created:** 2026.11.06
 
