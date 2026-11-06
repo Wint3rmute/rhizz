@@ -4,6 +4,24 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0005.0 Projection resolver (foundation, no UI)
+
+Pure helper `web/src/routes/projects/[id]/modeling/connectionProjection.ts`
+implementing `SPEC.md` §6.3–§6.4 + §6.7 item 2, next to `connectionVisibility.ts`
+— red/green TDD (`connectionProjection.test.ts`, 10 tests: direct, projected,
+nested `B/C/input`, shortened path on intermediate placement, mixed, omitted,
+projected-self-edge omitted vs direct self-connection kept, copies resolved
+independently, hidden exposed separately, bare endpoints portless).
+
+- `nearestVisibleAncestor` (placed + in-system walk, cycle-guarded),
+  `projectedPortName`, `resolveConnectionProjection(s)`, `isProjectionDrawn`.
+  Hidden stays caller-side (as in `isConnectionDrawn`) so the sidebar can keep
+  hidden rows listed-but-unchecked in 0005.1.
+- Validation: targeted vitest green, `eslint` clean, `just format` no-op.
+  No UI change; existing `connectionVisibility` untouched.
+
+---
+
 ## Task <N> — Follower auto-reload on remote version change
 
 Watchers polled the project version but never acted on it. Implemented the
