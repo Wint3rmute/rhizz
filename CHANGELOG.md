@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Feat
+
+- **web**: add projection resolver for projected connections
+
 ## 0.10.0 (2026-11-06)
 
 ### Feat
