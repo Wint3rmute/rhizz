@@ -133,10 +133,8 @@
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import { fitCamera, sceneBounds } from "./blend";
   import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
-  import {
-    drawnConnections,
-    sidebarConnectionRows,
-  } from "./connectionVisibility";
+  import { drawnConnections, isPlacedInSystem } from "./connectionVisibility";
+  import { sidebarProjectionRows } from "./connectionProjection";
   import { createDiagramTransition } from "./transition.svelte";
   import {
     type BorderStyle,
@@ -552,19 +550,33 @@
     return systemComponentIndices.has(index);
   }
 
-  // Connections sidebar: every system connection with both endpoints placed
-  // in the view, grouped by name. A name is listed when any copy is placed
-  // and checked when any copy is drawn (placed, in-system, not hidden), so
-  // hidden connections stay listed, unchecked, and can be shown again.
-  // Shares the drawn predicate with the canvas edge list below.
+  // Connections sidebar: every in-system connection is listed (placed or
+  // not), grouped by name. A name is checked when drawn on the canvas and
+  // badged `Projected` when it resolves through visible ancestors instead of
+  // directly placed endpoints. Hidden connections stay listed but unchecked;
+  // the canvas still draws only directly placed edges until 0005.2.
   let systemConnections = $derived.by(() =>
-    sidebarConnectionRows(
-      connections,
-      checkedIndices,
-      isInViewSystem,
-      isConnectionHidden,
-    ),
+    sidebarProjectionRows(connections, {
+      placed: checkedIndices,
+      inSystem: isInViewSystem,
+      parentOf: (index) => components[index]?.parent_component_index,
+      labelOf: (index) => components[index]?.label ?? `#${String(index)}`,
+      isHidden: isConnectionHidden,
+    }),
   );
+
+  // Labels for the inspector's per-realization "Show" buttons: connections
+  // with both endpoints placed in the view's system (the pre-projection
+  // listing rule), so Show never targets an edge the canvas cannot draw yet.
+  let placedConnectionLabels = $derived.by(() => {
+    const labels = new SvelteSet<string>();
+    for (const conn of connections) {
+      if (isPlacedInSystem(conn, checkedIndices, isInViewSystem)) {
+        labels.add(conn.label);
+      }
+    }
+    return [...labels].sort();
+  });
 
   let fullDiagramPath = $derived(
     selectedDiagramPath === null
@@ -4401,7 +4413,7 @@
           protocol={selectedConnectionInspector.protocol}
           protocolReason={selectedConnectionInspector.protocolReason}
           protocolUsage={selectedConnectionInspector.protocolUsage}
-          placedLabels={systemConnections.map((row) => row.label)}
+          placedLabels={placedConnectionLabels}
           {readonly}
           onupdate={(patch) =>
             void handleUpdateSelectedConnection(patch).catch(
@@ -4759,8 +4771,7 @@
 
         {#if systemConnections.length === 0}
           <p class="text-xs text-base-content/50 italic">
-            No connections between placed components yet — place both endpoints
-            of a connection to show it here.
+            No connections defined in this system yet.
           </p>
         {:else}
           <ul class="space-y-1">
@@ -4782,6 +4793,14 @@
                   aria-label={`Show connection ${connection.label}`}
                 />
                 <span class="truncate">{connection.label}</span>
+                {#if connection.projected}
+                  <span
+                    class="badge badge-ghost badge-xs shrink-0"
+                    data-testid={`projected-badge-${connection.label}`}
+                    title="Shown through visible ancestors instead of directly placed endpoints"
+                    >Projected</span
+                  >
+                {/if}
                 <button
                   type="button"
                   class="ml-auto shrink-0 invisible group-hover:visible text-xs text-base-content/60 hover:text-error"

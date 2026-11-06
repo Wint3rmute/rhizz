@@ -8,8 +8,8 @@ import {
 
 // Hiding a connection removes it from the canvas and unchecks it in the
 // sidebar; the state survives reload; unchecking and re-checking an endpoint
-// keeps the connection hidden; the sidebar lists exactly the placed
-// connections (drawn or hidden).
+// keeps the connection hidden; the sidebar lists every in-system connection
+// (drawn or hidden, placed or not) — unplaced ones stay listed unchecked.
 test("hiding a connection removes it from the canvas and survives reload", async ({
   page,
 }) => {
@@ -157,9 +157,16 @@ test("hiding a connection removes it from the canvas and survives reload", async
     .getByRole("checkbox")
     .first();
   await visBPlacement.uncheck();
-  // With an endpoint unplaced, neither connection is listed.
-  await expect(page.getByTestId("connection-row-link-ab")).toBeHidden();
-  await expect(page.getByTestId("connection-row-link-bc")).toBeHidden();
+  // With an endpoint unplaced, both connections stay listed but unchecked
+  // (nothing placed to project through here — no badge either).
+  await expect(page.getByTestId("connection-row-link-ab")).toBeVisible();
+  await expect(page.getByTestId("connection-row-link-bc")).toBeVisible();
+  await expect(
+    page.getByTestId("connection-row-link-ab").getByRole("checkbox"),
+  ).not.toBeChecked();
+  await expect(
+    page.getByTestId("connection-row-link-bc").getByRole("checkbox"),
+  ).not.toBeChecked();
   await visBPlacement.check();
   // Both are listed again; the hidden one stays unchecked.
   await expect(page.getByTestId("connection-row-link-ab")).toBeVisible();
