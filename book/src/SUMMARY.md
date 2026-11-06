@@ -20,3 +20,4 @@
 - [0002 Protocol Modeling](proposals/0002-protocol-modeling.md)
 - [0003 MCP Introduction](proposals/0003-mcp-introduction.md)
 - [0004 Locking and Collaboration](proposals/0004-locking-and-collab.md)
+- [0005 Projected Connections](proposals/0005-projected-connections.md)

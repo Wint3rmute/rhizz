@@ -120,17 +120,26 @@ path, and its target must share the declaring system or definition tree.
 Views are not part of `Model`. Each `views/*.hcl` file yields one
 `ViewDefinition` (see `serialize.rs`: label, system, filter, nodes, connection
 layouts, annotations) validated per step 8 above. `filter` is parsed and
-round-tripped but not applied by any renderer yet.
+round-tripped but not applied by any renderer yet. Projection (see SPEC.md
+§6.2–§6.8) is derived at render time from `Model` + `ViewDefinition` and is
+never stored in `Model`.
 
 A view `connection` block carries routing (`start_side`/`end_side`) and a
 per-view `hidden` flag (omitted when `false`). Connections are keyed by name
 within a system: copies of one declaration share the name and hide together,
 while two different declarations sharing a name in one system fail with E001.
+The same layout entry controls both direct and projected renderings of that
+system connection.
 
 A view `node` block may carry nested `port` blocks (`PortLayout`: port label,
 `side`, `offset` 0..1 clamped). They pin port dots to exact outline spots in
 that view; ports without a block use the role default. Unknown sides are
-skipped on parse (same as connection sides); `offset` defaults to `0.5`.
+skipped on parse (same as connection sides); `offset` defaults to `0.5`. A
+`PortLayout` port label names either a direct port on the node's component or
+a view-local projected port (`<relative-component-path>/<original-port-name>`,
+see SPEC.md §6.4) resolved against that node's component in that view only.
+Stale projected-port entries that no longer resolve are ignored at render
+time, like stale `node` paths (W016).
 
 ## Design notes
 
