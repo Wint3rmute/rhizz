@@ -930,11 +930,14 @@ visible ancestor that actually renders the endpoint; if the view later places
 an intermediate component, resolution re-derives a shorter name via the
 nearest-visible-ancestor rule (§6.3).
 
-Projected ports inherit their technical properties from the original port,
-including protocol, role, and other relevant attributes. Identity and
-technical semantics remain tied to the original port: protocol compatibility,
-role-based direction inference (§6.1), and validation all read the original
-ports.
+Projected ports inherit protocol and role from the original port for rendering
+purposes only: direction inference (§6.1) and displayed compatibility read the
+originals. They do not inherit `external` / `required` and carry no validation
+obligations whatsoever — a projected port neither satisfies an unconnected-port
+(W010) obligation at the visible ancestor nor creates one. All validation reads
+the original ports in the system graph (see §4). Projected connections are a
+visualisation improvement only; they provide no means of checking the soundness
+or completeness of the system.
 
 Projected ports are not actual ports in the system model:
 
