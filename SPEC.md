@@ -1,4 +1,4 @@
-# `rhizz` Specification v0.8
+# `rhizz` Specification
 
 Rhizz is a code-first system architecture modeling tool. It combines:
 
