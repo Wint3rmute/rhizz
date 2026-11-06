@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: list all connections with Projected badge in sidebar
 - **web**: add projection resolver for projected connections
 
 ## 0.10.0 (2026-11-06)
