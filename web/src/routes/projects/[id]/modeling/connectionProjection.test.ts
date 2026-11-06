@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveConnectionProjection,
   resolveConnectionProjections,
+  sidebarProjectionRows,
   type ProjectionContext,
 } from "./connectionProjection";
 
@@ -201,5 +202,63 @@ describe("resolveConnectionProjection", () => {
       toPort: undefined,
       hidden: false,
     });
+  });
+});
+
+describe("sidebarProjectionRows", () => {
+  const conns = [
+    { label: "low-link", from: 1, to: 5, fromPort: "input", toPort: "output" },
+    { label: "foreign", from: 1, to: 9, fromPort: "input", toPort: "x" },
+  ];
+
+  it("lists in-system connections even when nothing is placed", () => {
+    expect(sidebarProjectionRows(conns, ctx([]))).toEqual([
+      { label: "low-link", shown: false, projected: false },
+    ]);
+  });
+
+  it("marks projected rows when ancestors are placed", () => {
+    expect(sidebarProjectionRows(conns, ctx([0, 4]))).toEqual([
+      { label: "low-link", shown: false, projected: true },
+    ]);
+  });
+
+  it("marks direct rows shown once owners are placed", () => {
+    expect(sidebarProjectionRows(conns, ctx([1, 5]))).toEqual([
+      { label: "low-link", shown: true, projected: false },
+    ]);
+  });
+
+  it("keeps hidden connections listed but unchecked", () => {
+    expect(
+      sidebarProjectionRows(conns, ctx([1, 5], { hidden: ["low-link"] })),
+    ).toEqual([{ label: "low-link", shown: false, projected: false }]);
+  });
+
+  it("badges hidden projected rows without checking them", () => {
+    expect(
+      sidebarProjectionRows(conns, ctx([0, 4], { hidden: ["low-link"] })),
+    ).toEqual([{ label: "low-link", shown: false, projected: true }]);
+  });
+
+  it("never badges projected self-edges", () => {
+    const selfEdge = [
+      { label: "inner", from: 1, to: 2, fromPort: "input", toPort: "loop" },
+    ];
+    expect(sidebarProjectionRows(selfEdge, ctx([0]))).toEqual([
+      { label: "inner", shown: false, projected: false },
+    ]);
+  });
+
+  it("groups copies by name and sorts rows by label", () => {
+    const copies = [
+      { label: "zeta", from: 1, to: 5, fromPort: "input", toPort: "output" },
+      { label: "alpha", from: 1, to: 2, fromPort: "input", toPort: "loop" },
+      { label: "zeta", from: 4, to: 4, fromPort: "a", toPort: "b" },
+    ];
+    expect(sidebarProjectionRows(copies, ctx([0, 4]))).toEqual([
+      { label: "alpha", shown: false, projected: false },
+      { label: "zeta", shown: true, projected: true },
+    ]);
   });
 });

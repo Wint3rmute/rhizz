@@ -149,3 +149,56 @@ export function isProjectionDrawn(
 ): boolean {
   return projection.kind !== "omitted" && !projection.hidden;
 }
+
+export interface SidebarProjectionRow {
+  label: string;
+  /** Checked: at least one copy is drawn on the canvas (old `shown` rule). */
+  shown: boolean;
+  /** At least one copy resolves `projected` under current visibility. */
+  projected: boolean;
+}
+
+/**
+ * Sidebar rows, grouped by connection name: every in-system connection is
+ * listed (placed or not), checked when drawn, badged when projected.
+ * `shown` keeps the pre-projection drawn rule so the checkbox stays truthful
+ * to the canvas until 0005.2 draws projected edges; `projected` is the new
+ * visibility-only signal for the badge.
+ */
+export function sidebarProjectionRows(
+  conns: readonly ProjectionEndpointRef[],
+  context: ProjectionContext,
+): SidebarProjectionRow[] {
+  const hiddenOf = context.isHidden ?? (() => false);
+  const byLabel = new Map<
+    string,
+    { listed: boolean; shown: boolean; projected: boolean }
+  >();
+  for (const conn of conns) {
+    let entry = byLabel.get(conn.label);
+    if (!entry) {
+      entry = { listed: false, shown: false, projected: false };
+      byLabel.set(conn.label, entry);
+    }
+    if (!context.inSystem(conn.from) || !context.inSystem(conn.to)) continue;
+    entry.listed = true;
+    if (
+      context.placed.has(conn.from) &&
+      context.placed.has(conn.to) &&
+      !hiddenOf(conn.label)
+    ) {
+      entry.shown = true;
+    }
+    if (resolveConnectionProjection(conn, context).kind === "projected") {
+      entry.projected = true;
+    }
+  }
+  return [...byLabel.entries()]
+    .filter(([, entry]) => entry.listed)
+    .map(([label, entry]) => ({
+      label,
+      shown: entry.shown,
+      projected: entry.projected,
+    }))
+    .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+}
