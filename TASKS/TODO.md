@@ -16,21 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0005.4 Reveal/hide transitions (jump) + stale handling
-
-End state bullet 4: connection added as projected, then inner component shown
-→ edge jumps from projected rendering to the real inner port. Hiding reverses it.
-
-- Must fall out of shared-resolver reactivity (0005.0): visibility change
-  re-resolves; no position transfer (projected layout ignored once direct
-  applies; direct falls back to its own block or role default — state this in
-  e2e assertions).
-- Stale `port` blocks (renamed/removed descendant): ignored with fallback, no
-  diagnostic (per scoping decision) — e2e covers fallback, no warning asserted.
-- e2e: project → reveal inner → attached to real port → hide inner → projected
-  again.
-- Definition of done: e2e green; `just test`, `just lint`, `just build`.
-
 ## Task <N> — Slash-in-label compiler error (Rust)
 
 Enforce the `SPEC.md` §3 rule (block labels must be non-empty, must not contain
