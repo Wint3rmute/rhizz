@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - lock immediately after first change, then debounce
+
+Two halves, since the perceived ~4s was debounce (0.5–0.7s) plus lock polling
+(4s): `createDebounced` gained an opt-in `{ leading: true }` (first call of an
+idle burst runs now, rest collapse into one trailing run; flush/cancel/pending
+semantics preserved, unit-tested incl. cooldown re-lead), enabled at all three
+page-level VFS writers (Code 700ms, Modeling layout 500ms, Inventory docs
+500ms). Each writer also refreshes `projectLock` after a successful write
+(skipped while already holding, heartbeats renew) so the badge flips without
+waiting for the next poll. Red/green TDD (unit) + updated `debounced-writes`
+e2e (leading write lands inside the old window; burst = leading + one
+trailing). Verified: web unit green, eslint/`svelte-check` clean, targeted e2e
+green.
+
+---
+
 ## Task <N> - visually mark connections not possible to display
 
 Done as proposed, with one wording tweak ("placed", the actual mechanism,
