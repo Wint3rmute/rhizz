@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## 0005 follow-up — No inward projected edges (ancestor into descendant)
+
+User report: placing `A` and `B` (both children of `A` wired together) drew an
+awkward `A → B` edge — the ancestor reaching into itself. Dictated by SPEC §6.3
+"mixed cases" + per-endpoint nearest-ancestor resolution. Fixed by extending
+the omission rule (§6.3, §6.7 item 3, proposal §2/§6): with ≥1 endpoint
+projected, resolved ancestor–descendant pairs omit; direct system connections
+between placed ancestors/descendants still render. Shared `resolutionKind` in
+`connectionProjection.ts` keeps edge and dot enumeration in agreement (dots
+now resolve per drawn connection). Red/green TDD (unit: both orientations,
+direct kept, row/dot omission) + new e2e (`test-connection` between `A/b`,
+`A/c`: listed unchecked unbadged with no edge until `c` is placed).
+
+---
+
 ## Task <N> — 0005.4 Reveal/hide transitions (jump) + stale handling
 
 No production change required: both behaviors fall out of the shared-resolver
