@@ -4347,6 +4347,12 @@
     // now: keep its state so the save effect can persist it (last-writer
     // wins), rather than yanking it away mid-drag.
     if (diagramEditStamp !== stampAtStart) return;
+    // Tween into the remote state like a view switch ("nodes": positions
+    // tween, camera stays — yanking the follower's camera would be rude),
+    // instead of cutting: the blend engine matches nodes/edges by stable id
+    // and fades added/removed ones, so this is the same transition path as
+    // every other scene change. Reduced-motion users still cut (see advance).
+    presentMode = "nodes";
     checked = layout.checked;
     savedLayout = { ...layout.checked };
     savedConnections = layout.connections ?? {};
