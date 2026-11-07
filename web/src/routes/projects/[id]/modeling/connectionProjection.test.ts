@@ -358,3 +358,49 @@ describe("projectedPortDots", () => {
     ).toHaveLength(2);
   });
 });
+
+describe("ancestor-descendant projections", () => {
+  // 3:C lives under 1:B under 0:A; 2:f2 lives directly under 0:A.
+  // Placing A and B while C stays hidden resolves C's end onto A —
+  // an ancestor reaching into its own descendant — which must omit.
+  const inwards = {
+    label: "t",
+    from: 3,
+    to: 2,
+    fromPort: "deep",
+    toPort: "loop",
+  };
+
+  it("omits both orientations", () => {
+    expect(resolveConnectionProjection(inwards, ctx([0, 1])).kind).toBe(
+      "omitted",
+    );
+    expect(
+      resolveConnectionProjection(
+        { ...inwards, from: 2, to: 3, fromPort: "loop", toPort: "deep" },
+        ctx([0, 1]),
+      ).kind,
+    ).toBe("omitted");
+  });
+
+  it("keeps direct ancestor-descendant system connections", () => {
+    expect(
+      resolveConnectionProjection(
+        { label: "t", from: 0, to: 1, fromPort: "p", toPort: "q" },
+        ctx([0, 1]),
+      ).kind,
+    ).toBe("direct");
+  });
+
+  it("lists the row unchecked and unbadged, and draws no dot", () => {
+    expect(sidebarProjectionRows([inwards], ctx([0, 1]))).toEqual([
+      { label: "t", shown: false, projected: false },
+    ]);
+    const keysOf = (index: number) =>
+      (["sys/A", "sys/A/B", "sys/A/f2", "sys/A/B/C"] as const)[index] ??
+      `#${String(index)}`;
+    expect(
+      projectedPortDots([inwards], ctx([0, 1]), keysOf, () => undefined),
+    ).toEqual([]);
+  });
+});
