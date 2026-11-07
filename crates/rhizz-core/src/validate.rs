@@ -536,6 +536,25 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
         .unwrap_or_default();
+    // E004 — `/` is the path separator (SPEC.md §3), so it can never appear
+    // in a block label. Node paths and projected port names legitimately
+    // contain `/`, but the view label itself is a plain label.
+    if view.label.is_empty() {
+        diagnostics.push(view_diagnostic(
+            DiagnosticCode::E004,
+            &file,
+            format!("{filename}: view label must not be empty"),
+        ));
+    } else if view.label.contains('/') {
+        diagnostics.push(view_diagnostic(
+            DiagnosticCode::E004,
+            &file,
+            format!(
+                "{filename}: view label `{}` must not contain `/`",
+                view.label
+            ),
+        ));
+    }
     if view.label != stem {
         diagnostics.push(view_diagnostic(
             DiagnosticCode::E016,
@@ -1315,6 +1334,23 @@ mod tests {
         assert_eq!(
             diags[0].file.as_deref(),
             Some(Path::new("views/overview.hcl"))
+        );
+    }
+
+    #[test]
+    fn validate_view_slash_in_label_emits_e004() {
+        let model = model_with_system("s");
+        let views = vec![view("over/view", "s")];
+        let diags = validate_view(&model, &views, "views/overview.hcl");
+        let e004: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E004)
+            .collect();
+        assert_eq!(e004.len(), 1, "expected one E004, got {diags:?}");
+        assert!(
+            e004[0].message.contains("over/view"),
+            "message must name the label, got: {}",
+            e004[0].message
         );
     }
 
