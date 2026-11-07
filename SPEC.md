@@ -892,7 +892,12 @@ placed components, and projection generalizes that rule without adding a new
 mechanism. The `hidden` flag on the view's `connection` block still applies
 per original connection name, whether the rendering is direct or projected.
 Mixed cases are allowed: one endpoint may be direct while the other is
-projected.
+projected — except that projection never renders an edge between an ancestor
+and its own descendant (see §6.7, item 2). A connection whose resolved
+endpoints are in an ancestor–descendant relationship with at least one
+endpoint projected is omitted: it would read as the ancestor reaching into
+itself, which obscures rather than clarifies. Direct system connections
+between a placed ancestor and a placed descendant still render normally.
 
 ### 6.4 Projected ports
 
@@ -1039,6 +1044,14 @@ original ports.
    placed ancestor `A`) and keeps projection sound — place the descendants to
    see internal connections. Direct self-connections declared in the system
    model still render and are subject to W005 as before.
+3. **A resolved endpoint inside the other resolved endpoint via projection:**
+   omit the connection. When at least one endpoint was projected and one
+   resolved component is an ancestor of the other, the view draws nothing —
+   an ancestor reaching into its own descendant (e.g. placed `A` and `B`
+   with `B`'s peer hidden inside `A`) reads as the component connecting to
+   itself and obscures the hierarchy. Place the hidden peer to see the real
+   edge. Direct system connections between a placed ancestor and a placed
+   descendant still render normally.
 3. **Multiple descendant ports with identical names:** relative component paths
    distinguish projected ports (for example `B1/data` vs `B2/data`). The full
    relative path is mandatory, never just the leaf port name.

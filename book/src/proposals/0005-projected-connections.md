@@ -94,9 +94,12 @@ For each system connection considered in a view:
 
 Visibility is `node` placement in the same view and system. The derivation
 uses only hierarchy + visibility — never explicit intermediates or forwarding
-ports. Mixed direct/projected endpoints are allowed. The view's `connection`
-block (`start_side` / `end_side` / `hidden`, keyed by system connection name)
-applies to the projected rendering unchanged.
+ports. Mixed direct/projected endpoints are allowed, except that projection
+never renders an edge between an ancestor and its own descendant (see §6
+item 3): with at least one endpoint projected, ancestor–descendant resolved
+pairs are omitted. The view's `connection` block (`start_side` / `end_side` /
+`hidden`, keyed by system connection name) applies to the projected rendering
+unchanged.
 
 If either endpoint has no suitable visible ancestor, the connection is
 **omitted** from that view. A connection is also omitted when projection would
@@ -190,6 +193,11 @@ inference all operate on the system connection and its original ports.
    duplicate-name loops such as `f1/inner` + `f2/inner` under one placed `A`;
    place the descendants to see internals). Direct self-connections still render
    under W005 as before.
+3. **One resolved end inside the other via projection:** omit. When at least
+   one endpoint was projected and one resolved component is an ancestor of the
+   other, the view draws nothing — an ancestor reaching into its own descendant
+   reads as the component connecting to itself. Place the hidden peer to see
+   the real edge. Direct ancestor–descendant system connections still render.
 3. **Identical descendant port names:** full relative paths distinguish them;
    leaf-only names are never used.
 4. **Explicit high-level plus low-level onto the same visible pair:** render

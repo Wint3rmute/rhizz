@@ -81,6 +81,48 @@ export function projectedPortName(
   return `${relLabels.join("/")}/${port}`;
 }
 
+/** Strict ancestor check: walks `node` up past itself. Cycle-guarded. */
+export function isAncestorOf(
+  ancestor: number,
+  node: number,
+  parentOf: (index: number) => number | undefined,
+): boolean {
+  const visited = new Set<number>();
+  let current = parentOf(node);
+  while (current !== undefined && !visited.has(current)) {
+    if (current === ancestor) return true;
+    visited.add(current);
+    current = parentOf(current);
+  }
+  return false;
+}
+
+/**
+ * Shared omission rule (SPEC.md §6.7 items 2–3), so the edge resolver and the
+ * port-dot enumerator cannot disagree: given both resolved ends, `undefined`
+ * means an end had no visible ancestor. Both-direct renders (even genuine
+ * self-connections); anything projected onto the same ancestor — or into an
+ * ancestor–descendant pair — omits.
+ */
+function resolutionKind(
+  fromVisible: VisibleAncestor | undefined,
+  toVisible: VisibleAncestor | undefined,
+  parentOf: (index: number) => number | undefined,
+): ProjectionKind {
+  if (fromVisible === undefined || toVisible === undefined) return "omitted";
+  const fromProjected = fromVisible.relLabels.length > 0;
+  const toProjected = toVisible.relLabels.length > 0;
+  if (!fromProjected && !toProjected) return "direct";
+  if (fromVisible.ancestor === toVisible.ancestor) return "omitted";
+  if (
+    isAncestorOf(fromVisible.ancestor, toVisible.ancestor, parentOf) ||
+    isAncestorOf(toVisible.ancestor, fromVisible.ancestor, parentOf)
+  ) {
+    return "omitted";
+  }
+  return "projected";
+}
+
 export function resolveConnectionProjection(
   conn: ProjectionEndpointRef,
   context: ProjectionContext,
@@ -88,42 +130,29 @@ export function resolveConnectionProjection(
   const hidden = context.isHidden?.(conn.label) ?? false;
   const fromVisible = nearestVisibleAncestor(conn.from, context);
   const toVisible = nearestVisibleAncestor(conn.to, context);
+  const kind = resolutionKind(fromVisible, toVisible, context.parentOf);
+  if (kind === "direct") {
+    return {
+      kind,
+      from: conn.from,
+      to: conn.to,
+      fromPort: conn.fromPort,
+      toPort: conn.toPort,
+      hidden,
+    };
+  }
   if (fromVisible === undefined || toVisible === undefined) {
     return {
-      kind: "omitted",
+      kind,
       from: conn.from,
       to: conn.to,
       fromPort: conn.fromPort,
       toPort: conn.toPort,
-      hidden,
-    };
-  }
-  const fromProjected = fromVisible.relLabels.length > 0;
-  const toProjected = toVisible.relLabels.length > 0;
-  if (!fromProjected && !toProjected) {
-    return {
-      kind: "direct",
-      from: conn.from,
-      to: conn.to,
-      fromPort: conn.fromPort,
-      toPort: conn.toPort,
-      hidden,
-    };
-  }
-  if (fromVisible.ancestor === toVisible.ancestor) {
-    // Projected self-edge (SPEC.md §6.7 item 2): omitted. Genuine system
-    // self-connections (both ends directly placed) take the branch above.
-    return {
-      kind: "omitted",
-      from: fromVisible.ancestor,
-      to: toVisible.ancestor,
-      fromPort: projectedPortName(fromVisible.relLabels, conn.fromPort),
-      toPort: projectedPortName(toVisible.relLabels, conn.toPort),
       hidden,
     };
   }
   return {
-    kind: "projected",
+    kind,
     from: fromVisible.ancestor,
     to: toVisible.ancestor,
     fromPort: projectedPortName(fromVisible.relLabels, conn.fromPort),
@@ -237,13 +266,15 @@ function toDotRole(role: string | undefined): ProjectedPortDot["role"] {
 }
 
 /**
- * One draggable dot per projected endpoint of every connection: the visible
- * ancestor plus the derived port name. Role/protocol inherit from the
+ * One draggable dot per projected endpoint of every drawn connection: the
+ * visible ancestor plus the derived port name. Role/protocol inherit from the
  * original descendant port (found via ancestor key + relative path); a port
  * whose hierarchy entry is gone falls back to peer/untyped and still renders
  * — stale *customizations* are ignored later (0005.4), the dot itself follows
- * the live edge. Direct endpoints and bare (portless) ends yield no dot.
- * Deduped by ancestor + label so fan-out edges share one dot.
+ * the live edge. Omitted connections (no ancestor, projected self-edge, or
+ * ancestor–descendant pair) yield no dots. Direct endpoints and bare
+ * (portless) ends yield no dot. Deduped by ancestor + label so fan-out edges
+ * share one dot.
  */
 export function projectedPortDots(
   conns: readonly ProjectionEndpointRef[],
@@ -255,10 +286,8 @@ export function projectedPortDots(
 ): ProjectedPortDot[] {
   const seen = new Set<string>();
   const dots: ProjectedPortDot[] = [];
-  const emit = (owner: number, port: string | undefined): void => {
-    if (port === undefined) return;
-    const visible = nearestVisibleAncestor(owner, context);
-    if (visible === undefined || visible.relLabels.length === 0) return;
+  const emit = (port: string | undefined, visible: VisibleAncestor): void => {
+    if (port === undefined || visible.relLabels.length === 0) return;
     const label = projectedPortName(visible.relLabels, port);
     if (label === undefined) return;
     const key = `${String(visible.ancestor)}:${label}`;
@@ -274,8 +303,15 @@ export function projectedPortDots(
     });
   };
   for (const conn of conns) {
-    emit(conn.from, conn.fromPort);
-    emit(conn.to, conn.toPort);
+    const fromVisible = nearestVisibleAncestor(conn.from, context);
+    const toVisible = nearestVisibleAncestor(conn.to, context);
+    if (
+      resolutionKind(fromVisible, toVisible, context.parentOf) !== "projected"
+    ) {
+      continue;
+    }
+    if (fromVisible !== undefined) emit(conn.fromPort, fromVisible);
+    if (toVisible !== undefined) emit(conn.toPort, toVisible);
   }
   return dots.sort((a, b) =>
     a.ancestor !== b.ancestor

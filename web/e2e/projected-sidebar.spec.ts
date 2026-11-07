@@ -175,3 +175,71 @@ test("parallel projected connections draw separately; projected self-edges omit"
   await row1.getByRole("checkbox").check();
   await expect(canvas.getByTestId("diagram-edge")).toHaveCount(2);
 });
+
+// A connection between two children of one placed component never renders
+// ancestor-into-descendant: placing A and b while c stays hidden lists the
+// row unchecked and unbadged with no edge; placing c draws the real edge.
+const NESTED_MODEL = `protocol "sig" {}
+component "leaf" {
+  leaf = true
+  port "p" {
+    protocol = "sig"
+    role     = "peer"
+  }
+}
+component "outer" {
+  instance "b" {
+    source = "leaf"
+  }
+  instance "c" {
+    source = "leaf"
+  }
+}
+system "sys" {
+  instance "A" {
+    source = "outer"
+  }
+  connection "test-connection" {
+    from = "A/b/p"
+    to   = "A/c/p"
+  }
+}
+`;
+
+test("no inward projected edges between an ancestor and its descendant", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E no inward projection");
+  await replaceModel(page, NESTED_MODEL);
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+
+  const tree = page.getByTestId("modeling-pane-right");
+  const canvas = page.getByTestId("diagram-canvas");
+  const row = page.getByTestId("connection-row-test-connection");
+
+  async function place(name: string): Promise<void> {
+    const button = tree.getByRole("button", { name, exact: true });
+    await expect(button).toBeVisible();
+    const item = button.locator("xpath=parent::*");
+    await item.getByRole("checkbox").check();
+  }
+
+  await place("A");
+  await tree.getByRole("button", { name: "Expand all" }).click();
+  await place("b");
+
+  await expect(row).toBeVisible();
+  await expect(row.getByRole("checkbox")).not.toBeChecked();
+  await expect(page.getByTestId("projected-badge-test-connection")).toHaveCount(
+    0,
+  );
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(0);
+
+  await place("c");
+  await expect(row.getByRole("checkbox")).toBeChecked();
+  await expect(page.getByTestId("projected-badge-test-connection")).toHaveCount(
+    0,
+  );
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(1);
+});
