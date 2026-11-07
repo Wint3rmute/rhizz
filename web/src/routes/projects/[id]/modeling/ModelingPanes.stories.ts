@@ -151,8 +151,8 @@ export const PanesOpenByDefault: Story = {
     await expect(rowQueries.getByRole("checkbox")).toBeDisabled();
     await expect(row).toHaveClass(/opacity-60/);
     await expect(row).toHaveAttribute(
-      "data-tip",
-      "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
+      "title",
+      "This connection cannot be shown — none of its components (or their parents) are placed in this view. Place one to enable it.",
     );
     await expect(
       canvas.queryByTestId("projected-badge-telemetry"),
