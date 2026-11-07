@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: explain Projected badge and disabled rows via title tooltips
 - **web**: upload first change immediately, debounce the rest
 - **web**: grey out unshowable connections with explanatory tooltip
 - **web**: tween follower canvas into remote diagram changes
