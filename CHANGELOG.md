@@ -15,6 +15,11 @@
 - **web**: list all connections with Projected badge in sidebar
 - **web**: add projection resolver for projected connections
 
+### Refactor
+
+- **web**: drop obsolete lock VRT baselines
+- **web**: remove lock badge from diagnostics status bar
+
 ## 0.10.0 (2026-11-06)
 
 ### Feat
