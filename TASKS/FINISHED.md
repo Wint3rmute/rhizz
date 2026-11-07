@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0005.4 Reveal/hide transitions (jump) + stale handling
+
+No production change required: both behaviors fall out of the shared-resolver
+reactivity built in 0005.0–0005.3. New `e2e/projected-transitions.spec.ts`
+pins them: reveal owners → badge clears, edge stays drawn on real ports, and
+the dragged projected spot does NOT transfer (no `port "out"` block appears);
+hide again → badge and projected edge return. Rename-descendant run pins stale
+handling: the orphaned `port "sen-a/out"` block is preserved in the file but
+ignored, the view recompiles cleanly, and the edge re-derives under the new
+name with the badge. Verified e2e green (2 tests).
+
+---
+
 ## Task <N> — 0005.3 Draggable projected ports + persistence
 
 `projectedPortDots` in `connectionProjection.ts` (unit-tested: inherited
