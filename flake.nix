@@ -117,7 +117,12 @@
               rustc
               cargo
               cargo-audit
-              cargo-llvm-cov
+              # cargo-llvm-cov's own test suite shells out to cargo against
+              # fresh registries and fails in the sandbox (no network) as of
+              # the f9a75f4 nixpkgs bump — 14 integration tests red while the
+              # binary itself builds fine. We only need the binary for
+              # `just coverage`, so skip its self-tests.
+              (cargo-llvm-cov.overrideAttrs (_old: { doCheck = false; }))
               clippy
               mdbook
               rustfmt
