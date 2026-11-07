@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: tween follower canvas into remote diagram changes
 - **core**: reject slash in block labels with E004
 - **web**: omit inward projected ancestor-descendant edges
 - **web**: draggable projected port dots with persistence
