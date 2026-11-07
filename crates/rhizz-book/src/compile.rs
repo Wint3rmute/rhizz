@@ -213,7 +213,11 @@ mod tests {
         }];
         let result = compile(&sources);
         let output = normalize_result(&result);
-        assert!(!output.sorted.errors.is_empty());
+        assert!(
+            !output.sorted.errors.is_empty(),
+            "{:?}",
+            output.sorted.errors
+        );
         assert!(output.sorted.errors.iter().all(|d| d.code == "E000"));
         assert!(output.score.is_none());
     }

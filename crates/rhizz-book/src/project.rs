@@ -461,7 +461,7 @@ mod tests {
         let paths: Vec<&str> = loaded.files.iter().map(|file| file.path.as_str()).collect();
         assert_eq!(paths, vec!["system.hcl", "views/main.hcl"]);
         assert_eq!(loaded.files.len(), 2);
-        assert!(!loaded.input_sha256.is_empty());
+        assert!(!loaded.input_sha256.is_empty(), "{:?}", loaded.input_sha256);
         for file in &loaded.files {
             assert_eq!(file.sha256.len(), 64);
         }

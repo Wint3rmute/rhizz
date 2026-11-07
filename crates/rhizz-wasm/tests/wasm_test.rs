@@ -295,7 +295,7 @@ fn get_example_projects_returns_all_embedded_examples() {
         .find(|e| e.id == "apollo-11")
         .expect("apollo-11 should exist");
     assert_eq!(apollo.name, "Apollo 11 Mission Stack");
-    assert!(!apollo.files.is_empty());
+    assert!(!apollo.files.is_empty(), "apollo-11 should have files");
 }
 
 #[wasm_bindgen_test]

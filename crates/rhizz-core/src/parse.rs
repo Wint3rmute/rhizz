@@ -1337,7 +1337,7 @@ mod tests {
 
         let plain = &raw.protocols[1].inner;
         assert!(!plain.leaf, "leaf defaults to false");
-        assert!(plain.encapsulates.is_empty());
+        assert!(plain.encapsulates.is_empty(), "{:?}", plain.encapsulates);
     }
 
     #[test]
@@ -1362,7 +1362,11 @@ mod tests {
             conns[0].inner.realized_by,
             vec!["b", "../c", "/banking/n/d"]
         );
-        assert!(conns[1].inner.realized_by.is_empty());
+        assert!(
+            conns[1].inner.realized_by.is_empty(),
+            "{:?}",
+            conns[1].inner.realized_by
+        );
     }
 
     #[test]

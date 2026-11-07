@@ -328,7 +328,7 @@ system "demo" {
         assert!(!port.external);
         assert!(port.required);
         assert_eq!(port.role, None);
-        assert!(port.protocol.is_empty());
+        assert!(port.protocol.is_empty(), "{:?}", port.protocol);
     }
 
     #[test]
@@ -380,7 +380,7 @@ system "demo" {
             .find(|p| p.label == "spi")
             .expect("protocol");
         assert!(!protocol.leaf, "a stub is not a leaf protocol");
-        assert!(protocol.roles.is_empty());
+        assert!(protocol.roles.is_empty(), "{:?}", protocol.roles);
         assert!(
             model
                 .ports
@@ -424,7 +424,7 @@ system "demo" {
         )
         .expect_err("refused");
         let errors = codes(&diagnostics);
-        assert!(!errors.is_empty());
+        assert!(!errors.is_empty(), "{errors:?}");
         assert!(
             errors.iter().all(|code| *code == DiagnosticCode::E009),
             "{errors:?}"

@@ -572,8 +572,8 @@ mod tests {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(blocks.clone(), "rhizz 0.1.0");
         let (diffs, notes) = compare_lock(&lock, &blocks, &[], "rhizz 0.1.0");
-        assert!(diffs.is_empty());
-        assert!(notes.is_empty());
+        assert!(diffs.is_empty(), "{diffs:?}");
+        assert!(notes.is_empty(), "{notes:?}");
     }
 
     #[test]
@@ -692,7 +692,7 @@ mod tests {
         let blocks = vec![entry("a.md", "1", output(vec![]))];
         let lock = payload(blocks.clone(), "rhizz 0.1.0");
         let (diffs, notes) = compare_lock(&lock, &blocks, &[], "rhizz 0.2.0");
-        assert!(diffs.is_empty());
+        assert!(diffs.is_empty(), "{diffs:?}");
         assert_eq!(notes.len(), 1);
         assert!(notes[0].contains("0.1.0"));
     }
@@ -794,7 +794,7 @@ mod tests {
     fn legacy_lock_without_projects_parses_to_empty() {
         let text = r#"{"entries": [], "format": 1, "rhizz_version": "rhizz 0.1.0"}"#;
         let parsed: LockPayload = serde_json::from_str(text).expect("legacy lock should parse");
-        assert!(parsed.projects.is_empty());
+        assert!(parsed.projects.is_empty(), "{:?}", parsed.projects);
     }
 
     #[test]
@@ -834,7 +834,7 @@ mod tests {
         assert!(format_diff(&diffs[0], false).contains("new project 'projects/demo' in 'a.md'"));
 
         let (diffs, _) = compare_lock(&payload(vec![], "rhizz 0.1.0"), &[], &[], "rhizz 0.1.0");
-        assert!(diffs.is_empty());
+        assert!(diffs.is_empty(), "{diffs:?}");
         let mut lock = payload(vec![], "rhizz 0.1.0");
         lock.projects = projects;
         let (diffs, _) = compare_lock(&lock, &[], &[], "rhizz 0.1.0");
@@ -880,7 +880,7 @@ mod tests {
         let mut lock = payload(vec![], "rhizz 0.1.0");
         lock.projects = projects.clone();
         let (diffs, notes) = compare_lock(&lock, &[], &projects, "rhizz 0.1.0");
-        assert!(diffs.is_empty());
-        assert!(notes.is_empty());
+        assert!(diffs.is_empty(), "{diffs:?}");
+        assert!(notes.is_empty(), "{notes:?}");
     }
 }

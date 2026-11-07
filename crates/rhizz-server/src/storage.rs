@@ -2942,12 +2942,11 @@ mod tests {
 
         assert!(dir.path().join("drone").is_dir());
         assert_eq!(version, project_version(dir.path(), "drone").unwrap());
-        assert!(
-            load_vfs(dir.path()).unwrap()["projects"]
-                .as_array()
-                .unwrap()
-                .is_empty()
-        );
+        let projects = load_vfs(dir.path()).unwrap()["projects"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(projects.is_empty(), "{projects:?}");
     }
 
     #[test]

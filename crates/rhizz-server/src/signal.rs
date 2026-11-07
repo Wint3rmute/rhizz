@@ -16,7 +16,6 @@ use tracing::info;
 ///
 /// If installing the SIGTERM handler fails (practically impossible on Unix),
 /// shutdown still waits for SIGINT rather than panicking.
-#[must_use]
 pub fn shutdown_signal() -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
     Box::pin(async {
         let sigint = tokio::signal::ctrl_c();
