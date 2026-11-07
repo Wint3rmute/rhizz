@@ -59,9 +59,16 @@ test("projected connections are listed with a badge until owners are placed", as
   }
 
   // Nothing placed: the connection is listed (new in 0005.1) but unchecked
-  // and unbadged — no visible ancestor to project through.
+  // and unbadged — no visible ancestor to project through. Omitted rows are
+  // greyed out with an explanatory tooltip and a disabled checkbox.
   await expect(row).toBeVisible();
   await expect(row.getByRole("checkbox")).not.toBeChecked();
+  await expect(row.getByRole("checkbox")).toBeDisabled();
+  await expect(row).toHaveClass(/opacity-60/);
+  await expect(row).toHaveAttribute(
+    "data-tip",
+    "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
+  );
   await expect(badge).toHaveCount(0);
   await expect(
     page.getByTestId("diagram-canvas").getByTestId("diagram-edge"),
@@ -74,6 +81,7 @@ test("projected connections are listed with a badge until owners are placed", as
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText("Projected");
   await expect(row.getByRole("checkbox")).toBeChecked();
+  await expect(row.getByRole("checkbox")).toBeEnabled();
   await expect(
     page.getByTestId("diagram-canvas").getByTestId("diagram-edge"),
   ).toHaveCount(1);
