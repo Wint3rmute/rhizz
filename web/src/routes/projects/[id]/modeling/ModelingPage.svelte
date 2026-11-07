@@ -137,6 +137,7 @@
   import {
     isProjectionDrawn,
     normalizeEndpointRef,
+    projectedPortDots,
     resolveConnectionProjections,
     sidebarProjectionRows,
   } from "./connectionProjection";
@@ -2569,6 +2570,10 @@
     if (event.button !== 0) return;
     // Frozen while someone else holds the project: no connection starts.
     if (readonly) return;
+    // Projected ports (§6.4) are view-level representations, never system
+    // endpoints: they can be dragged but must never seed a connection. Real
+    // labels never contain "/" (§3), so the slash marks a projected port.
+    if (portLabel?.includes("/") === true) return;
     event.stopPropagation();
     event.preventDefault();
     interaction = {
@@ -3837,6 +3842,39 @@
   // recomputes them from these boxes.
   let editorScene = $derived.by(() => {
     const current = interaction;
+    // Normalized once for dots and edges below: wasm exposes port getters as
+    // `from_port`/`to_port`, and the spread inside the resolver would drop
+    // them — normalize first so anchoring never loses a named port.
+    const endpointRefs = connections.map((conn) =>
+      normalizeEndpointRef(
+        conn as unknown as Parameters<typeof normalizeEndpointRef>[0],
+      ),
+    );
+    // Draggable dots for projected endpoints (§6.5), grouped by the visible
+    // ancestor that renders them. Roles/protocols inherit from the original
+    // descendant ports; unresolvable ones fall back to peer/untyped.
+    // Plain, non-reactive local (consumed synchronously below, never
+    // rendered/read outside this derived), so it doesn't need SvelteMap's
+    // reactivity.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const projectedDotsByAncestor = new Map<
+      number,
+      {
+        label: string;
+        role: "provider" | "consumer" | "peer";
+        protocol?: string | undefined;
+      }[]
+    >();
+    for (const dot of projectedPortDots(
+      endpointRefs,
+      projectionContext,
+      getComponentKey,
+      (key) => componentData.get(key)?.ports,
+    )) {
+      const list = projectedDotsByAncestor.get(dot.ancestor) ?? [];
+      list.push(dot);
+      projectedDotsByAncestor.set(dot.ancestor, list);
+    }
     const nodes = renderOrder.flatMap((index) => {
       const box = nodeBox(index);
       const component = components[index];
@@ -3844,6 +3882,12 @@
       const compKey = getComponentKey(index);
       const compData = componentData.get(compKey);
       const spots = portPositions[compKey];
+      const withSpot = <T extends { label: string }>(port: T) => ({
+        ...port,
+        ...(spots?.[port.label] !== undefined
+          ? { spot: spots[port.label] }
+          : {}),
+      });
       return [
         {
           id: compKey,
@@ -3855,15 +3899,19 @@
           color: compData?.color || component.color,
           border: compData?.border ?? component.border,
           font: compData?.font ?? component.font,
-          ports:
-            compData && compData.ports.length > 0
-              ? compData.ports.map((p) => ({
-                  ...p,
-                  ...(spots?.[p.label] !== undefined
-                    ? { spot: spots[p.label] }
-                    : {}),
-                }))
-              : [],
+          ports: [
+            ...(compData && compData.ports.length > 0
+              ? compData.ports.map(withSpot)
+              : []),
+            ...(projectedDotsByAncestor.get(index) ?? []).map((d) => ({
+              label: d.label,
+              role: d.role,
+              ...(d.protocol !== undefined ? { protocol: d.protocol } : {}),
+              ...(spots?.[d.label] !== undefined
+                ? { spot: spots[d.label] }
+                : {}),
+            })),
+          ],
         },
       ];
     });
@@ -3873,11 +3921,7 @@
     // name. Hidden applies by name, so all copies of a hidden connection are
     // skipped together; projected self-edges resolve to omitted and never draw.
     const edges: EditorSceneEdgeInput[] = resolveConnectionProjections(
-      connections.map((conn) =>
-        normalizeEndpointRef(
-          conn as unknown as Parameters<typeof normalizeEndpointRef>[0],
-        ),
-      ),
+      endpointRefs,
       projectionContext,
     )
       .filter(isProjectionDrawn)
@@ -3890,8 +3934,7 @@
           toKey: getComponentKey(conn.to),
         };
         // Follow-the-dot: anchor to the port dots when the model names ports
-        // (original or projected `<rel-path>/<port>` — dots for the latter
-        // land in 0005.3, until then the router falls back to a side).
+        // (original or projected `<rel-path>/<port>` dots from above).
         if (conn.fromPort !== undefined) edge.fromPort = conn.fromPort;
         if (conn.toPort !== undefined) edge.toPort = conn.toPort;
         const saved = savedConnections[conn.label];

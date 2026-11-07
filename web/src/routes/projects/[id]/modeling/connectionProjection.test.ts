@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeEndpointRef,
+  projectedPortDots,
   resolveConnectionProjection,
   resolveConnectionProjections,
   sidebarProjectionRows,
@@ -300,5 +301,60 @@ describe("normalizeEndpointRef", () => {
       fromPort: undefined,
       toPort: undefined,
     });
+  });
+});
+
+describe("projectedPortDots", () => {
+  const conns = [
+    { label: "low-link", from: 1, to: 5, fromPort: "input", toPort: "output" },
+  ];
+  // Keys mirror Model::component_keys ("sys/..." paths); ports mirror the
+  // descendant definitions the projection resolves through.
+  const portTable: Record<
+    string,
+    { label: string; role?: string; protocol?: string }[]
+  > = {
+    "sys/A/B": [{ label: "input", role: "consumer", protocol: "sig" }],
+    "sys/C/E": [{ label: "output", role: "provider", protocol: "sig" }],
+  };
+  const portsOf = (key: string) => portTable[key];
+  const keysOf = (index: number) =>
+    (
+      ["sys/A", "sys/A/B", "sys/A/f2", "sys/A/B/C", "sys/C", "sys/C/E"] as const
+    )[index] ?? `#${String(index)}`;
+
+  it("emits dots with inherited role and protocol", () => {
+    expect(projectedPortDots(conns, ctx([0, 4]), keysOf, portsOf)).toEqual([
+      { ancestor: 0, label: "B/input", role: "consumer", protocol: "sig" },
+      { ancestor: 4, label: "E/output", role: "provider", protocol: "sig" },
+    ]);
+  });
+
+  it("skips direct endpoints and bare ends", () => {
+    expect(projectedPortDots(conns, ctx([1, 5]), keysOf, portsOf)).toEqual([]);
+    expect(
+      projectedPortDots(
+        [{ label: "bare", from: 1, to: 4 }],
+        ctx([0, 4]),
+        keysOf,
+        portsOf,
+      ),
+    ).toEqual([]);
+  });
+
+  it("falls back to peer/untyped when the descendant port is gone", () => {
+    expect(
+      projectedPortDots(conns, ctx([0, 4]), keysOf, () => undefined),
+    ).toEqual([
+      { ancestor: 0, label: "B/input", role: "peer", protocol: undefined },
+      { ancestor: 4, label: "E/output", role: "peer", protocol: undefined },
+    ]);
+  });
+
+  it("dedupes one dot per ancestor and label", () => {
+    const copies = [...conns, ...conns];
+    expect(
+      projectedPortDots(copies, ctx([0, 4]), keysOf, portsOf),
+    ).toHaveLength(2);
   });
 });
