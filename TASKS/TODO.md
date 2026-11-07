@@ -18,19 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - lock immediately after first change, then debounce
-
-The current filesystem debounce mechanism has a ~4s (rough estimate) delay
-between the change being made to the system model and that change being uploaded
-to the server via a PUT request. This reflects on the project locking mechanism,
-causing the lock to only occur about ~4s after the first change. I'd like to
-change that - the first change should be uploaded immediately, locking the
-project. Later changes should be debounced with the current debounce period. Add
-some simple robust mechanism so that the first filesystem PUT (and project lock)
-runs immediately, later ones undergo the debounce.
-
----
-
 ## Task <N> - remove duplicated locking icon, keep only the one in navbar
 
 The project lock status is currently duplicated - one is on the bottom bar, one
