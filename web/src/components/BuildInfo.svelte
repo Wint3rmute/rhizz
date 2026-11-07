@@ -11,6 +11,9 @@
   // any other value — including `null` — is rendered as given and never
   // fetched. `undefined` is spelled out because `exactOptionalPropertyTypes`
   // makes an optional property reject an explicit `undefined` otherwise.
+  // A tagged build (`git_tag` present) renders `1.2.3 (05eeb57)` and links
+  // to the release tag; an untagged one renders just the commit and links
+  // to it.
   interface Props {
     buildInfo?: BuildInfo | null | undefined;
   }
@@ -37,12 +40,28 @@
     info !== null && /^[0-9a-f]{7,40}$/i.test(info.git_sha),
   );
 
+  // Release tag, if this build comes from a tagged commit.
+  let tag = $derived(
+    info?.git_tag !== undefined && info.git_tag !== "" ? info.git_tag : null,
+  );
+
   const COMMIT_URL = "https://github.com/Wint3rmute/rhizz/commit/";
+  const TAG_URL = "https://github.com/Wint3rmute/rhizz/releases/tag/";
 </script>
 
 {#if info}
   <footer class="text-xs text-base-content/50 font-mono text-center">
-    {#if isCommit}
+    {#if tag}
+      <a
+        class="link link-hover"
+        href={`${TAG_URL}${encodeURIComponent(tag)}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open this build's release on GitHub"
+      >
+        rhizz build {tag} ({info.git_sha})
+      </a>
+    {:else if isCommit}
       <a
         class="link link-hover"
         href={`${COMMIT_URL}${info.git_sha}`}

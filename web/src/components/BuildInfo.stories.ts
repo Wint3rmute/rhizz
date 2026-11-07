@@ -32,6 +32,21 @@ export const Commit: Story = {
   },
 };
 
+// A tagged build names the release and links to the tag rather than the commit.
+export const Tagged: Story = {
+  args: { buildInfo: { git_sha: "a37bd15", git_tag: "0.10.0" } },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const link = canvas.getByRole("link", {
+      name: /rhizz build 0\.10\.0 \(a37bd15\)/,
+    });
+    await expect(link).toHaveAttribute(
+      "href",
+      "https://github.com/Wint3rmute/rhizz/releases/tag/0.10.0",
+    );
+  },
+};
+
 // No server to ask (browser-only build): nothing renders. No baseline — the
 // screenshot would be an empty page.
 export const Hidden: Story = {

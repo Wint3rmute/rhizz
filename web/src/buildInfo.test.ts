@@ -21,6 +21,27 @@ describe("fetchBuildInfo", () => {
     expect(info).toEqual({ git_sha: "07265fb" });
   });
 
+  it("reads the git tag for tagged builds", async () => {
+    const info = await fetchBuildInfo("http://x", () =>
+      Promise.resolve(jsonResponse({ git_sha: "a37bd15", git_tag: "0.10.0" })),
+    );
+    expect(info).toEqual({ git_sha: "a37bd15", git_tag: "0.10.0" });
+  });
+
+  it("omits the git tag when the build is untagged", async () => {
+    const info = await fetchBuildInfo("http://x", () =>
+      Promise.resolve(jsonResponse({ git_sha: "07265fb" })),
+    );
+    expect(info).toEqual({ git_sha: "07265fb" });
+  });
+
+  it("ignores a non-string git tag", async () => {
+    const info = await fetchBuildInfo("http://x", () =>
+      Promise.resolve(jsonResponse({ git_sha: "07265fb", git_tag: 42 })),
+    );
+    expect(info).toEqual({ git_sha: "07265fb" });
+  });
+
   it("returns null when the server answers with an error status", async () => {
     const info = await fetchBuildInfo("http://x", () =>
       Promise.resolve(jsonResponse({}, 500)),
