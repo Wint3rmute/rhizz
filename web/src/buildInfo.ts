@@ -3,9 +3,12 @@ import type { FetchLike } from "./vfs/vfsStore";
 /**
  * Commit the rhizz server was built from, as reported by `GET /api/version`.
  * `dev` for local builds; `unknown` when the flake had no git revision.
+ * `git_tag` is the release tag (e.g. `"0.10.0"`), present only when built
+ * from a tagged commit.
  */
 export interface BuildInfo {
   git_sha: string;
+  git_tag?: string;
 }
 
 /**
@@ -28,7 +31,11 @@ export async function fetchBuildInfo(
       "git_sha" in body &&
       typeof body.git_sha === "string"
     ) {
-      return { git_sha: body.git_sha };
+      const tag = "git_tag" in body ? body.git_tag : undefined;
+      return {
+        git_sha: body.git_sha,
+        ...(typeof tag === "string" && tag !== "" ? { git_tag: tag } : {}),
+      };
     }
     return null;
   } catch {
