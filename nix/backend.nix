@@ -21,6 +21,10 @@
   # Short commit the source was built from, shown in the UI via
   # `/api/version`. Passed in from the flake so this derivation has no git dependency.
   gitSha ? "dev",
+  # Release tag the source was built from (e.g. `0.10.0`), shown in the UI
+  # alongside the commit. Empty for untagged builds; omitted from the
+  # `/api/version` payload then.
+  gitTag ? "",
 }:
 
 rustPlatform.buildRustPackage {
@@ -32,6 +36,8 @@ rustPlatform.buildRustPackage {
   # Read by rhizz-server's `option_env!`. Setting it here rather than in
   # `preBuild` means only this derivation rebuilds when the commit changes.
   RHIZZ_GIT_SHA = gitSha;
+  # Same channel for the release tag (see above).
+  RHIZZ_GIT_TAG = gitTag;
 
   # Vendored from the workspace lockfile; no hash to maintain by hand.
   cargoLock.lockFile = "${src}/Cargo.lock";

@@ -111,9 +111,28 @@ const GIT_SHA: &str = match option_env!("RHIZZ_GIT_SHA") {
     None => "dev",
 };
 
-/// Handles `GET /api/version`: the commit the running server was built from.
+/// Release tag this binary was built from, if any (see `nix/backend.nix`).
+/// Empty for untagged commits and local builds; CI tag builds inject it via
+/// `RHIZZ_GIT_TAG` (see `flake.nix` and `.github/workflows/docker.yml`).
+const GIT_TAG: &str = match option_env!("RHIZZ_GIT_TAG") {
+    Some(tag) => tag,
+    None => "",
+};
+
+/// Builds the `GET /api/version` payload: the build commit plus the release
+/// tag when built from a tagged commit (omitted otherwise).
+fn version_payload(sha: &str, tag: &str) -> Value {
+    if tag.is_empty() {
+        serde_json::json!({ "git_sha": sha })
+    } else {
+        serde_json::json!({ "git_sha": sha, "git_tag": tag })
+    }
+}
+
+/// Handles `GET /api/version`: the commit (and release tag, if any) the
+/// running server was built from.
 async fn version() -> Json<Value> {
-    Json(serde_json::json!({ "git_sha": GIT_SHA }))
+    Json(version_payload(GIT_SHA, GIT_TAG))
 }
 
 /// Fetches the entire VFS state (all projects + nodes), expanded from the
@@ -629,8 +648,24 @@ mod tests {
             .await
             .unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
-        assert_eq!(json, json!({ "git_sha": GIT_SHA }));
+        assert_eq!(json, version_payload(GIT_SHA, GIT_TAG));
         assert!(!GIT_SHA.is_empty());
+    }
+
+    #[test]
+    fn version_payload_omits_tag_when_untagged() {
+        assert_eq!(
+            version_payload("05eeb57", ""),
+            json!({ "git_sha": "05eeb57" })
+        );
+    }
+
+    #[test]
+    fn version_payload_includes_tag_for_tagged_builds() {
+        assert_eq!(
+            version_payload("a37bd15", "0.10.0"),
+            json!({ "git_sha": "a37bd15", "git_tag": "0.10.0" })
+        );
     }
 
     #[tokio::test]

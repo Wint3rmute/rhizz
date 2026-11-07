@@ -50,6 +50,12 @@
             # `shortRev` exists only for a clean git tree; `dirtyShortRev`
             # marks a dirty one. Neither exists for a non-git source.
             gitSha = self.shortRev or self.dirtyShortRev or "unknown";
+            # Release tag (e.g. `0.10.0`) for tagged builds, shown in the UI
+            # via `/api/version`. Flakes evaluate purely, so the tag cannot
+            # be read from git here: CI tag builds pass `RHIZZ_GIT_TAG` with
+            # `--impure` (see `.github/workflows/docker.yml`). Empty (and
+            # therefore omitted from the payload) in every other build.
+            gitTag = builtins.getEnv "RHIZZ_GIT_TAG";
           };
 
           # A container image is inherently Linux: on Darwin the same
