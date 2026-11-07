@@ -319,35 +319,3 @@ export const ResizablePanel: Story = {
     await expect(canvas.getByTestId("diagnostics-panel")).toBeVisible();
   },
 };
-
-/** The project is locked by someone else: the strip carries the lock icon. */
-export const Locked: Story = {
-  args: {
-    lockedBy: "bob",
-    lockMe: "alice",
-  },
-  loaders: [forgetDiagnosticsLayout],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const badge = canvas.getByTestId("lock-badge");
-    await expect(badge).toHaveTextContent("🔒");
-    await userEvent.click(within(badge).getByRole("button"));
-    await expect(await canvas.findByText(/Locked by bob/)).toBeInTheDocument();
-  },
-};
-
-/** The project is locked by us: the icon opens a menu saying "you". */
-export const LockedByMe: Story = {
-  args: {
-    lockedBy: "alice",
-    lockMe: "alice",
-  },
-  loaders: [forgetDiagnosticsLayout],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const badge = canvas.getByTestId("lock-badge");
-    await expect(badge).toHaveTextContent("🔒");
-    await userEvent.click(within(badge).getByRole("button"));
-    await expect(await canvas.findByText(/Locked by you/)).toBeInTheDocument();
-  },
-};

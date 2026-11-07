@@ -1,7 +1,6 @@
 <script lang="ts">
   import type { DiagnosticJS } from "rhizz";
   import DiagnosticRow from "./DiagnosticRow.svelte";
-  import LockBadge from "./LockBadge.svelte";
   import ScoreBadge from "./ScoreBadge.svelte";
   import WarningLevelSelect from "./WarningLevelSelect.svelte";
   import Splitter from "./modular_ui/Splitter.svelte";
@@ -56,16 +55,10 @@
   let {
     diagnostics,
     score = null,
-    lockedBy = null,
-    lockMe = null,
   }: {
     diagnostics: DiagnosticJS[];
     /** The compiled model's overall score; null hides the badge. */
     score?: { overall_percentage: number } | null;
-    /** Who holds the project lock; null hides the lock badge. */
-    lockedBy?: string | null;
-    /** Our own username, for the lock badge's "you" label. */
-    lockMe?: string | null;
   } = $props();
 
   // ── Expandable, resizable panel ─────────────────────────────────────────────
@@ -239,7 +232,6 @@
       <div
         class="flex items-center gap-2 py-2 pl-2 sm:pl-3 pr-4 sm:pr-6 lg:pr-8 pointer-events-auto"
       >
-        <LockBadge holder={lockedBy} me={lockMe} direction="top" />
         <WarningLevelSelect />
       </div>
     </div>
