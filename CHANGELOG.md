@@ -29,6 +29,7 @@
 
 - **web**: drop obsolete lock VRT baselines
 - **web**: remove lock badge from diagnostics status bar
+- **coverage**: provision pinned toolchain via coverage devshell
 
 ## 0.10.0 (2026-11-06)
 
