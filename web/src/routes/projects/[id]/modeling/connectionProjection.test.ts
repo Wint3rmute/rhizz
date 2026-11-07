@@ -215,32 +215,44 @@ describe("sidebarProjectionRows", () => {
 
   it("lists in-system connections even when nothing is placed", () => {
     expect(sidebarProjectionRows(conns, ctx([]))).toEqual([
-      { label: "low-link", shown: false, projected: false },
+      { label: "low-link", shown: false, projected: false, omitted: true },
     ]);
   });
 
   it("marks projected rows when ancestors are placed", () => {
     expect(sidebarProjectionRows(conns, ctx([0, 4]))).toEqual([
-      { label: "low-link", shown: true, projected: true },
+      { label: "low-link", shown: true, projected: true, omitted: false },
     ]);
   });
 
   it("marks direct rows shown once owners are placed", () => {
     expect(sidebarProjectionRows(conns, ctx([1, 5]))).toEqual([
-      { label: "low-link", shown: true, projected: false },
+      { label: "low-link", shown: true, projected: false, omitted: false },
     ]);
   });
 
-  it("keeps hidden connections listed but unchecked", () => {
+  it("keeps hidden connections listed, unchecked and enabled", () => {
     expect(
       sidebarProjectionRows(conns, ctx([1, 5], { hidden: ["low-link"] })),
-    ).toEqual([{ label: "low-link", shown: false, projected: false }]);
+    ).toEqual([
+      { label: "low-link", shown: false, projected: false, omitted: false },
+    ]);
+  });
+
+  it("marks hidden-but-unplaced rows omitted", () => {
+    expect(
+      sidebarProjectionRows(conns, ctx([], { hidden: ["low-link"] })),
+    ).toEqual([
+      { label: "low-link", shown: false, projected: false, omitted: true },
+    ]);
   });
 
   it("badges hidden projected rows without checking them", () => {
     expect(
       sidebarProjectionRows(conns, ctx([0, 4], { hidden: ["low-link"] })),
-    ).toEqual([{ label: "low-link", shown: false, projected: true }]);
+    ).toEqual([
+      { label: "low-link", shown: false, projected: true, omitted: false },
+    ]);
   });
 
   it("never badges projected self-edges", () => {
@@ -248,7 +260,7 @@ describe("sidebarProjectionRows", () => {
       { label: "inner", from: 1, to: 2, fromPort: "input", toPort: "loop" },
     ];
     expect(sidebarProjectionRows(selfEdge, ctx([0]))).toEqual([
-      { label: "inner", shown: false, projected: false },
+      { label: "inner", shown: false, projected: false, omitted: true },
     ]);
   });
 
@@ -259,9 +271,24 @@ describe("sidebarProjectionRows", () => {
       { label: "zeta", from: 4, to: 4, fromPort: "a", toPort: "b" },
     ];
     expect(sidebarProjectionRows(copies, ctx([0, 4]))).toEqual([
-      { label: "alpha", shown: false, projected: false },
-      { label: "zeta", shown: true, projected: true },
+      { label: "alpha", shown: false, projected: false, omitted: true },
+      { label: "zeta", shown: true, projected: true, omitted: false },
     ]);
+  });
+
+  it("marks rows omitted only when neither drawn nor projected", () => {
+    // Shown (direct, drawn) → not omitted even though ancestors differ.
+    expect(sidebarProjectionRows(conns, ctx([1, 5]))[0]?.omitted).toBe(false);
+    // Drawn-after-hide-toggle state resolves the same way: a hidden placed
+    // row stays interactive, while a hidden unplaced row is omitted.
+    expect(
+      sidebarProjectionRows(conns, ctx([1, 5], { hidden: ["low-link"] }))[0]
+        ?.omitted,
+    ).toBe(false);
+    expect(
+      sidebarProjectionRows(conns, ctx([], { hidden: ["low-link"] }))[0]
+        ?.omitted,
+    ).toBe(true);
   });
 });
 
@@ -394,7 +421,7 @@ describe("ancestor-descendant projections", () => {
 
   it("lists the row unchecked and unbadged, and draws no dot", () => {
     expect(sidebarProjectionRows([inwards], ctx([0, 1]))).toEqual([
-      { label: "t", shown: false, projected: false },
+      { label: "t", shown: false, projected: false, omitted: true },
     ]);
     const keysOf = (index: number) =>
       (["sys/A", "sys/A/B", "sys/A/f2", "sys/A/B/C"] as const)[index] ??

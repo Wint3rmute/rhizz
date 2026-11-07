@@ -205,14 +205,16 @@ export interface SidebarProjectionRow {
   shown: boolean;
   /** At least one copy resolves `projected` under current visibility. */
   projected: boolean;
+  /** Neither drawn nor projected: explain instead of silently listing. */
+  omitted: boolean;
 }
 
 /**
  * Sidebar rows, grouped by connection name: every in-system connection is
  * listed (placed or not), checked when drawn on the canvas, badged when
- * projected. `shown` follows the projection-aware drawn rule
- * (`isProjectionDrawn`), so sidebar and canvas agree; `projected` is the
- * visibility-only signal for the badge.
+ * projected, greyed with an explanatory tooltip when omitted. `shown`
+ * follows the projection-aware drawn rule (`isProjectionDrawn`), so sidebar
+ * and canvas agree; `projected` is the visibility-only signal for the badge.
  */
 export function sidebarProjectionRows(
   conns: readonly ProjectionEndpointRef[],
@@ -220,17 +222,33 @@ export function sidebarProjectionRows(
 ): SidebarProjectionRow[] {
   const byLabel = new Map<
     string,
-    { listed: boolean; shown: boolean; projected: boolean }
+    {
+      listed: boolean;
+      shown: boolean;
+      projected: boolean;
+      drawable: boolean;
+    }
   >();
   for (const conn of conns) {
     let entry = byLabel.get(conn.label);
     if (!entry) {
-      entry = { listed: false, shown: false, projected: false };
+      entry = {
+        listed: false,
+        shown: false,
+        projected: false,
+        drawable: false,
+      };
       byLabel.set(conn.label, entry);
     }
     if (!context.inSystem(conn.from) || !context.inSystem(conn.to)) continue;
     entry.listed = true;
     const resolution = resolveConnectionProjection(conn, context);
+    if (resolution.kind !== "omitted") {
+      // Drawable if unhidden: hidden rows stay interactive (untoggling a
+      // placed or projected connection re-shows it), so only visibility
+      // decides omission. `shown` already excludes hidden copies.
+      entry.drawable = true;
+    }
     if (isProjectionDrawn(resolution)) {
       entry.shown = true;
     }
@@ -244,6 +262,10 @@ export function sidebarProjectionRows(
       label,
       shown: entry.shown,
       projected: entry.projected,
+      // Visibility only: hidden rows stay interactive (untoggling a placed
+      // or projected connection re-shows it), so only undrawable rows grey
+      // out. `shown` already excludes hidden copies.
+      omitted: !entry.drawable,
     }))
     .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }

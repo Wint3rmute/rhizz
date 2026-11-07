@@ -4841,14 +4841,22 @@
           <ul class="space-y-1">
             {#each systemConnections as connection (connection.label)}
               <li
-                class="group flex items-center gap-2 text-sm truncate"
-                title={connection.label}
+                class="group flex items-center gap-2 text-sm truncate {connection.omitted
+                  ? 'tooltip tooltip-left opacity-60'
+                  : ''}"
+                {...connection.omitted
+                  ? {
+                      "data-tip":
+                        "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
+                    }
+                  : { title: connection.label }}
                 data-testid={`connection-row-${connection.label}`}
               >
                 <input
                   type="checkbox"
                   class="checkbox checkbox-xs shrink-0"
                   checked={connection.shown}
+                  disabled={connection.omitted}
                   onchange={(event) =>
                     toggleConnectionShown(
                       connection.label,
