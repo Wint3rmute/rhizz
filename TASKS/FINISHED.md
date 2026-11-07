@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0005.3 Draggable projected ports + persistence
+
+`projectedPortDots` in `connectionProjection.ts` (unit-tested: inherited
+role/protocol, direct/bare skipped, peer/untyped fallback, dedupe) feeds the
+ModelingPage node mapping, so projected dots render with inherited roles and
+follow edges; drag + persist reuse the existing gesture/`writePortSpot` path,
+round-tripping as `port "sen-a/out"` blocks (unit-pinned in
+`persistence.test.ts`). Connecting from a projected dot is refused in
+`onPortMouseDown` (slash ⟺ projected per §3), and the canvas tooltip no longer
+offers Alt+drag there. Red/green TDD incl. new `e2e/projected-ports.spec.ts`
+(drag persists across reload, Alt+drag starts nothing). Verified: unit green,
+eslint + `svelte-check` clean, e2e `projected*` + `port-drag-undo` +
+`connection-visibility` green.
+
+---
+
 ## Task <N> — 0005.2 Canvas draws projected edges
 
 Canvas edges now resolve through the 0005.0 resolver: `ModelingPage` maps
