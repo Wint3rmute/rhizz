@@ -48,7 +48,7 @@ is well readable in both dark and light theme.
 
 ---
 
-### Task <N> - crypto.randomUUID is not a function when running over http
+## Task <N> - crypto.randomUUID is not a function when running over http
 
 I was running a test deployment of rhizz or a server with http. When trying
 to create a project, I got an error popup like "crypto.randomUUID is not a
@@ -58,6 +58,14 @@ its usage? Can it be cut out so that the app (namely the project creation stuff)
 always works, no matter whether the app is running over http or https?
 
 ---
+
+## Task <N> - unify port fading mechanics
+
+During view transitions, when a port fades into existence, it fades in smoothly,
+this looks great. However, when fading out, the ports don't fade out until the
+very end of the transition animation, then immediately disappear in a blink. Can
+you uniform this behavior, so that there's a smooth fade in both appearance and
+disappearance of ports?
 
 
 ## Task <N> - more advanced connection routing on canvas
