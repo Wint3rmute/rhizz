@@ -4,6 +4,22 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0005.2 Canvas draws projected edges
+
+Canvas edges now resolve through the 0005.0 resolver: `ModelingPage` maps
+connections via `normalizeEndpointRef` (wasm `from_port`/`to_port` getters
+survive the spread) into `resolveConnectionProjections` with the shared
+projection context, filters with `isProjectionDrawn`, and emits edges between
+resolved ancestors with original or `<rel-path>/<port>` anchoring, original
+names, and unchanged `start_side`/`end_side` handling. Sidebar `shown` flipped
+to the same projection-aware drawn rule so the two agree again; inspector
+`placedLabels` keeps old placed semantics. Red/green TDD (unit: shown flip,
+`normalizeEndpointRef`; e2e: updated `projected-sidebar` badge/edge counts
+plus new parallel/self-edge/hide test). Verified: unit 28 green, eslint +
+`svelte-check` clean, e2e `projected-sidebar` + `connection-visibility` green.
+
+---
+
 ## Task <N> — 0005.1 Sidebar lists all connections + Projected badge
 
 `sidebarProjectionRows` in `connectionProjection.ts` (unit-tested: unplaced

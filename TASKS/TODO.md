@@ -16,19 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0005.2 Canvas draws projected edges
-
-Projected connections render between visible ancestors under their original
-name/identity (`SPEC.md` §6.2, §6.6).
-
-- Edge list (`drawnConnections` consumers) emits projected edges with resolved
-  endpoints; `hidden`/`start_side`/`end_side` apply unchanged; multiples
-  preserved (no merging); projected self-edges omitted (0005.0).
-- Direction arrowheads from original roles (§6.1).
-- e2e first: view with only `A`,`C` shows `A—C` for `B/input—D/output`;
-  hidden flag hides it; two connections onto same pair render twice.
-- Definition of done: e2e green; `just test`, `just lint`, `just build`.
-
 ## Task <N> — 0005.3 Draggable projected ports + persistence
 
 End state bullet 3: projected port dots move like any other port, position
