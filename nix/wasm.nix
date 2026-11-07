@@ -8,7 +8,7 @@
 # invocation — but hermetically: `cargoLock` vendors the workspace's Cargo.lock
 # dependencies, and `wasm-bindgen-cli` is pinned to the version the locked
 # nixpkgs ships, which must match the `wasm-bindgen` crate in Cargo.lock (both
-# 0.2.129 today). wasm-pack picks the CLI up from PATH instead of downloading
+# 0.2.130 today). wasm-pack picks the CLI up from PATH instead of downloading
 # it, so the sandboxed build needs no network.
 #
 # `HOME` is redirected to a scratch dir because wasm-pack writes its cache under
