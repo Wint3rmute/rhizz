@@ -835,10 +835,13 @@
 
   // Every layout write persists the whole VFS blob, so a drag (one write per
   // tick) used to be one full-blob transfer per frame — visible as a burst of
-  // `vfs.size` samples in Sentry. Trailing debounce instead, and only for this
+  // `vfs.size` samples in Sentry. Debounce instead, and only for this
   // high-frequency source: the discrete transactions elsewhere
   // (runModelLayoutTransaction/applyModelMutation — create/rename/delete/
-  // reparent) are undoable steps and stay immediate.
+  // reparent) are undoable steps and stay immediate. The first write of a
+  // burst runs at once (leading edge) so the upload — and with it the project
+  // lock — happens immediately; later ticks still coalesce into one trailing
+  // write.
   //
   // The `fs` handle, the path, the detached snapshot and the system name are
   // captured per call, so the write that finally lands carries the newest
@@ -854,14 +857,20 @@
       // Checked at fire time, not schedule time: a drag that starts free
       // can end locked, and only the write must be refused.
       if (projectLock.readonly) return;
-      void writeDiagramLayoutFile(file, path, layout, systemName).catch(
-        (error: unknown) => {
+      void writeDiagramLayoutFile(file, path, layout, systemName)
+        .then(() => {
+          // The lock badge only refreshes on poll: re-read now so holding
+          // the project shows promptly instead of up to one poll late.
+          // Skipped while already holding (heartbeats renew the lease).
+          if (!projectLock.holding) void projectLock.refresh();
+        })
+        .catch((error: unknown) => {
           if (isLockRefusal(error)) void handleModelingLockLost();
           else console.error("Failed to persist diagram layout:", error);
-        },
-      );
+        });
     },
     LAYOUT_WRITE_DEBOUNCE_MS,
+    { leading: true },
   );
 
   // Leaving the page is the other way a pending write could be lost, and the

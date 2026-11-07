@@ -137,18 +137,29 @@
   }
 
   // Every write persists the whole VFS blob, so writing on every keystroke
-  // turned a typed sentence into one full-blob transfer per character. Trailing
-  // debounce instead: the write happens once the typing pauses. The `fs` handle
+  // turned a typed sentence into one full-blob transfer per character. The
+  // first keystroke of a burst writes immediately (leading edge) so the
+  // upload — and with it the project lock — happens at once; the rest of the
+  // burst still coalesces into one trailing write. The `fs` handle
   // and the content are captured per call, so the write that finally runs
   // targets the file that was open when the burst started, with its newest text.
   const WRITE_DEBOUNCE_MS = 700;
   const scheduleFileWrite = createDebounced(
     (file: ProjectFs, path: string, text: string) => {
-      void file.writeFile(path, text).catch((error: unknown) => {
-        if (isLockRefusal(error)) void handleCodeLockLost();
-      });
+      void file
+        .writeFile(path, text)
+        .then(() => {
+          // The lock badge only refreshes on poll: re-read now so holding
+          // the project shows promptly instead of up to one poll late.
+          // Skipped while already holding (heartbeats renew the lease).
+          if (!projectLock.holding) void projectLock.refresh();
+        })
+        .catch((error: unknown) => {
+          if (isLockRefusal(error)) void handleCodeLockLost();
+        });
     },
     WRITE_DEBOUNCE_MS,
+    { leading: true },
   );
 
   // Follower reload: another tab wrote, the poll saw a new version, and

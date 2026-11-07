@@ -151,3 +151,75 @@ describe("createDebounced", () => {
     expect(fn).not.toHaveBeenCalled();
   });
 });
+
+describe("createDebounced with leading: true", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("runs the first call immediately and debounces the rest of the burst", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500, { leading: true });
+
+    debounced("a");
+    expect(fn).toHaveBeenCalledExactlyOnceWith("a");
+    expect(debounced.pending).toBe(false);
+
+    debounced("b");
+    debounced("c");
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(500);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenLastCalledWith("c");
+    expect(debounced.pending).toBe(false);
+  });
+
+  it("runs the first call of every settled burst immediately", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500, { leading: true });
+
+    debounced("a");
+    expect(fn).toHaveBeenCalledExactlyOnceWith("a");
+
+    // A lone call never schedules a trailing run for itself.
+    vi.advanceTimersByTime(10_000);
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    debounced("b");
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenLastCalledWith("b");
+  });
+
+  it("flush during the cooldown without a pending call does not re-run", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500, { leading: true });
+
+    debounced("a");
+    debounced.flush();
+
+    vi.advanceTimersByTime(10_000);
+    expect(fn).toHaveBeenCalledExactlyOnceWith("a");
+  });
+
+  it("cancel during the cooldown makes the next call lead again", () => {
+    const fn = vi.fn();
+    const debounced = createDebounced(fn, 500, { leading: true });
+
+    debounced("a");
+    debounced("b");
+    debounced.cancel();
+    expect(debounced.pending).toBe(false);
+
+    debounced("c");
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(fn).toHaveBeenLastCalledWith("c");
+
+    vi.advanceTimersByTime(10_000);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+});
