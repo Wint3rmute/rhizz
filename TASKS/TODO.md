@@ -16,18 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0005.3 Draggable projected ports + persistence
-
-End state bullet 3: projected port dots move like any other port, position
-persisted per view.
-
-- Port dots for projected names reuse existing drag gesture; writes go through
-  `persistence.ts` as `node "sys/A" { port "B/input" { side offset } }`
-  (existing HCL convention, §2.10/§6.5). Direct layout wins when present.
-- Verify `parse_views`/serializer round-trip of `/`-containing port labels
-  (`persistence.test.ts`); e2e drag test for a projected dot.
-- Definition of done: reload keeps position; `just test`, `just lint`.
-
 ## Task <N> — 0005.4 Reveal/hide transitions (jump) + stale handling
 
 End state bullet 4: connection added as projected, then inner component shown
