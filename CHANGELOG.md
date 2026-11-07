@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: grey out unshowable connections with explanatory tooltip
 - **web**: tween follower canvas into remote diagram changes
 - **core**: reject slash in block labels with E004
 - **web**: omit inward projected ancestor-descendant edges
