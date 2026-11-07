@@ -4,6 +4,17 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - remove duplicated locking icon, keep only the one in navbar
+
+Removed the bottom-bar `LockBadge` from `DiagnosticsStatusBar` (plus its
+`lockedBy`/`lockMe` props), unwired `ProjectStatusBar` from the `projectLock`
+singleton, and deleted the now-obsolete `Locked`/`LockedByMe` bar stories and
+their VRT baselines. The navbar `LockBadge` (desktop + mobile) is now the
+single lock status affordance. Verified: web unit suite green, eslint +
+`svelte-check` clean, `diagnostics-status-bar` e2e green.
+
+---
+
 ## Task <N> - lock immediately after first change, then debounce
 
 Two halves, since the perceived ~4s was debounce (0.5–0.7s) plus lock polling

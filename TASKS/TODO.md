@@ -18,13 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - remove duplicated locking icon, keep only the one in navbar
-
-The project lock status is currently duplicated - one is on the bottom bar, one
-is on the navbar. Remove the one on the bottom bar, keep only the one on the
-navbar. Once deleted, do a cleanup pass, ensuring no leftovers or extra logic is
-left from the bottom bar-placed lock component.
-
 ## Task <N> - allow unlocking the project, add button next to username "rename" 
 
 Current locking UI only displays the lock status and allows changing the
