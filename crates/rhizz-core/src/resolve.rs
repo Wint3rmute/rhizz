@@ -47,6 +47,31 @@ impl Resolver {
     fn push_warning(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
         self.diagnostics.push(Diagnostic::warning(code, msg));
     }
+
+    /// Reject block labels that are empty or contain `/` (E004): `/` is the
+    /// path separator (SPEC.md §3), so such labels can never resolve as a
+    /// single segment and would collide with projected port names
+    /// (`B/input`). Returns `false` when the label was rejected and the
+    /// caller must skip the block. Mirrors the editor-side
+    /// `mutation/connect.ts:check_label` guard, which refuses the same labels
+    /// before they reach the compiler.
+    fn check_block_label(&mut self, label: &str, what: &str) -> bool {
+        if label.is_empty() {
+            self.push_error(
+                DiagnosticCode::E004,
+                format!("{what} label must not be empty"),
+            );
+            return false;
+        }
+        if label.contains('/') {
+            self.push_error(
+                DiagnosticCode::E004,
+                format!("{what} label `{label}` must not contain `/`"),
+            );
+            return false;
+        }
+        true
+    }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -99,6 +124,9 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // ── Protocols ─────────────────────────────────────────────────────────────
     let mut proto_seen: HashSet<String> = HashSet::new();
     for lp in raw.protocols {
+        if !r.check_block_label(&lp.label, "protocol") {
+            continue;
+        }
         if !proto_seen.insert(lp.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -145,6 +173,9 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     {
         let mut def_seen: HashSet<String> = HashSet::new();
         for lc in &raw.components {
+            if !r.check_block_label(&lc.label, "component") {
+                continue;
+            }
             if !def_seen.insert(lc.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
@@ -185,6 +216,9 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     let mut pending_systems: Vec<SystemWork> = Vec::new();
 
     for ls in raw.systems {
+        if !r.check_block_label(&ls.label, "system") {
+            continue;
+        }
         if !system_labels_seen.insert(ls.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -213,6 +247,9 @@ fn resolve_pass(raw: RawFile) -> Resolver {
         let mut ancestors: Vec<String> = Vec::new();
 
         for li in &ls.inner.instances {
+            if !r.check_block_label(&li.label, "instance") {
+                continue;
+            }
             if !instance_labels_seen.insert(li.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
@@ -443,6 +480,9 @@ fn register_component_inner(
     let mut child_label_seen: HashSet<String> = HashSet::new();
     let mut child_ids: Vec<ComponentId> = Vec::new();
     for child_li in &body.instances {
+        if !r.check_block_label(&child_li.label, "instance") {
+            continue;
+        }
         if !child_label_seen.insert(child_li.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -576,6 +616,9 @@ fn process_ports(
     let mut port_ids: Vec<PortId> = Vec::new();
 
     for lp in ports {
+        if !r.check_block_label(&lp.label, "port") {
+            continue;
+        }
         if !label_seen.insert(lp.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -679,6 +722,9 @@ fn process_connections_in_scope(
     let mut conn_ids: Vec<ConnectionId> = Vec::new();
 
     for lc in connections {
+        if !r.check_block_label(&lc.label, "connection") {
+            continue;
+        }
         if !label_seen.insert(lc.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -1140,6 +1186,9 @@ fn process_messages(
     let mut msg_ids: Vec<MessageId> = Vec::new();
 
     for lm in messages {
+        if !r.check_block_label(&lm.label, "message") {
+            continue;
+        }
         if !label_seen.insert(lm.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -1178,6 +1227,9 @@ fn process_fields(
     let mut field_ids: Vec<FieldId> = Vec::new();
 
     for lf in fields {
+        if !r.check_block_label(&lf.label, "field") {
+            continue;
+        }
         if !label_seen.insert(lf.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
@@ -3323,5 +3375,123 @@ system "banking" {
         targets.sort_by_key(|c| c.0);
         targets.dedup();
         assert_eq!(targets.len(), 3, "each copy has a distinct target");
+    }
+
+    /// A source with a single slash-bearing (or empty) block label must fail
+    /// with exactly one E004 whose message contains `want`.
+    fn assert_one_e004(src: &str, what: &str, want: &str) {
+        let result = resolve_src(src);
+        assert!(result.is_err(), "expected E004 for {what}, got ok");
+        let diags = result.unwrap_err();
+        let e004: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::E004)
+            .collect();
+        assert_eq!(e004.len(), 1, "expected one E004, got: {diags:?}");
+        assert!(
+            e004[0].message.contains(want),
+            "{what} message must contain `{want}`, got: {}",
+            e004[0].message
+        );
+    }
+
+    #[test]
+    fn e004_slash_in_system_label_rejected() {
+        assert_one_e004(r#"system "a/b" { full_name = "d" }"#, "system", "a/b");
+    }
+
+    #[test]
+    fn e004_slash_in_component_label_rejected() {
+        assert_one_e004(r#"component "a/b" { full_name = "d" }"#, "component", "a/b");
+    }
+
+    #[test]
+    fn e004_empty_component_label_rejected() {
+        assert_one_e004(
+            r#"component "" { full_name = "d" }"#,
+            "component",
+            "must not be empty",
+        );
+    }
+
+    #[test]
+    fn e004_slash_in_instance_label_rejected() {
+        assert_one_e004(
+            r#"
+            component "c" { leaf = true }
+            system "s" {
+              instance "a/b" { source = "c" }
+            }
+            "#,
+            "instance",
+            "a/b",
+        );
+    }
+
+    #[test]
+    fn e004_slash_in_port_label_rejected() {
+        assert_one_e004(
+            r#"
+            component "c" {
+              leaf = true
+              port "a/b" { role = "provider" }
+            }
+            "#,
+            "port",
+            "a/b",
+        );
+    }
+
+    #[test]
+    fn e004_slash_in_connection_label_rejected() {
+        assert_one_e004(
+            r#"
+            component "a" {
+              leaf = true
+              port "p" { role = "provider" }
+            }
+            component "b" {
+              leaf = true
+              port "q" { role = "consumer" }
+            }
+            system "s" {
+              instance "a" { source = "a" }
+              instance "b" { source = "b" }
+              connection "a/b" {
+                from = "a/p"
+                to   = "b/q"
+              }
+            }
+            "#,
+            "connection",
+            "a/b",
+        );
+    }
+
+    #[test]
+    fn e004_slash_in_protocol_message_field_labels_rejected() {
+        assert_one_e004(r#"protocol "a/b" {}"#, "protocol", "a/b");
+        assert_one_e004(
+            r#"
+            protocol "p" {
+              message "a/b" {
+                field "x" { type = "uint8" }
+              }
+            }
+            "#,
+            "message",
+            "a/b",
+        );
+        assert_one_e004(
+            r#"
+            protocol "p" {
+              message "m" {
+                field "a/b" { type = "uint8" }
+              }
+            }
+            "#,
+            "field",
+            "a/b",
+        );
     }
 }
