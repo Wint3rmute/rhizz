@@ -218,3 +218,72 @@ export function sidebarProjectionRows(
     }))
     .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
 }
+
+export interface ProjectedPortDot {
+  ancestor: number;
+  /** View-local name (`<rel-path>/<port>`); never collides — see §3. */
+  label: string;
+  role: "provider" | "consumer" | "peer";
+  protocol?: string | undefined;
+}
+
+/** Normalizes a stored role exactly like `modelView.toRole`: only provider /
+ * consumer survive, everything else (including absent) is a peer. */
+function toDotRole(role: string | undefined): ProjectedPortDot["role"] {
+  const normalized = role?.toLowerCase();
+  return normalized === "provider" || normalized === "consumer"
+    ? normalized
+    : "peer";
+}
+
+/**
+ * One draggable dot per projected endpoint of every connection: the visible
+ * ancestor plus the derived port name. Role/protocol inherit from the
+ * original descendant port (found via ancestor key + relative path); a port
+ * whose hierarchy entry is gone falls back to peer/untyped and still renders
+ * — stale *customizations* are ignored later (0005.4), the dot itself follows
+ * the live edge. Direct endpoints and bare (portless) ends yield no dot.
+ * Deduped by ancestor + label so fan-out edges share one dot.
+ */
+export function projectedPortDots(
+  conns: readonly ProjectionEndpointRef[],
+  context: ProjectionContext,
+  ancestorKeyOf: (index: number) => string,
+  portsOf: (
+    componentKey: string,
+  ) => { label: string; role?: string; protocol?: string }[] | undefined,
+): ProjectedPortDot[] {
+  const seen = new Set<string>();
+  const dots: ProjectedPortDot[] = [];
+  const emit = (owner: number, port: string | undefined): void => {
+    if (port === undefined) return;
+    const visible = nearestVisibleAncestor(owner, context);
+    if (visible === undefined || visible.relLabels.length === 0) return;
+    const label = projectedPortName(visible.relLabels, port);
+    if (label === undefined) return;
+    const key = `${String(visible.ancestor)}:${label}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    const ownerKey = `${ancestorKeyOf(visible.ancestor)}/${visible.relLabels.join("/")}`;
+    const original = portsOf(ownerKey)?.find((p) => p.label === port);
+    dots.push({
+      ancestor: visible.ancestor,
+      label,
+      role: toDotRole(original?.role),
+      ...(original?.protocol ? { protocol: original.protocol } : {}),
+    });
+  };
+  for (const conn of conns) {
+    emit(conn.from, conn.fromPort);
+    emit(conn.to, conn.toPort);
+  }
+  return dots.sort((a, b) =>
+    a.ancestor !== b.ancestor
+      ? a.ancestor - b.ancestor
+      : a.label < b.label
+        ? -1
+        : a.label > b.label
+          ? 1
+          : 0,
+  );
+}

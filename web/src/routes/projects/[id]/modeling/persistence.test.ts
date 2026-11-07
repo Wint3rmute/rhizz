@@ -303,6 +303,29 @@ describe("HCL View conversion and persistence", () => {
     });
   });
 
+  it("round-trips projected port names with relative paths", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/A": { x: 10, y: 20, width: 100, height: 50 },
+      },
+      ports: {
+        "sys/A": {
+          "sen-a/out": { side: "right" as const, offset: 0.25 },
+        },
+      },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('port "sen-a/out"');
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.ports?.["sys/A"]).toEqual({
+      "sen-a/out": { side: "right", offset: 0.25 },
+    });
+  });
+
   it("omits port blocks when no spots are placed", async () => {
     const fs = await projectFs();
     const layout = {
