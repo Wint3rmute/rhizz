@@ -143,6 +143,26 @@ export function resolveConnectionProjections<T extends ProjectionEndpointRef>(
   }));
 }
 
+/**
+ * ConnectionJS (wasm) exposes ports as `from_port`/`to_port` getters while the
+ * resolver speaks camelCase. Read both so a spread (which drops prototype
+ * getters) can never silently lose the anchoring ports.
+ */
+export function normalizeEndpointRef(
+  conn: ProjectionEndpointRef & {
+    from_port?: string | null | undefined;
+    to_port?: string | null | undefined;
+  },
+): ProjectionEndpointRef {
+  return {
+    label: conn.label,
+    from: conn.from,
+    to: conn.to,
+    fromPort: conn.fromPort ?? conn.from_port ?? undefined,
+    toPort: conn.toPort ?? conn.to_port ?? undefined,
+  };
+}
+
 /** Drawn means resolved (not omitted) and not hidden — mirrors `isConnectionDrawn`. */
 export function isProjectionDrawn(
   projection: Pick<ConnectionProjection, "kind" | "hidden">,
@@ -152,7 +172,7 @@ export function isProjectionDrawn(
 
 export interface SidebarProjectionRow {
   label: string;
-  /** Checked: at least one copy is drawn on the canvas (old `shown` rule). */
+  /** Checked: at least one copy is drawn on the canvas. */
   shown: boolean;
   /** At least one copy resolves `projected` under current visibility. */
   projected: boolean;
@@ -160,16 +180,15 @@ export interface SidebarProjectionRow {
 
 /**
  * Sidebar rows, grouped by connection name: every in-system connection is
- * listed (placed or not), checked when drawn, badged when projected.
- * `shown` keeps the pre-projection drawn rule so the checkbox stays truthful
- * to the canvas until 0005.2 draws projected edges; `projected` is the new
+ * listed (placed or not), checked when drawn on the canvas, badged when
+ * projected. `shown` follows the projection-aware drawn rule
+ * (`isProjectionDrawn`), so sidebar and canvas agree; `projected` is the
  * visibility-only signal for the badge.
  */
 export function sidebarProjectionRows(
   conns: readonly ProjectionEndpointRef[],
   context: ProjectionContext,
 ): SidebarProjectionRow[] {
-  const hiddenOf = context.isHidden ?? (() => false);
   const byLabel = new Map<
     string,
     { listed: boolean; shown: boolean; projected: boolean }
@@ -182,14 +201,11 @@ export function sidebarProjectionRows(
     }
     if (!context.inSystem(conn.from) || !context.inSystem(conn.to)) continue;
     entry.listed = true;
-    if (
-      context.placed.has(conn.from) &&
-      context.placed.has(conn.to) &&
-      !hiddenOf(conn.label)
-    ) {
+    const resolution = resolveConnectionProjection(conn, context);
+    if (isProjectionDrawn(resolution)) {
       entry.shown = true;
     }
-    if (resolveConnectionProjection(conn, context).kind === "projected") {
+    if (resolution.kind === "projected") {
       entry.projected = true;
     }
   }
