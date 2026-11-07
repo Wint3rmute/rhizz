@@ -25,11 +25,42 @@ component "battery" {
   leaf        = true
 }
 
+component "sensor" {
+  full_name = "Sensing unit"
+  leaf        = true
+  port "data" {
+    protocol = "mqtt"
+    role     = "provider"
+  }
+}
+
+component "hub" {
+  full_name = "Collecting unit"
+  leaf        = true
+  port "in" {
+    protocol = "mqtt"
+    role     = "consumer"
+  }
+}
+
 system "demo" {
   full_name = "Demo system"
 
   instance "battery" {
     source = "battery"
+  }
+
+  instance "sensor" {
+    source = "sensor"
+  }
+
+  instance "hub" {
+    source = "hub"
+  }
+
+  connection "telemetry" {
+    from = "sensor/data"
+    to   = "hub/in"
   }
 }
 `;
@@ -110,6 +141,22 @@ export const PanesOpenByDefault: Story = {
     await expect(
       canvas.getByTestId("modeling-pane-rail-right"),
     ).not.toBeVisible();
+
+    // The unplaced telemetry connection is listed greyed out with a
+    // disabled checkbox and an explanatory tooltip instead of silently
+    // hiding.
+    const row = await canvas.findByTestId("connection-row-telemetry");
+    const rowQueries = within(row);
+    await expect(row).toBeVisible();
+    await expect(rowQueries.getByRole("checkbox")).toBeDisabled();
+    await expect(row).toHaveClass(/opacity-60/);
+    await expect(row).toHaveAttribute(
+      "data-tip",
+      "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
+    );
+    await expect(
+      canvas.queryByTestId("projected-badge-telemetry"),
+    ).not.toBeInTheDocument();
   },
 };
 
@@ -173,94 +220,5 @@ export const ComponentsPaneHideAndRestore: Story = {
     await expect(canvas.getByTestId("diagram-system-label")).toHaveTextContent(
       "system: demo",
     );
-  },
-};
-
-// A connection whose endpoints are not placed is listed greyed out with a
-// disabled checkbox and an explanatory tooltip instead of silently hiding.
-const OMITTED_PROJECT_NAME = "Modeling omitted connection story";
-const OMITTED_PROJECT_ID = projectSlug(OMITTED_PROJECT_NAME);
-
-const OMITTED_SYSTEM_HCL = `project {
-  name = "modeling-omitted-story"
-}
-
-component "sensor" {
-  full_name = "Sensing unit"
-  leaf        = true
-  port "data" {
-    protocol = "mqtt"
-    role     = "provider"
-  }
-}
-
-component "hub" {
-  full_name = "Collecting unit"
-  leaf        = true
-  port "in" {
-    protocol = "mqtt"
-    role     = "consumer"
-  }
-}
-
-system "demo" {
-  full_name = "Demo system"
-
-  instance "sensor" {
-    source = "sensor"
-  }
-
-  instance "hub" {
-    source = "hub"
-  }
-
-  connection "telemetry" {
-    from = "sensor/data"
-    to   = "hub/in"
-  }
-}
-`;
-
-const OMITTED_VIEWS_HCL = `view "main" {
-  full_name = ""
-  system      = "demo"
-}
-`;
-
-async function ensureOmittedProject(): Promise<Project> {
-  await init();
-  modelingPanes.forget();
-  const existing = await projectStore.listProjects();
-  const stale = existing.find(
-    (candidate) => candidate.id === OMITTED_PROJECT_ID,
-  );
-  if (stale !== undefined) {
-    await projectStore.deleteProject(stale.id);
-  }
-  return createProjectWithFiles(OMITTED_PROJECT_NAME, [
-    { path: "system.hcl", content: OMITTED_SYSTEM_HCL },
-    { path: "views/main.hcl", content: OMITTED_VIEWS_HCL },
-  ]);
-}
-
-export const OmittedConnectionRow: Story = {
-  args: {
-    projectId: OMITTED_PROJECT_ID,
-  },
-  loaders: [ensureOmittedProject],
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const row = await canvas.findByTestId("connection-row-telemetry");
-    const rowQueries = within(row);
-    await expect(row).toBeVisible();
-    await expect(rowQueries.getByRole("checkbox")).toBeDisabled();
-    await expect(row).toHaveClass(/opacity-60/);
-    await expect(row).toHaveAttribute(
-      "data-tip",
-      "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
-    );
-    await expect(
-      canvas.queryByTestId("projected-badge-telemetry"),
-    ).not.toBeInTheDocument();
   },
 };
