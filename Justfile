@@ -55,10 +55,22 @@ test: wasm
 # gate, and writes lcov + cobertura reports under target/coverage/.
 # rhizz-wasm is excluded (wasm cdylib, no host tests) and crates/*/tests
 # are not counted as source.
+#
+# TEMPORARY (Rust 1.99 regression, TODO: revert to `{{run}} cargo llvm-cov`
+# once nixpkgs Rust emits valid profiles again): Rust 1.99.0 (current
+# nixpkgs rev) generates empty profiles (format version 11, zero counters)
+# and segfaults instrumented build scripts, so coverage cannot use it.
+# Pin coverage to the last working toolchain (Rust 1.98.1, same
+# cargo-llvm-cov 0.9.0 / LLVM 21.1.8 that was green on main) via an
+# ad-hoc `nix shell` pinned to the pre-bump rev (fe13242...). No
+# flake.lock change (ad-hoc URL, not a flake input); Nix reuses the
+# store paths already cached from main's green runs, so no download.
+# Everything else (builds, clippy, tests) keeps using the new toolchain
+# via `{{run}}` (nix develop) — only coverage is pinned.
 coverage:
-    {{run}} mkdir -p target/coverage
-    {{run}} sh -c 'RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
-    {{run}} sh -c 'cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
+    mkdir -p target/coverage
+    nix shell github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#rustc github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#cargo github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#cargo-llvm-cov github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#llvmPackages_21.llvm --command sh -c 'export LLVM_COV=$(which llvm-cov); export LLVM_PROFDATA=$(which llvm-profdata); RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
+    nix shell github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#rustc github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#cargo github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#cargo-llvm-cov github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df#llvmPackages_21.llvm --command sh -c 'export LLVM_COV=$(which llvm-cov); export LLVM_PROFDATA=$(which llvm-profdata); cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
 
 # Builds the wasm package via its Nix derivation (nix/wasm.nix) — the same
 # build CI runs — and syncs the result into crates/rhizz-wasm/pkg/, the
