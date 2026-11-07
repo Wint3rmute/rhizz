@@ -249,7 +249,7 @@ mod tests {
             &no_projects(),
             TEST_BASE_URL,
         );
-        assert!(traces.is_empty());
+        assert!(traces.is_empty(), "{traces:?}");
         assert!(new_content.contains("rhizz-tool"));
     }
 
@@ -303,7 +303,7 @@ mod tests {
             TEST_BASE_URL,
         );
         assert_eq!(new_content, "# T\n\ntext after");
-        assert!(traces.is_empty());
+        assert!(traces.is_empty(), "{traces:?}");
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
             &no_projects(),
             TEST_BASE_URL,
         );
-        assert!(traces.is_empty());
+        assert!(traces.is_empty(), "{traces:?}");
         assert!(new_content.contains("rhizz-tool"));
     }
 }

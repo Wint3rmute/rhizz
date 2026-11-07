@@ -1787,7 +1787,11 @@ system "apollo" {
 }"#;
         let parsed = parse_views(hcl).expect("unknown port side should not fail");
         assert_eq!(parsed.len(), 1);
-        assert!(parsed[0].nodes[0].ports.is_empty());
+        assert!(
+            parsed[0].nodes[0].ports.is_empty(),
+            "{:?}",
+            parsed[0].nodes[0].ports
+        );
     }
 
     #[test]

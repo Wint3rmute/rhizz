@@ -292,7 +292,7 @@ mod tests {
         let segments = parse_blocks(&split_lines(content));
         assert_eq!(segments.len(), 2);
         if let Segment::Block { attrs, body } = &segments[0] {
-            assert!(attrs.is_empty());
+            assert!(attrs.is_empty(), "{attrs:?}");
             assert_eq!(body, &vec!["one".to_owned()]);
         } else {
             panic!("expected first segment to be a block");

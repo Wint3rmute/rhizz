@@ -1697,8 +1697,8 @@ mod tests {
             .expect("ground-station-pc");
         let gpc = &model.components[gpc_cid.0];
         assert!(!gpc.leaf);
-        assert!(gpc.children.is_empty());
-        assert!(gpc.full_name.is_empty());
+        assert!(gpc.children.is_empty(), "{:?}", gpc.children);
+        assert!(gpc.full_name.is_empty(), "{:?}", gpc.full_name);
 
         // Warnings: W001 for ground-station-pc, W004 for ground-station-pc
         let w001_labels: Vec<&str> = warnings
@@ -1752,7 +1752,11 @@ mod tests {
             .copied()
             .find(|cid| model.components[cid.0].label == "recommendation-engine")
             .expect("recommendation-engine");
-        assert!(model.components[rec_cid.0].children.is_empty());
+        assert!(
+            model.components[rec_cid.0].children.is_empty(),
+            "{:?}",
+            model.components[rec_cid.0].children
+        );
 
         // rec-to-feed connection: from=recommendation-engine/scores-out, to=feed-service/scores-in
         let feed_service_cid = backend
@@ -1821,8 +1825,8 @@ mod tests {
             .expect("operations");
         let ops = &model.components[ops_cid.0];
         assert!(!ops.leaf);
-        assert!(ops.children.is_empty());
-        assert!(ops.full_name.is_empty());
+        assert!(ops.children.is_empty(), "{:?}", ops.children);
+        assert!(ops.full_name.is_empty(), "{:?}", ops.full_name);
 
         // sprint-planning connection: from=product/sprint-out, to=engineering/sprint-in
         let product_cid = acme
@@ -2897,7 +2901,11 @@ protocol "http" {
 "#;
         let (model, warnings) = resolve_src(src).expect("W022 must not block compilation");
         assert_eq!(codes(&warnings), vec!["W022"]);
-        assert!(model.protocols[0].encapsulates_ids.is_empty());
+        assert!(
+            model.protocols[0].encapsulates_ids.is_empty(),
+            "{:?}",
+            model.protocols[0].encapsulates_ids
+        );
         assert_eq!(model.protocols[0].encapsulates, vec!["fund-transfer"]);
     }
 

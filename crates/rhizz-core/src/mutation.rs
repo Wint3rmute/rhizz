@@ -2156,7 +2156,7 @@ mod tests {
         assert_eq!(first.actions.len(), 1);
         let second = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#).expect("ok");
         assert!(second.applied);
-        assert!(second.actions.is_empty());
+        assert!(second.actions.is_empty(), "{:?}", second.actions);
     }
 
     #[test]

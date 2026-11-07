@@ -649,7 +649,7 @@ mod tests {
             .unwrap();
         let json: Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(json, version_payload(GIT_SHA, GIT_TAG));
-        assert!(!GIT_SHA.is_empty());
+        assert!(!GIT_SHA.is_empty(), "{GIT_SHA:?}");
     }
 
     #[test]
@@ -839,8 +839,16 @@ mod tests {
             .unwrap();
         let vfs: Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(vfs.get("version").unwrap(), &json!(1));
-        assert!(vfs.get("projects").unwrap().as_array().unwrap().is_empty());
-        assert!(vfs.get("nodes").unwrap().as_array().unwrap().is_empty());
+        assert!(
+            vfs.get("projects").unwrap().as_array().unwrap().is_empty(),
+            "{:?}",
+            vfs.get("projects").unwrap().as_array().unwrap()
+        );
+        assert!(
+            vfs.get("nodes").unwrap().as_array().unwrap().is_empty(),
+            "{:?}",
+            vfs.get("nodes").unwrap().as_array().unwrap()
+        );
     }
 
     #[tokio::test]

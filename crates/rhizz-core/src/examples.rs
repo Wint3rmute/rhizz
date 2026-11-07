@@ -46,17 +46,17 @@ mod tests {
             .find(|p| p.id == "apollo-11")
             .expect("apollo-11 missing");
         assert_eq!(apollo.name, "Apollo 11 Mission Stack");
-        assert!(!apollo.files.is_empty());
+        assert!(!apollo.files.is_empty(), "{:?}", apollo.files);
         assert!(apollo.files.iter().any(|f| f.path == "system.hcl"));
 
         for p in projects {
-            assert!(!p.id.is_empty());
-            assert!(!p.name.is_empty());
-            assert!(!p.description.is_empty());
-            assert!(!p.files.is_empty());
+            assert!(!p.id.is_empty(), "{:?}", p.id);
+            assert!(!p.name.is_empty(), "{:?}", p.name);
+            assert!(!p.description.is_empty(), "{:?}", p.description);
+            assert!(!p.files.is_empty(), "{:?}", p.files);
             for f in p.files {
-                assert!(!f.path.is_empty());
-                assert!(!f.content.is_empty());
+                assert!(!f.path.is_empty(), "{:?}", f.path);
+                assert!(!f.content.is_empty(), "{:?}", f.content);
             }
         }
     }
