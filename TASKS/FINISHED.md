@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - transition on remote diagram change
+
+Yes — plug-and-play as suspected. Follower auto-reload applied the remote
+layout with `presentMode` still `"cut"`, so the scene effect cut instead of
+tweening. One line in `reloadForFollower` (`ModelingPage.svelte`) sets
+`presentMode = "nodes"` before applying the layout: node positions tween via
+the existing blend engine (stable-id matching, added/removed fade), camera
+stays put, reduced-motion users still cut. No automated test seam exists for
+the follower path (e2e runs localStorage-only with forced reduced motion, and
+the reload function is a component closure), so verification is the web unit
+suite (449 green) + eslint/`svelte-check` clean; confirm visually with two
+browser windows (holder edits, follower watches the tween).
+
+---
+
 ## Task <N> — Slash-in-label compiler error (Rust)
 
 New `E004` ("Invalid block label", `SPEC/diagnostics/E004.md`, picked up by

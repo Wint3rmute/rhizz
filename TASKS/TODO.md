@@ -18,15 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - transition on remote diagram change
-
-When a system model change is detected on the remote server, the diagram
-immediately "jumps" to the new state. Would it be possible to transition
-smoothly instead? Transition engine already exists, so this should be plug-and
-play.
-
----
-
 ## Task <N> - visually mark connections not possible to display
 
 In modeling, under connections (right side) I wonder how I could indicate which
