@@ -18,16 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - visually mark connections not possible to display
-
-In modeling, under connections (right side) I wonder how I could indicate which
-connections are not possible to show given the components visible in the system
-view. I'd like to grey them out and add a tooltip popup saying that "this
-connection cannot be shown as none of its components (or parents of them) are
-shown in this view". You think this popup wording is okay?
-
----
-
 ## Task <N> - lock immediately after first change, then debounce
 
 The current filesystem debounce mechanism has a ~4s (rough estimate) delay

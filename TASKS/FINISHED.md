@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - visually mark connections not possible to display
+
+Done as proposed, with one wording tweak ("placed", the actual mechanism,
+instead of "shown"): rows whose connection resolves `omitted` render greyed
+(`opacity-60`) with a DaisyUI `tooltip-left` — "This connection cannot be
+shown — none of its components (or their parents) are placed in this view."
+— and a disabled checkbox. `omitted` means no copy is drawable-if-unhidden,
+so hidden-but-placeable rows stay interactive (untoggling re-shows them);
+only truly undrawable rows grey out. Red/green TDD (unit: all row states +
+hidden/placed matrix) + e2e (disabled + tooltip + class when unplaced,
+enabled once ancestors are placed).
+
+---
+
 ## Task <N> - transition on remote diagram change
 
 Yes — plug-and-play as suspected. Follower auto-reload applied the remote
