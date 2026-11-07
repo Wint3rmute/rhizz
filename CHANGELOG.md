@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: omit inward projected ancestor-descendant edges
 - **web**: draggable projected port dots with persistence
 - **web**: draw projected edges on canvas
 - **web**: list all connections with Projected badge in sidebar
