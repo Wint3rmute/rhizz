@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  normalizeEndpointRef,
   resolveConnectionProjection,
   resolveConnectionProjections,
   sidebarProjectionRows,
@@ -219,7 +220,7 @@ describe("sidebarProjectionRows", () => {
 
   it("marks projected rows when ancestors are placed", () => {
     expect(sidebarProjectionRows(conns, ctx([0, 4]))).toEqual([
-      { label: "low-link", shown: false, projected: true },
+      { label: "low-link", shown: true, projected: true },
     ]);
   });
 
@@ -260,5 +261,44 @@ describe("sidebarProjectionRows", () => {
       { label: "alpha", shown: false, projected: false },
       { label: "zeta", shown: true, projected: true },
     ]);
+  });
+});
+
+describe("normalizeEndpointRef", () => {
+  it("reads wasm snake_case port getters", () => {
+    expect(
+      normalizeEndpointRef({
+        label: "a",
+        from: 1,
+        to: 2,
+        from_port: "in",
+        to_port: "out",
+      }),
+    ).toEqual({ label: "a", from: 1, to: 2, fromPort: "in", toPort: "out" });
+  });
+
+  it("prefers camelCase ports and tolerates bare endpoints", () => {
+    expect(
+      normalizeEndpointRef({
+        label: "a",
+        from: 1,
+        to: 2,
+        fromPort: "in",
+        from_port: "stale",
+      }),
+    ).toEqual({
+      label: "a",
+      from: 1,
+      to: 2,
+      fromPort: "in",
+      toPort: undefined,
+    });
+    expect(normalizeEndpointRef({ label: "b", from: 1, to: 2 })).toEqual({
+      label: "b",
+      from: 1,
+      to: 2,
+      fromPort: undefined,
+      toPort: undefined,
+    });
   });
 });

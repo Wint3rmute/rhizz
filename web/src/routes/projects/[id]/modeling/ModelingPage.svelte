@@ -133,8 +133,13 @@
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import { fitCamera, sceneBounds } from "./blend";
   import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
-  import { drawnConnections, isPlacedInSystem } from "./connectionVisibility";
-  import { sidebarProjectionRows } from "./connectionProjection";
+  import { isPlacedInSystem } from "./connectionVisibility";
+  import {
+    isProjectionDrawn,
+    normalizeEndpointRef,
+    resolveConnectionProjections,
+    sidebarProjectionRows,
+  } from "./connectionProjection";
   import { createDiagramTransition } from "./transition.svelte";
   import {
     type BorderStyle,
@@ -550,19 +555,23 @@
     return systemComponentIndices.has(index);
   }
 
+  // Shared projection context for the sidebar rows and the canvas edges
+  // below, so the two cannot disagree: visibility, hierarchy, and per-view
+  // hidden state flow through the 0005.0 resolver.
+  let projectionContext = $derived.by(() => ({
+    placed: checkedIndices,
+    inSystem: isInViewSystem,
+    parentOf: (index: number) => components[index]?.parent_component_index,
+    labelOf: (index: number) => components[index]?.label ?? `#${String(index)}`,
+    isHidden: isConnectionHidden,
+  }));
+
   // Connections sidebar: every in-system connection is listed (placed or
   // not), grouped by name. A name is checked when drawn on the canvas and
   // badged `Projected` when it resolves through visible ancestors instead of
-  // directly placed endpoints. Hidden connections stay listed but unchecked;
-  // the canvas still draws only directly placed edges until 0005.2.
+  // directly placed endpoints. Hidden connections stay listed but unchecked.
   let systemConnections = $derived.by(() =>
-    sidebarProjectionRows(connections, {
-      placed: checkedIndices,
-      inSystem: isInViewSystem,
-      parentOf: (index) => components[index]?.parent_component_index,
-      labelOf: (index) => components[index]?.label ?? `#${String(index)}`,
-      isHidden: isConnectionHidden,
-    }),
+    sidebarProjectionRows(connections, projectionContext),
   );
 
   // Labels for the inspector's per-realization "Show" buttons: connections
@@ -3858,32 +3867,38 @@
         },
       ];
     });
-    // Canvas edges share the drawn predicate with the sidebar above: placed
-    // in the view's system and not hidden. Hidden applies by name, so all
-    // copies of a hidden connection are skipped together.
-    const edges: EditorSceneEdgeInput[] = drawnConnections(
-      connections,
-      checkedIndices,
-      isInViewSystem,
-      isConnectionHidden,
-    ).map((conn) => {
-      const edge: EditorSceneEdgeInput = {
-        from: conn.from,
-        to: conn.to,
-        label: conn.label,
-        fromKey: getComponentKey(conn.from),
-        toKey: getComponentKey(conn.to),
-      };
-      // Follow-the-dot: anchor to the port dots when the model names ports.
-      const fromPort = (conn as unknown as { from_port?: string }).from_port;
-      const toPort = (conn as unknown as { to_port?: string }).to_port;
-      if (fromPort !== undefined) edge.fromPort = fromPort;
-      if (toPort !== undefined) edge.toPort = toPort;
-      const saved = savedConnections[conn.label];
-      if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
-      if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
-      return edge;
-    });
+    // Canvas edges share the projection resolver with the sidebar above:
+    // every resolved (non-omitted), non-hidden copy draws between its visible
+    // ancestors — directly placed or projected — under the original connection
+    // name. Hidden applies by name, so all copies of a hidden connection are
+    // skipped together; projected self-edges resolve to omitted and never draw.
+    const edges: EditorSceneEdgeInput[] = resolveConnectionProjections(
+      connections.map((conn) =>
+        normalizeEndpointRef(
+          conn as unknown as Parameters<typeof normalizeEndpointRef>[0],
+        ),
+      ),
+      projectionContext,
+    )
+      .filter(isProjectionDrawn)
+      .map((conn) => {
+        const edge: EditorSceneEdgeInput = {
+          from: conn.from,
+          to: conn.to,
+          label: conn.label,
+          fromKey: getComponentKey(conn.from),
+          toKey: getComponentKey(conn.to),
+        };
+        // Follow-the-dot: anchor to the port dots when the model names ports
+        // (original or projected `<rel-path>/<port>` — dots for the latter
+        // land in 0005.3, until then the router falls back to a side).
+        if (conn.fromPort !== undefined) edge.fromPort = conn.fromPort;
+        if (conn.toPort !== undefined) edge.toPort = conn.toPort;
+        const saved = savedConnections[conn.label];
+        if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
+        if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
+        return edge;
+      });
     return buildEditorScene({
       nodes,
       edges,
