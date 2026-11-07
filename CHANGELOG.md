@@ -20,6 +20,9 @@
 
 - **web**: fade ports with their edges during view transitions
 - **web**: generate VFS ids without requiring a secure context
+- **deps**: bump wasm-bindgen to 0.2.130 to match nixpkgs
+- **clippy**: satisfy assert_is_empty and double_must_use lints from nixpkgs bump
+- **nix**: skip cargo-llvm-cov self-tests broken by nixpkgs bump
 
 ### Refactor
 
