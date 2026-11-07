@@ -4,6 +4,21 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Slash-in-label compiler error (Rust)
+
+New `E004` ("Invalid block label", `SPEC/diagnostics/E004.md`, picked up by
+`build.rs` codegen): `Resolver::check_block_label` rejects empty or
+`/`-containing labels at all 8 system-model registration sites in `resolve.rs`
+(systems, components, instances ×2, ports, connections, messages, fields) plus
+the view label in `validate_view` (node paths and projected port names, which
+legitimately contain `/`, are untouched). Neither `E000` (HCL syntax) nor
+`E001` (duplicates) fit, so a new code was minted. Red/green TDD with exact
+single-`E004` assertions per block kind incl. the empty-label case; full
+workspace suite green (306 core tests, examples unaffected), clippy clean.
+`SPEC.md` §3 now cites `E004`.
+
+---
+
 ## 0005 follow-up — No inward projected edges (ancestor into descendant)
 
 User report: placing `A` and `B` (both children of `A` wired together) drew an

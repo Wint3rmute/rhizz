@@ -16,25 +16,7 @@ How to work on this file:
 
 ---
 
-## Task <N> — Slash-in-label compiler error (Rust)
-
-Enforce the `SPEC.md` §3 rule (block labels must be non-empty, must not contain
-`/`; `/` is the path separator) in `rhizz-core` instead of relying on
-incidental resolution failure + the editor-only `mutation/connect.ts:check_label`
-guard. Motivating case: guarantees projected names (`B/input`) can never
-collide with a real single label.
-
-- New diagnostic file under `SPEC/diagnostics/` (error code; `build.rs` picks it
-  up — follow `diagnostics.md` format rules), emitted at parse/resolution for
-  any block label containing `/` (system, component, instance, port,
-  connection, protocol, message, field, view). Check what `E000`/`E001`
-  already cover first and reuse if fitting; otherwise mint the new code.
-- Assert the exact new code (not just counts) in tests, per repo convention.
-- Red/green TDD in `crates/rhizz-core`; `just test`, `just lint`, `just build`;
-  `just format`. No frontend change.
-
 ---
-
 
 ## Task <N> - transition on remote diagram change
 
