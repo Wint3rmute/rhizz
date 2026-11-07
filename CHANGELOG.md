@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: draw projected edges on canvas
 - **web**: list all connections with Projected badge in sidebar
 - **web**: add projection resolver for projected connections
 
