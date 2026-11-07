@@ -35,11 +35,67 @@ collide with a real single label.
 
 ---
 
-## Task <N> - exploring diagrams in embed mode
 
-When browsing system diagrams in Embed mode (/modeling/embed/), it's not
-possible to navigate defined system views, as it is possible in the explore/
-view. Please make it possible to navigate back and forth through linked views.
+## Task <N> - transition on remote diagram change
+
+When a system model change is detected on the remote server, the diagram
+immediately "jumps" to the new state. Would it be possible to transition
+smoothly instead? Transition engine already exists, so this should be plug-and
+play.
+
+---
+
+## Task <N> - visually mark connections not possible to display
+
+In modeling, under connections (right side) I wonder how I could indicate which
+connections are not possible to show given the components visible in the system
+view. I'd like to grey them out and add a tooltip popup saying that "this
+connection cannot be shown as none of its components (or parents of them) are
+shown in this view". You think this popup wording is okay?
+
+---
+
+## Task <N> - lock immediately after first change, then debounce
+
+The current filesystem debounce mechanism has a ~4s (rough estimate) delay
+between the change being made to the system model and that change being uploaded
+to the server via a PUT request. This reflects on the project locking mechanism,
+causing the lock to only occur about ~4s after the first change. I'd like to
+change that - the first change should be uploaded immediately, locking the
+project. Later changes should be debounced with the current debounce period. Add
+some simple robust mechanism so that the first filesystem PUT (and project lock)
+runs immediately, later ones undergo the debounce.
+
+---
+
+## Task <N> - remove duplicated locking icon, keep only the one in navbar
+
+The project lock status is currently duplicated - one is on the bottom bar, one
+is on the navbar. Remove the one on the bottom bar, keep only the one on the
+navbar. Once deleted, do a cleanup pass, ensuring no leftovers or extra logic is
+left from the bottom bar-placed lock component.
+
+## Task <N> - allow unlocking the project, add button next to username "rename" 
+
+Current locking UI only displays the lock status and allows changing the
+username. Add a button to unlock the project immediately. You can make it a
+slightly different color than "rename", maybe something in yellow/orange? Make
+it compliant with the DaisyUI coloring so that it is consistent with the UI and
+is well readable in both dark and light theme.
+
+---
+
+### Task <N> - crypto.randomUUID is not a function when running over http
+
+I was running a test deployment of rhizz or a server with http. When trying
+to create a project, I got an error popup like "crypto.randomUUID is not a
+function" (or very similar). This is related to the site running over http. I
+don't believe this function should even be used in the frontend, can you justify
+its usage? Can it be cut out so that the app (namely the project creation stuff)
+always works, no matter whether the app is running over http or https?
+
+---
+
 
 ## Task <N> - more advanced connection routing on canvas
 
