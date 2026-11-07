@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: upload first change immediately, debounce the rest
 - **web**: grey out unshowable connections with explanatory tooltip
 - **web**: tween follower canvas into remote diagram changes
 - **core**: reject slash in block labels with E004
