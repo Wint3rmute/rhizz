@@ -4851,14 +4851,11 @@
             {#each systemConnections as connection (connection.label)}
               <li
                 class="group flex items-center gap-2 text-sm truncate {connection.omitted
-                  ? 'tooltip tooltip-left opacity-60'
+                  ? 'opacity-60'
                   : ''}"
-                {...connection.omitted
-                  ? {
-                      "data-tip":
-                        "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
-                    }
-                  : { title: connection.label }}
+                title={connection.omitted
+                  ? "This connection cannot be shown — none of its components (or their parents) are placed in this view. Place one to enable it."
+                  : connection.label}
                 data-testid={`connection-row-${connection.label}`}
               >
                 <input
@@ -4878,7 +4875,7 @@
                   <span
                     class="badge badge-ghost badge-xs shrink-0"
                     data-testid={`projected-badge-${connection.label}`}
-                    title="Shown through visible ancestors instead of directly placed endpoints"
+                    title="Projected connection — its real endpoints are hidden inside the shown components. Place them to see the actual connection."
                     >Projected</span
                   >
                 {/if}

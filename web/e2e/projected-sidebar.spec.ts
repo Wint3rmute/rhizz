@@ -66,8 +66,8 @@ test("projected connections are listed with a badge until owners are placed", as
   await expect(row.getByRole("checkbox")).toBeDisabled();
   await expect(row).toHaveClass(/opacity-60/);
   await expect(row).toHaveAttribute(
-    "data-tip",
-    "This connection cannot be shown — none of its components (or their parents) are placed in this view.",
+    "title",
+    "This connection cannot be shown — none of its components (or their parents) are placed in this view. Place one to enable it.",
   );
   await expect(badge).toHaveCount(0);
   await expect(
@@ -80,6 +80,10 @@ test("projected connections are listed with a badge until owners are placed", as
   await place("C");
   await expect(badge).toBeVisible();
   await expect(badge).toHaveText("Projected");
+  await expect(badge).toHaveAttribute(
+    "title",
+    "Projected connection — its real endpoints are hidden inside the shown components. Place them to see the actual connection.",
+  );
   await expect(row.getByRole("checkbox")).toBeChecked();
   await expect(row.getByRole("checkbox")).toBeEnabled();
   await expect(

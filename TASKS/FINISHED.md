@@ -22,13 +22,16 @@ green.
 
 ## Task <N> - visually mark connections not possible to display
 
-Done as proposed, with one wording tweak ("placed", the actual mechanism,
-instead of "shown"): rows whose connection resolves `omitted` render greyed
-(`opacity-60`) with a DaisyUI `tooltip-left` — "This connection cannot be
-shown — none of its components (or their parents) are placed in this view."
-— and a disabled checkbox. `omitted` means no copy is drawable-if-unhidden,
-so hidden-but-placeable rows stay interactive (untoggling re-shows them);
-only truly undrawable rows grey out. Red/green TDD (unit: all row states +
+Done as proposed, with two tweaks. First the wording: "placed" instead of
+"shown" (placement is the mechanism), plus "Place one to enable it." so the
+disabled checkbox is explained too. Second, native `title` attributes
+instead of a DaisyUI tooltip — the row's `truncate` (overflow hidden) clips
+DaisyUI's absolutely-positioned bubble, so `title` is the robust on-hover
+channel here. Same for the `Projected` badge, which now explains itself on
+hover ("its real endpoints are hidden inside the shown components — place
+them to see the actual connection"). Omitted rows render greyed
+(`opacity-60`) with a disabled checkbox; hidden-but-placeable rows stay
+interactive. Red/green TDD (unit: all row states +
 hidden/placed matrix) + e2e (disabled + tooltip + class when unplaced,
 enabled once ancestors are placed).
 
