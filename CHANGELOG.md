@@ -2,6 +2,8 @@
 
 ### Feat
 
+- **web**: show release tag in build footer
+- **server**: expose build tag via /api/version
 - **web**: explain Projected badge and disabled rows via title tooltips
 - **web**: upload first change immediately, debounce the rest
 - **web**: grey out unshowable connections with explanatory tooltip
