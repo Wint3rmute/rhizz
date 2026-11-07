@@ -130,11 +130,22 @@
   // The label is captured per call (not read live at write time), so a write
   // that lands after an entity switch still reaches the file it was typed
   // for. Switching entities flushes first for the same reason the Code page
-  // flushes on file switch; unmount flushes for navigation away.
+  // flushes on file switch; unmount flushes for navigation away. The first
+  // keystroke of a burst saves at once (leading edge) so the upload — and
+  // with it the project lock — happens immediately.
   const DOC_WRITE_DEBOUNCE_MS = 500;
-  const scheduleDocSave = createDebounced((label: string, text: string) => {
-    void ondocsave(label, text);
-  }, DOC_WRITE_DEBOUNCE_MS);
+  const scheduleDocSave = createDebounced(
+    (label: string, text: string) => {
+      void ondocsave(label, text).then(() => {
+        // The lock badge only refreshes on poll: re-read now so holding the
+        // project shows promptly instead of up to one poll late. Skipped
+        // while already holding (heartbeats renew the lease).
+        if (!projectLock.holding) void projectLock.refresh();
+      });
+    },
+    DOC_WRITE_DEBOUNCE_MS,
+    { leading: true },
+  );
   let lastScheduledDocText = $state<string | null>(null);
   $effect(() => {
     const label = definition?.label ?? null;

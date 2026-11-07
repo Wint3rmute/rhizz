@@ -1,14 +1,20 @@
-// Trailing-edge debouncing, framework-free: no Svelte runes, no timers owned
-// by a component, just a plain function that can be created anywhere and
-// driven from anywhere (including an `$effect` body).
+// Debouncing, framework-free: no Svelte runes, no timers owned by a
+// component, just a plain function that can be created anywhere and driven
+// from anywhere (including an `$effect` body).
 //
-// It exists for the app's two high-frequency VFS write sources — the code
-// editor (one write per keystroke) and the Modeling canvas (one write per drag
-// tick). Each of those persists the *whole* VFS blob, so a burst of edits used
-// to turn into a burst of network round trips (and a burst of `vfs.size`
-// samples in Sentry). Coalescing them into one trailing write fixes that at
-// the source, rather than debouncing inside `VfsProjectStore.mutate()` — whose
-// per-call rejection contract the debounced callers rely on.
+// It exists for the app's high-frequency VFS write sources — the code editor
+// (one write per keystroke), the Modeling canvas (one write per drag tick),
+// and the Inventory doc editor. Each of those persists the *whole* VFS blob,
+// so a burst of edits used to turn into a burst of network round trips (and a
+// burst of `vfs.size` samples in Sentry). Coalescing them into one trailing
+// write fixes that at the source, rather than debouncing inside
+// `VfsProjectStore.mutate()` — whose per-call rejection contract the debounced
+// callers rely on.
+//
+// Pass `{ leading: true }` and the first call of an idle burst also runs
+// immediately (used by the page-level VFS writers so the very first edit
+// uploads at once and locks the project); later calls still collapse into
+// one trailing run.
 //
 // The call's arguments are captured at call time, not at run time, so the run
 // always carries the newest state: with a snapshot object as an argument, the
@@ -42,18 +48,29 @@ export interface Debounced<Args extends unknown[]> {
 /**
  * Wraps `fn` so that it runs `delayMs` after the last call, with that last
  * call's arguments.
+ *
+ * With `{ leading: true }`, the first call of an idle burst runs immediately
+ * (locking the project on the very first keystroke instead of one debounce
+ * window later) and only the *rest* of the burst collapses into one trailing
+ * run. `flush`/`cancel`/`pending` keep their trailing meanings: `pending` is
+ * true only while a trailing run is armed, and `cancel` also ends the
+ * leading cooldown so the next call leads again.
  */
 export function createDebounced<Args extends unknown[]>(
   fn: (...args: Args) => void,
   delayMs: number,
+  opts?: { leading?: boolean },
 ): Debounced<Args> {
+  const leading = opts?.leading === true;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let pendingArgs: Args | undefined;
+  let cooling = false;
 
   function invoke(): void {
     const args = pendingArgs;
     pendingArgs = undefined;
     timer = undefined;
+    cooling = false;
     if (args !== undefined) fn(...args);
   }
 
@@ -63,6 +80,18 @@ export function createDebounced<Args extends unknown[]>(
   }
 
   const debounced = (...args: Args): void => {
+    if (leading && !cooling && timer === undefined) {
+      cooling = true;
+      fn(...args);
+      // Cooldown window: further calls collapse into one trailing run, and
+      // a lone leading call schedules nothing for itself.
+      timer = setTimeout(() => {
+        timer = undefined;
+        cooling = false;
+        invoke();
+      }, delayMs);
+      return;
+    }
     pendingArgs = args;
     disarm();
     timer = setTimeout(invoke, delayMs);
@@ -76,6 +105,7 @@ export function createDebounced<Args extends unknown[]>(
   debounced.cancel = (): void => {
     disarm();
     pendingArgs = undefined;
+    cooling = false;
   };
 
   // `pending` is a getter, which TypeScript can't see through, hence the cast.

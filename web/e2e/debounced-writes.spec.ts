@@ -3,8 +3,10 @@ import { createNewProject } from "./helpers";
 
 // Every VFS mutation persists the whole blob, so the two high-frequency write
 // sources (the code editor's keystrokes, the canvas's drag ticks) are
-// trailing-debounced: a burst must collapse into a *single* persisted write,
-// and switching away mid-burst must not swallow the tail of it.
+// debounced: a burst must collapse into *leading plus one trailing* persisted
+// writes — the first change uploads at once (locking the project), the rest
+// collapse into a single trailing write — and switching away mid-burst must
+// not swallow the tail of it.
 //
 // Writes are counted by recording every blob the app persists, before it
 // boots, and reading the file's content out of each one — a rewrite of
@@ -121,12 +123,15 @@ test("a burst of canvas nudges persists as a single layout write", async ({
     await page.keyboard.press("ArrowRight");
   }
 
-  // The persisted layout catches up with the canvas — through a single write,
-  // carrying the final position rather than an intermediate one.
+  // The persisted layout catches up with the canvas — the first nudge writes
+  // immediately (leading edge) and the rest of the burst collapses into one
+  // trailing write carrying the final position rather than an intermediate one.
   await expect
     .poll(async () => xOf(await lastPersisted(page, VIEW)))
     .toBe(startX + 50);
-  expect((await persistedVersions(page, VIEW)).length - before.length).toBe(1);
+  const added = await persistedVersions(page, VIEW);
+  expect(added.length - before.length).toBe(2);
+  expect(xOf(added[before.length] ?? "")).toBe(startX + 10);
 });
 
 test("a burst of typing persists as a single file write", async ({ page }) => {
@@ -141,8 +146,14 @@ test("a burst of typing persists as a single file write", async ({ page }) => {
   await page.keyboard.press("Control+End");
   await page.keyboard.type("\n# burst", { delay: 0 });
 
+  // Leading edge: the first character is already persisted, well inside the
+  // 700ms trailing window. The rest of the burst collapses into one trailing
+  // write, so the burst persists as exactly two versions.
+  await expect
+    .poll(() => lastPersisted(page, MAIN), { timeout: 200 })
+    .not.toEqual(before.at(-1) ?? "");
   await expect.poll(() => lastPersisted(page, MAIN)).toContain("# burst");
-  expect((await persistedVersions(page, MAIN)).length - before.length).toBe(1);
+  expect((await persistedVersions(page, MAIN)).length - before.length).toBe(2);
 });
 
 test("switching files mid-burst persists the edit instead of losing it", async ({
