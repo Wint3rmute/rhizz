@@ -30,7 +30,7 @@
     SELECTION_OUTLINE_OPACITY,
   } from "./visuals";
   import type { DiagramNode, DiagramScene } from "./scene";
-  import { portsUsedByEdges } from "./scene";
+  import { portsUsedByEdges, portLabelOpacity } from "./scene";
 
   // Same hit-area sizes the modeling page used before this canvas existed.
   const CORNER_HANDLE_SIZE = 10;
@@ -483,6 +483,11 @@
   selected, or when a selected connection names that port, or while a drag
   reveals all drop targets. Positions stay stable (computed from all ports)
   so showing or hiding labels never reflows the outline.
+
+  Fading: the port rides its naming edges' tween opacity (strongest wins),
+  multiplied by the node's own fade — so during view transitions added
+  ports fade in with their arriving edge and removed ones fade out with
+  their leaving edge, instead of blinking at a transition boundary.
 -->
 {#each scene.nodes as node (node.id)}
   {@const allPortPositions =
@@ -490,6 +495,10 @@
       ? computePortPositions(node.box.width, node.box.height, node.ports)
       : []}
   {@const usedPortLabels = portsUsedByEdges(
+    visibleEdges.map((visible) => visible.conn),
+    node.index,
+  )}
+  {@const portFades = portLabelOpacity(
     visibleEdges.map((visible) => visible.conn),
     node.index,
   )}
@@ -507,13 +516,15 @@
       (revealAllPorts ||
         (usedPortLabels.has(port.label) &&
           (node.selected || selectedPortLabels.has(port.label))))}
+    {@const portOpacity =
+      (node.opacity ?? 1) * (portFades.get(port.label) ?? 1)}
     {#if labelVisible || dotVisible}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <g
         data-testid="diagram-port"
         transform="translate({world.x}, {world.y})"
-        opacity={fade(node.opacity)}
-        style:pointer-events={frozen || fade(node.opacity) !== undefined
+        opacity={fade(portOpacity)}
+        style:pointer-events={frozen || fade(portOpacity) !== undefined
           ? "none"
           : undefined}
       >

@@ -407,3 +407,81 @@ export const ConnectionLabelSelectedPill: Story = {
     await expect(text?.getAttribute("fill")).toBe("var(--color-base-200)");
   },
 };
+
+// Ports ride their naming edges' tween opacity: a leaving port fades out
+// with its edge, an arriving one fades in, a staying one stays solid —
+// instead of sitting at full opacity and blinking at a transition boundary.
+const portFadeScene: DiagramScene = {
+  nodes: [
+    {
+      id: "sys/a",
+      index: 0,
+      label: "A",
+      box: { x: 0, y: 0, width: 100, height: 60, textAlign: "center" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [
+        { label: "leaving", role: "provider" },
+        { label: "staying", role: "provider" },
+      ],
+      handles: "none",
+    },
+    {
+      id: "sys/b",
+      index: 1,
+      label: "B",
+      box: { x: 200, y: 0, width: 100, height: 60, textAlign: "center" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [{ label: "arriving", role: "consumer" }],
+      handles: "none",
+    },
+  ],
+  edges: [
+    {
+      id: "old:0:1",
+      label: "old",
+      from: 0,
+      to: 1,
+      fromPort: "leaving",
+      selected: false,
+      opacity: 0.25,
+    },
+    {
+      id: "kept:0:1",
+      label: "kept",
+      from: 0,
+      to: 1,
+      fromPort: "staying",
+      selected: false,
+    },
+    {
+      id: "new:0:1",
+      label: "new",
+      from: 0,
+      to: 1,
+      toPort: "arriving",
+      selected: false,
+      opacity: 0.75,
+    },
+  ],
+  notes: [],
+  overlays: [],
+};
+
+export const PortFadeRidesEdgeTween: Story = {
+  args: { scene: portFadeScene },
+  play: async ({ canvasElement }) => {
+    const byLabel = new Map(
+      Array.from(
+        canvasElement.querySelectorAll("[data-testid=diagram-port]"),
+      ).map((port) => [port.textContent, port.getAttribute("opacity")]),
+    );
+    await expect(byLabel.get("leaving")).toBe("0.25");
+    // Resting edges carry no fade: the attribute stays omitted, as before.
+    await expect(byLabel.get("staying")).toBeNull();
+    await expect(byLabel.get("arriving")).toBe("0.75");
+  },
+};

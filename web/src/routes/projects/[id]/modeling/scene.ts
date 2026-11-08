@@ -119,6 +119,36 @@ export function portsUsedByEdges(
   return out;
 }
 
+/**
+ * Per-port fade during view transitions, riding the naming edges' own
+ * opacities. A port renders only when a drawn edge names it (see
+ * `portsUsedByEdges`); while a transition crossfades that edge, the port
+ * dot/label must ride the same tween — otherwise the port sits at full
+ * opacity until the edge vanishes, then blinks out (or blinks in while
+ * its edge fades up). The strongest naming edge wins, so a port shared by
+ * a staying edge and a leaving one never dips. Resting edges carry no
+ * opacity, which counts as 1 (fully shown).
+ */
+export function portLabelOpacity(
+  edges: readonly Pick<
+    DiagramEdge,
+    "from" | "to" | "fromPort" | "toPort" | "opacity"
+  >[],
+  nodeIndex: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const edge of edges) {
+    const opacity = edge.opacity ?? 1;
+    if (edge.from === nodeIndex && edge.fromPort !== undefined) {
+      out.set(edge.fromPort, Math.max(out.get(edge.fromPort) ?? 0, opacity));
+    }
+    if (edge.to === nodeIndex && edge.toPort !== undefined) {
+      out.set(edge.toPort, Math.max(out.get(edge.toPort) ?? 0, opacity));
+    }
+  }
+  return out;
+}
+
 function textAlignOf(align: TextAlign | undefined): TextAlign {
   return align ?? "center";
 }
