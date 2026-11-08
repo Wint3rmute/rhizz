@@ -18,6 +18,7 @@
 
 ### Fix
 
+- **web**: fade ports with their edges during view transitions
 - **web**: generate VFS ids without requiring a secure context
 
 ### Refactor
