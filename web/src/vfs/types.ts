@@ -7,7 +7,8 @@
 // Two kinds of id, deliberately different: a *project*'s id is derived from
 // its name (the slug it is addressed by — see ./slug), so renaming a project
 // re-addresses it; everything *inside* a project (files, directories) is
-// client-generated with crypto.randomUUID(), because those names are
+// client-generated with generateId() (see ./ids — crypto.randomUUID() alone
+// would crash over plain http, which is not a secure context), because those
 // user-renameable and their identity has to survive a rename. Either way a
 // future backend can accept client-created records directly (no server-side
 // id remapping needed for offline-created data).

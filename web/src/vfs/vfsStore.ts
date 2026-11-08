@@ -10,6 +10,7 @@ import * as ops from "./operations";
 import { emptyVfsData, sanitizeVfsData, type VfsData } from "./operations";
 import type { ProjectStore } from "./store";
 import type { FsDirectory, FsFile, FsNode, Project } from "./types";
+import { generateId } from "./ids";
 import { projectFiles } from "./tree";
 import { getOrCreateUsername } from "../collab/identity";
 
@@ -295,7 +296,9 @@ export class VfsProjectStore implements ProjectStore {
   constructor(
     backend: VfsBackend,
     now: () => string = () => new Date().toISOString(),
-    newId: () => string = () => crypto.randomUUID(),
+    // Secure-context-independent (see ./ids): crypto.randomUUID() does not
+    // exist over plain http.
+    newId: () => string = generateId,
     onPersisted?: (bytes: number) => void,
   ) {
     this.backend = backend;
