@@ -18,15 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - unify port fading mechanics
-
-During view transitions, when a port fades into existence, it fades in smoothly,
-this looks great. However, when fading out, the ports don't fade out until the
-very end of the transition animation, then immediately disappear in a blink. Can
-you uniform this behavior, so that there's a smooth fade in both appearance and
-disappearance of ports?
-
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
