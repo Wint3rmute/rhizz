@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: add unlock button to project lock menu
 - **web**: show release tag in build footer
 - **server**: expose build tag via /api/version
 - **web**: explain Projected badge and disabled rows via title tooltips
