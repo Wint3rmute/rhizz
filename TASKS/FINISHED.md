@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - crypto.randomUUID is not a function when running over http
+
+`crypto.randomUUID()` requires a secure context and is `undefined` over
+plain http, crashing project/file creation. It was the default VFS node-id
+generator. Added `generateId()` (`web/src/vfs/ids.ts`): prefers
+`randomUUID`, falls back to `getRandomValues` (available in insecure
+contexts), then `Math.random` — all UUIDv4-shaped. Wired in as the store
+default; only a guarded call remains. Verified: 4 new unit tests incl.
+http/no-WebCrypto fallbacks, full web suite green (1319), eslint +
+`svelte-check` clean.
+
+---
+
 ## Task <N> - allow unlocking the project, add button next to username "rename"
 
 Added `ProjectLock.unlock()` (release + refresh so the badge flips without

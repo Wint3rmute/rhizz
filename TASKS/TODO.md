@@ -18,17 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - crypto.randomUUID is not a function when running over http
-
-I was running a test deployment of rhizz or a server with http. When trying
-to create a project, I got an error popup like "crypto.randomUUID is not a
-function" (or very similar). This is related to the site running over http. I
-don't believe this function should even be used in the frontend, can you justify
-its usage? Can it be cut out so that the app (namely the project creation stuff)
-always works, no matter whether the app is running over http or https?
-
----
-
 ## Task <N> - unify port fading mechanics
 
 During view transitions, when a port fades into existence, it fades in smoothly,
