@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - allow unlocking the project, add button next to username "rename"
+
+Added `ProjectLock.unlock()` (release + refresh so the badge flips without
+waiting for the next poll) and an Unlock button next to Rename in the
+`LockBadge` holder menu, shown only while holding the lock. Styled
+`btn-warning` per DaisyUI (yellow/orange, readable in dark and light theme);
+a toast confirms the release, and anyone else's live lock still shows no
+unlock affordance (the server 409s force-unlocks). Verified: new `unlock`
+unit test + `LockedByMe` navbar story (warning styling, absent for foreign
+holders), full web suite green (1315), eslint + `svelte-check` clean.
+
+---
+
 ## Task <N> - remove duplicated locking icon, keep only the one in navbar
 
 Removed the bottom-bar `LockBadge` from `DiagnosticsStatusBar` (plus its

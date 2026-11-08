@@ -18,16 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> - allow unlocking the project, add button next to username "rename" 
-
-Current locking UI only displays the lock status and allows changing the
-username. Add a button to unlock the project immediately. You can make it a
-slightly different color than "rename", maybe something in yellow/orange? Make
-it compliant with the DaisyUI coloring so that it is consistent with the UI and
-is well readable in both dark and light theme.
-
----
-
 ## Task <N> - crypto.randomUUID is not a function when running over http
 
 I was running a test deployment of rhizz or a server with http. When trying
