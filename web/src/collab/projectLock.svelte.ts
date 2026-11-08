@@ -202,6 +202,17 @@ export class ProjectLock {
     }
   }
 
+  /**
+   * Frees the project when this client holds it, then re-reads the state so
+   * the badge flips at once instead of waiting for the next poll. Anyone
+   * else's live lock is left alone by the server (409); the refresh then
+   * keeps showing their hold.
+   */
+  async unlock(): Promise<void> {
+    await this.release();
+    await this.refresh();
+  }
+
   /** Renews the lease while this client holds it. Never throws. */
   private async maybeHeartbeat(): Promise<void> {
     const { projectId, serverUrl, me } = this;

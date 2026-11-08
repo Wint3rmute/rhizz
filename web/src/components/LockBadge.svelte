@@ -1,9 +1,10 @@
 <!-- The project lock affordance: an optional label (the project name) with
      an inline lock icon when held — no badge chrome. The whole thing is one
-     dropdown trigger opening the holder menu (who holds it, your name, and
-     the rename row). Reads the holder as a prop so stories stay
-     deterministic; the app passes the shared lock state. Renders nothing
-     without a holder and without a label. -->
+     dropdown trigger opening the holder menu (who holds it, your name, the
+     rename row, and — while you hold it — an unlock button). Reads the
+     holder as a prop so stories stay deterministic; the app passes the
+     shared lock state. Renders nothing without a holder and without a
+     label. -->
 <script lang="ts">
   import { projectLock } from "../collab/projectLock.svelte";
   import { setUsername } from "../collab/identity";
@@ -29,6 +30,19 @@
   } = $props();
 
   const mine = $derived(holder !== null && holder === me);
+
+  let unlocking = $state(false);
+
+  async function handleUnlock(): Promise<void> {
+    if (unlocking || !projectLock.holding) return;
+    unlocking = true;
+    try {
+      await projectLock.unlock();
+      toastState.show("Project unlocked.", "success");
+    } finally {
+      unlocking = false;
+    }
+  }
 
   function handleRename(): void {
     const next = prompt("Your display name?", me ?? "");
@@ -106,6 +120,16 @@
         >
           Rename
         </button>
+        {#if mine}
+          <button
+            type="button"
+            class="btn btn-warning btn-xs shrink-0"
+            onclick={() => void handleUnlock()}
+            disabled={unlocking}
+          >
+            {unlocking ? "Unlocking…" : "Unlock"}
+          </button>
+        {/if}
       </div>
     </div>
   </div>

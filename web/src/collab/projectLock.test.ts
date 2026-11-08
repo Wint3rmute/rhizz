@@ -57,6 +57,14 @@ function makeFakeServer(): FakeServer {
         new Response(JSON.stringify({ lockedBy: user }), { status: 200 }),
       );
     }
+    if (url.endsWith("/release")) {
+      const user = headers.get("x-rhizz-user");
+      if (state.lockedBy !== null && state.lockedBy !== user) {
+        return Promise.resolve(new Response("conflict", { status: 409 }));
+      }
+      state.lockedBy = null;
+      return Promise.resolve(new Response(null, { status: 204 }));
+    }
     return Promise.resolve(new Response("not found", { status: 404 }));
   };
   return { fetch, calls, state };
@@ -224,6 +232,24 @@ describe("ProjectLock", () => {
     const goodbye = fake.calls.find((c) => c.url.endsWith("/release"));
     expect(goodbye?.method).toBe("POST");
     expect(goodbye?.user).toBe("alice");
+    lock.stop();
+  });
+
+  it("unlock frees a held lock and refreshes so the badge flips at once", async () => {
+    const fake = makeFakeServer();
+    fake.state.lockedBy = "alice";
+    const lock = new ProjectLock();
+    lock.me = "alice";
+    lock.start("drone", "http://server", fake.fetch);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lock.holding).toBe(true);
+
+    await lock.unlock();
+    expect(
+      fake.calls.some((c) => c.url.endsWith("/release") && c.method === "POST"),
+    ).toBe(true);
+    expect(lock.lockedBy).toBeNull();
+    expect(lock.holding).toBe(false);
     lock.stop();
   });
 });
