@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> - unify port fading mechanics
+
+Ports rode only the node opacity, so a port whose edge left during a view
+transition sat at full opacity until the tween ended, then blinked out.
+Added `portLabelOpacity()` (`scene.ts`): each port rides its strongest
+naming edge's tween opacity, multiplied by the node fade in
+`DiagramCanvas`. Symmetric smooth fade both ways, driven by the existing
+tween clock — no new mechanism. Verified: 4 unit tests + new
+`PortFadeRidesEdgeTween` canvas story, full web suite green (1324),
+eslint + `svelte-check` clean, transition e2e green.
+
+---
+
 ## Task <N> - crypto.randomUUID is not a function when running over http
 
 `crypto.randomUUID()` requires a secure context and is `undefined` over
