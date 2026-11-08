@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import {
   clearCurrentProject,
   createProjectWithMainFile,
@@ -141,6 +141,37 @@ export const LockedProject: Story = {
       await expect(
         await canvas.findByText(/Locked by bob/),
       ).toBeInTheDocument();
+      // Someone else's lock cannot be freed here: no unlock affordance.
+      await expect(
+        canvas.queryByRole("button", { name: "Unlock" }),
+      ).not.toBeInTheDocument();
+    } finally {
+      projectLock.stop();
+    }
+  },
+};
+
+// While holding the lock, the menu offers an immediate unlock next to
+// Rename — a DaisyUI warning button, so it reads as the destructive action
+// without shouting in either theme.
+export const LockedByMe: Story = {
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    projectLock.me = "alice";
+    projectLock.lockedBy = "alice";
+    try {
+      const canvas = within(canvasElement);
+      const badge = await canvas.findByTestId("lock-badge");
+      await expect(badge).toHaveTextContent("🔒");
+      // Open the holder menu first: the Unlock action lives inside the
+      // dropdown, like Rename.
+      await userEvent.click(within(badge).getByRole("button"));
+      await expect(
+        await canvas.findByText(/Locked by you/),
+      ).toBeInTheDocument();
+      const unlock = await canvas.findByRole("button", { name: "Unlock" });
+      await expect(unlock).toBeInTheDocument();
+      await expect(unlock.className).toContain("btn-warning");
     } finally {
       projectLock.stop();
     }
