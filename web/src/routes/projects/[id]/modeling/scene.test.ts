@@ -3,6 +3,7 @@ import {
   buildEditorScene,
   buildReadOnlyScene,
   diagramEdgeId,
+  portLabelOpacity,
   portsUsedByEdges,
 } from "./scene";
 
@@ -321,5 +322,38 @@ describe("portsUsedByEdges", () => {
   it("ignores edges at other nodes", () => {
     const edges = [{ from: 1, to: 2, fromPort: "x", toPort: "y" }];
     expect(portsUsedByEdges(edges, 0)).toEqual(new Set());
+  });
+});
+
+describe("portLabelOpacity", () => {
+  it("counts resting edges (no opacity) as fully shown", () => {
+    const edges = [{ from: 0, to: 1, fromPort: "out", toPort: "in" }];
+    expect(portLabelOpacity(edges, 0)).toEqual(new Map([["out", 1]]));
+    expect(portLabelOpacity(edges, 1)).toEqual(new Map([["in", 1]]));
+  });
+
+  it("rides the naming edge's tween opacity, both directions", () => {
+    const leaving = [{ from: 0, to: 1, fromPort: "out", opacity: 0.25 }];
+    expect(portLabelOpacity(leaving, 0)).toEqual(new Map([["out", 0.25]]));
+    const arriving = [{ from: 0, to: 1, toPort: "in", opacity: 0.75 }];
+    expect(portLabelOpacity(arriving, 1)).toEqual(new Map([["in", 0.75]]));
+  });
+
+  it("keeps the strongest naming edge so shared ports never dip", () => {
+    const edges = [
+      { from: 0, to: 1, fromPort: "out", opacity: 0.2 },
+      { from: 0, to: 2, fromPort: "out", opacity: 1 },
+    ];
+    expect(portLabelOpacity(edges, 0)).toEqual(new Map([["out", 1]]));
+  });
+
+  it("names nothing when no edge names a port at the node", () => {
+    expect(portLabelOpacity([{ from: 0, to: 1 }], 0)).toEqual(new Map());
+    expect(
+      portLabelOpacity(
+        [{ from: 1, to: 2, fromPort: "x", toPort: "y", opacity: 0.5 }],
+        0,
+      ),
+    ).toEqual(new Map());
   });
 });
