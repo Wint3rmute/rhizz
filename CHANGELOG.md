@@ -16,6 +16,10 @@
 - **web**: list all connections with Projected badge in sidebar
 - **web**: add projection resolver for projected connections
 
+### Fix
+
+- **web**: generate VFS ids without requiring a secure context
+
 ### Refactor
 
 - **web**: drop obsolete lock VRT baselines
