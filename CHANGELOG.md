@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fix
+
+- **deps**: bump rmcp to 3.9 for RUSTSEC-2026-0462
+
 ## 0.11.0 (2026-11-09)
 
 ### Feat
