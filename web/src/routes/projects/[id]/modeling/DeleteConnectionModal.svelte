@@ -55,29 +55,17 @@
       ),
   );
 
-  // Human-readable summary for the partial cleanup: which selected ports go,
-  // and which shared ports stay.
-  let keptSummary = $derived(
+  // Ports for the partial-cleanup note: selected removable ports go, shared
+  // ports stay. Rendered with <code> elements, not backticks.
+  let selectedPorts = $derived(
     request === null
-      ? ""
-      : request.keptPorts
-          .map(
-            (port) =>
-              `\`${port.port}\` (also used by connection \`${port.usedBy.join(", ")}\`)`,
-          )
-          .join(", "),
+      ? []
+      : request.removablePorts.filter((port) =>
+          selected.includes(portKey(port.definition, port.port)),
+        ),
   );
 
-  let selectedSummary = $derived(
-    request === null
-      ? ""
-      : request.removablePorts
-          .filter((port) =>
-            selected.includes(portKey(port.definition, port.port)),
-          )
-          .map((port) => `\`${port.port}\``)
-          .join(", "),
-  );
+  let keptPorts = $derived(request === null ? [] : request.keptPorts);
 
   async function submit(): Promise<void> {
     if (request === null || submitting) return;
@@ -272,8 +260,13 @@
             class="alert alert-info text-sm"
             data-testid="delete-connection-port-conflict"
           >
-            Only {selectedSummary} will be removed, as {keptSummary} is also used
-            by another connection.
+            Only {#each selectedPorts as port, i (port.definition + "/" + port.port)}{#if i > 0},
+              {/if}<code class="font-mono">{port.port}</code>{/each} will be removed,
+            as {#each keptPorts as port, i (port.definition + "/" + port.port)}{#if i > 0},
+              {/if}<code class="font-mono">{port.port}</code> (also used by
+              connection {#each port.usedBy as conn, j (conn)}{#if j > 0},
+                {/if}<code class="font-mono">{conn}</code>{/each}){/each} is also
+            used by another connection.
           </div>
         {/if}
       </div>

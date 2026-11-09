@@ -247,7 +247,7 @@ system "main" {
   await modal.getByTestId("delete-connection-remove-ports").check();
   await expect(
     modal.getByTestId("delete-connection-port-conflict"),
-  ).toContainText("Only `in` will be removed");
+  ).toContainText("Only in will be removed");
   await expect(
     modal.getByTestId("delete-connection-port-conflict"),
   ).toContainText("also used by");
