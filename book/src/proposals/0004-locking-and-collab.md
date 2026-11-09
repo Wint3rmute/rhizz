@@ -38,16 +38,17 @@ edits it; everyone else sees it read-only and follows the editor's changes.
 - **Identity (PoC):** the username is kept in `localStorage` and sent with each
   request. The server trusts it. There is no authentication. MCP-using entities get a hardcoded `AI` username.
 - **No override:** there is no force-unlock. A stuck lock clears itself.
-- **Voluntary release:** a closing tab says goodbye with a best-effort
+- **Voluntary release:** the holder can release the lock at any time with the
+  Unlock button, and a closing tab says goodbye with a best-effort
   `POST /api/projects/{id}/release` (only the holder can release their own
   lock), so the address is reusable at once instead of waiting out the
   lease. The lease still lapses on its own if the request never lands.
 - **Losing the lock:** if a save is refused because the lock was lost, the
   client discards its unsaved edits, reloads the project and becomes read-only.
 
-**UI:** a locked project shows a lock icon (🔒) in the navbar and in the
-status bar. Clicking it shows who holds the lock and offers a display-name
-rename.
+**UI:** a locked project shows a lock icon (🔒) in the navbar. Clicking it
+shows who holds the lock and offers a display-name rename, plus a voluntary
+Unlock button while holding the lock.
 
 ## Tuned timings
 
