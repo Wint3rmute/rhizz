@@ -9,7 +9,6 @@ import {
   type Box,
   computeRenderOrder,
   type ConnectionOrientation,
-  type ConnectionSide,
   type TextAlign,
 } from "./geometry";
 import type {
@@ -48,8 +47,6 @@ export interface DiagramEdge {
   label: string;
   from: number;
   to: number;
-  startSide?: ConnectionSide;
-  endSide?: ConnectionSide;
   /** Port labels the connection endpoints name, when typed. Edges anchor
    * to those port dots when the ports are placed (prototype: follow-the-dot). */
   fromPort?: string | undefined;
@@ -263,8 +260,6 @@ export function buildReadOnlyScene(input: {
         to: conn.to,
         selected: false,
       };
-      if (conn.startSide !== undefined) edge.startSide = conn.startSide;
-      if (conn.endSide !== undefined) edge.endSide = conn.endSide;
       // ConnectionJS (wasm) carries `from_port`/`to_port` getters that the
       // static type does not declare — read them structurally so read-only
       // edges anchor to port dots exactly like editor edges do.
@@ -305,8 +300,6 @@ export interface EditorSceneEdgeInput {
   /** Stable endpoint keys. View transitions match edges on these, not arena indexes. */
   fromKey?: string | undefined;
   toKey?: string | undefined;
-  startSide?: ConnectionSide | undefined;
-  endSide?: ConnectionSide | undefined;
   fromPort?: string | undefined;
   toPort?: string | undefined;
 }
@@ -377,8 +370,6 @@ export function buildEditorScene(input: {
         to: edge.to,
         selected: edge.label === input.selectedEdgeLabel,
       };
-      if (edge.startSide !== undefined) built.startSide = edge.startSide;
-      if (edge.endSide !== undefined) built.endSide = edge.endSide;
       if (edge.fromPort !== undefined) built.fromPort = edge.fromPort;
       if (edge.toPort !== undefined) built.toPort = edge.toPort;
       return built;

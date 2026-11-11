@@ -83,12 +83,8 @@ const meta = {
     protocolUsage: { connections: 1, ports: 2 },
     connections: [fundTransfer, httpRequest],
     placedLabels: ["fund-transfer", "http-request"],
-    startSide: undefined,
-    endSide: undefined,
     onupdate: noop,
     onselect: noop,
-    onsetstartside: noop,
-    onsetendside: noop,
     ondelete: noop,
   },
   globals: {
@@ -170,12 +166,6 @@ export const Readonly: Story = {
     await expect(canvas.getByLabelText(/full name/i)).toBeDisabled();
     await expect(canvas.getByLabelText(/tags/i)).toBeDisabled();
     await expect(canvas.getByLabelText(/^level$/i)).toBeDisabled();
-    // Side pickers (one per endpoint): every routing button disabled.
-    for (const side of await canvas.findAllByRole("button", {
-      name: /^(auto|top|right|bottom|left)$/i,
-    })) {
-      await expect(side).toBeDisabled();
-    }
     await expect(
       canvas.getByRole("button", { name: /remove realization/i }),
     ).toBeDisabled();
@@ -195,8 +185,8 @@ export const Readonly: Story = {
 
 /**
  * The split itself: protocol and connection attributes in their own panels,
- * the view panel holding only the side pickers, and each heading naming the
- * file it writes to, on hover.
+ * each heading naming the file it writes to, on hover. There is no
+ * view-level section: routing follows the port dots on the canvas.
  */
 export const AttributeScopes: Story = {
   // VRT duplicate of Default (byte-identical baselines): sharedWithCopies
@@ -210,7 +200,6 @@ export const AttributeScopes: Story = {
     const canvas = within(canvasElement);
     const protocol = await canvas.findByTestId("protocol-attributes");
     const connection = await canvas.findByTestId("connection-attributes");
-    const view = await canvas.findByTestId("view-attributes");
 
     // The protocol panel is read-only: nothing editable inside it.
     await expect(within(protocol).queryByRole("textbox")).toBeNull();
@@ -231,9 +220,8 @@ export const AttributeScopes: Story = {
     await expect(within(connection).getByLabelText(/^level$/i)).toBeTruthy();
     await expect(within(connection).queryByText("Text alignment")).toBeNull();
 
-    // The view panel holds the side pickers, and nothing else.
-    await expect(within(view).getByText(/bank-a starting point/)).toBeTruthy();
-    await expect(within(view).queryByLabelText(/^full name$/i)).toBeNull();
+    // No view-level routing section remains.
+    await expect(canvas.queryByTestId("view-attributes")).toBeNull();
 
     await expect(
       within(protocol).getByTestId("protocol-attributes-heading"),
@@ -244,8 +232,5 @@ export const AttributeScopes: Story = {
     await expect(
       within(connection).getByTestId("connection-attributes-heading"),
     ).toHaveAttribute("data-tip", expect.stringContaining("copies"));
-    await expect(
-      within(view).getByTestId("view-attributes-heading"),
-    ).toHaveAttribute("data-tip", expect.stringContaining("views/"));
   },
 };

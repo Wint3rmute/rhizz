@@ -114,8 +114,4 @@ view "lunar-landing-stack" {
     text_align = "center"
   }
 
-  connection "lgc-to-dsky" {
-    start_side = "top"
-    end_side   = "bottom"
-  }
 }

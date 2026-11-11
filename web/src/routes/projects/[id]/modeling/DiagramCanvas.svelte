@@ -19,7 +19,6 @@
     computeResizeHandles,
     computeVisibleConnections,
     connectionLabelPoint,
-    type ConnectionSide,
     elbowPath,
     type PortAnchor,
     type ResizeHandle,
@@ -86,7 +85,6 @@
           index: number,
           portLabel: string | null,
           worldPoint: { x: number; y: number },
-          startSide?: ConnectionSide | undefined,
         ) => void)
       | undefined;
     /** Perimeter-slider drag of a port dot (plain left-drag). Alt/Shift+drag
@@ -349,7 +347,6 @@
                     node.index,
                     null,
                     worldPoint(node, handle),
-                    handle.side,
                   )
               : undefined}
           >

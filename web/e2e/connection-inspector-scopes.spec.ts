@@ -1,10 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createNewProject, replaceModel, storedFiles } from "./helpers";
 
-// The connection inspector has three panels and each writes to a different
-// place: protocol is read-only, the connection's own fields go to the system
-// file, and the side pickers go to the open view's file. This drives the
-// real UI and reads the VFS back, so it pins where each edit lands.
+// The connection inspector has two panels: protocol is read-only and the
+// connection's own fields go to the system file. This drives the real UI
+// and reads the VFS back, so it pins where each edit lands.
 
 // fund-transfer is declared last so it is drawn on top of http-request: the two
 // edges overlap, and a click lands on the top one.
@@ -100,7 +99,6 @@ test("each connection panel writes to the file it belongs to", async ({
 
   const protocol = page.getByTestId("protocol-attributes");
   const connection = page.getByTestId("connection-attributes");
-  const view = page.getByTestId("view-attributes");
 
   // The protocol panel has nothing to edit.
   await expect(protocol.getByRole("textbox")).toHaveCount(0);
@@ -115,13 +113,4 @@ test("each connection panel writes to the file it belongs to", async ({
     })
     .toBe(true);
   expect(await viewsText(page)).not.toContain("Fund transfer v2");
-
-  // A side change lands in the view file and never in the system file.
-  await view.getByRole("button", { name: "Top", exact: true }).first().click();
-  await expect
-    .poll(async () => (await viewsText(page)).includes("top"), {
-      timeout: 10_000,
-    })
-    .toBe(true);
-  expect(await systemText(page)).not.toContain("start_side");
 });

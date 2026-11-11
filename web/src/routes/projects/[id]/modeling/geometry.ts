@@ -249,14 +249,13 @@ export function boxSidePoint(
 
 // Computes boundary connection points and routing for visible connections
 // between placed node boxes. Port-anchored ends (via `getPort`) pin the
-// endpoint to the dot and route from its side; otherwise the legacy box-side
-// / center logic applies. The knee decision comes from `routeConnection`.
+// endpoint to the dot and route from its side; otherwise the edge leaves
+// from the box boundary facing the other box's center. The knee decision
+// comes from `routeConnection`.
 export function computeVisibleConnections<
   T extends {
     from: number;
     to: number;
-    startSide?: ConnectionSide;
-    endSide?: ConnectionSide;
     fromPort?: string | undefined;
     toPort?: string | undefined;
   },
@@ -276,8 +275,8 @@ export function computeVisibleConnections<
         : undefined;
     const portB =
       conn.toPort !== undefined ? getPort?.(conn.to, conn.toPort) : undefined;
-    const sideA = portA?.side ?? conn.startSide;
-    const sideB = portB?.side ?? conn.endSide;
+    const sideA = portA?.side;
+    const sideB = portB?.side;
 
     let a: { x: number; y: number };
     let b: { x: number; y: number };
@@ -286,25 +285,10 @@ export function computeVisibleConnections<
       b = { x: portB.x, y: portB.y };
     } else if (portA) {
       a = { x: portA.x, y: portA.y };
-      b =
-        sideB !== undefined
-          ? boxSidePoint(boxB, sideB)
-          : boxBoundaryPoint(boxB, a, orientationForSide(sideA ?? "right"));
+      b = boxBoundaryPoint(boxB, a, orientationForSide(sideA ?? "right"));
     } else if (portB) {
       b = { x: portB.x, y: portB.y };
-      a =
-        sideA !== undefined
-          ? boxSidePoint(boxA, sideA)
-          : boxBoundaryPoint(boxA, b, orientationForSide(sideB ?? "left"));
-    } else if (conn.startSide && conn.endSide) {
-      a = boxSidePoint(boxA, conn.startSide);
-      b = boxSidePoint(boxB, conn.endSide);
-    } else if (conn.startSide) {
-      a = boxSidePoint(boxA, conn.startSide);
-      b = boxBoundaryPoint(boxB, a, orientationForSide(conn.startSide));
-    } else if (conn.endSide) {
-      b = boxSidePoint(boxB, conn.endSide);
-      a = boxBoundaryPoint(boxA, b, orientationForSide(conn.endSide));
+      a = boxBoundaryPoint(boxA, b, orientationForSide(sideB ?? "left"));
     } else {
       const centerA = boxCenter(boxA);
       const centerB = boxCenter(boxB);

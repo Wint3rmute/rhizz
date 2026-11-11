@@ -9,7 +9,6 @@
 import type { ConnectEnd } from "../../../../actionLog";
 import type { ModelMutationOp } from "../../../../history/applyMutation";
 import type { ProtocolData } from "../../../../modelView";
-import type { ConnectionSide } from "./geometry";
 
 /** One end of the connection being drawn, as the dialog needs to know it. */
 export interface ConnectionEndInfo {
@@ -39,8 +38,6 @@ export interface NewConnectionRequest {
   scopePath: string;
   from: ConnectionEndInfo;
   to: ConnectionEndInfo;
-  /** Border side the edge leaves, when the drag began on a side handle. */
-  startSide?: ConnectionSide | undefined;
 }
 
 /** The editable attributes of one new port. */

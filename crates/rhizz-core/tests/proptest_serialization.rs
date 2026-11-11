@@ -351,15 +351,7 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
             ),
             0..5,
         ),
-        prop::collection::vec(
-            (
-                identifier_suffix(),
-                prop::option::of(side()),
-                prop::option::of(side()),
-                any::<bool>(),
-            ),
-            0..5,
-        ),
+        prop::collection::vec((identifier_suffix(), any::<bool>()), 0..5),
     )
         .prop_map(
             |(
@@ -412,14 +404,10 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                 connections: connections
                     .into_iter()
                     .enumerate()
-                    .map(
-                        |(index, (connection, start_side, end_side, hidden))| ConnectionLayout {
-                            connection: format!("connection-{index}-{connection}"),
-                            start_side,
-                            end_side,
-                            hidden,
-                        },
-                    )
+                    .map(|(index, (connection, hidden))| ConnectionLayout {
+                        connection: format!("connection-{index}-{connection}"),
+                        hidden,
+                    })
                     .collect(),
                 annotations: vec![],
             },

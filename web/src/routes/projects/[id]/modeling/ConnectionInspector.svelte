@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { ConnectionPatch, ConnectionRef } from "../../../../actionLog";
-  import type { ConnectionSide } from "./geometry";
   import {
     connectionByRef,
     connectionRefKey,
@@ -18,7 +17,7 @@
     connection: ConnectionData;
     /** Every connection in the model, to resolve realization targets. */
     connections: readonly ConnectionData[];
-    /** Labels of the components at each end, for the side pickers. */
+    /** Labels of the components at each end. */
     fromLabel: string;
     toLabel: string;
     /** FontAwesome icon names of the endpoint components, drawn before the labels. */
@@ -33,8 +32,6 @@
      */
     fromConnectedPorts: ReadonlySet<string>;
     toConnectedPorts: ReadonlySet<string>;
-    startSide: ConnectionSide | undefined;
-    endSide: ConnectionSide | undefined;
     /**
      * True when the connection lives in a reusable component, so an edit also
      * reaches every copy of it in the instances.
@@ -51,34 +48,18 @@
     onupdate: (patch: ConnectionPatch) => void;
     /** Selects a connection on the canvas. */
     onselect: (ref: ConnectionRef) => void;
-    onsetstartside: (side: ConnectionSide | undefined) => void;
-    onsetendside: (side: ConnectionSide | undefined) => void;
     ondelete: () => void;
     /**
-     * Disables every mutating control (inputs, side pickers, realization
-     * add/remove, delete) but leaves navigation live: the "Show" row buttons
-     * and the "Edit protocol" link keep working.
+     * Disables every mutating control (inputs, realization add/remove,
+     * delete) but leaves navigation live: the "Show" row buttons and the
+     * "Edit protocol" link keep working.
      */
     readonly?: boolean;
   }
 
   // Which file each panel's attributes are written to, named the way the user
-  // would: the model file, or the open view's own file. `<view>` is a
-  // placeholder -- the inspector does not know which view is open.
-  const SCOPE_FILE = { model: "system.hcl", view: "views/<view>.hcl" };
-
-  // The five routing choices offered for each endpoint: "Auto" (no override,
-  // the router picks a side) plus the four border sides.
-  const SIDE_OPTIONS: {
-    value: ConnectionSide | undefined;
-    label: string;
-  }[] = [
-    { value: undefined, label: "Auto" },
-    { value: "top", label: "Top" },
-    { value: "right", label: "Right" },
-    { value: "bottom", label: "Bottom" },
-    { value: "left", label: "Left" },
-  ];
+  // would: the model file. The inspector does not know which view is open.
+  const SCOPE_FILE = { model: "system.hcl" };
 
   let {
     projectId,
@@ -92,8 +73,6 @@
     toPorts,
     fromConnectedPorts,
     toConnectedPorts,
-    startSide,
-    endSide,
     sharedWithCopies,
     protocol,
     protocolReason,
@@ -101,8 +80,6 @@
     placedLabels,
     onupdate,
     onselect,
-    onsetstartside,
-    onsetendside,
     ondelete,
     readonly = false,
   }: Props = $props();
@@ -194,36 +171,6 @@
       : protocol.roles.join(", "),
   );
 </script>
-
-{#snippet sidePicker(
-  title: string,
-  current: ConnectionSide | undefined,
-  onchange: (side: ConnectionSide | undefined) => void,
-  disabled: boolean,
-)}
-  <!-- One endpoint's routing override. Keyed on the label because `value` is
-       undefined for "Auto". -->
-  <div class="space-y-1.5 pt-1">
-    <span
-      class="text-xs font-semibold uppercase tracking-wider text-base-content/70"
-    >
-      {title}
-    </span>
-    <div class="grid grid-cols-5 gap-1 w-full">
-      {#each SIDE_OPTIONS as option (option.label)}
-        <button
-          class="btn btn-xs {current === option.value
-            ? 'btn-primary'
-            : 'btn-ghost border border-base-300'}"
-          {disabled}
-          onclick={() => onchange(option.value)}
-        >
-          {option.label}
-        </button>
-      {/each}
-    </div>
-  </div>
-{/snippet}
 
 {#snippet portList(
   title: string,
@@ -548,30 +495,6 @@
         {/each}
       </select>
     </div>
-  </div>
-
-  <div class="divider my-1"></div>
-
-  <div class="space-y-1 pt-1" data-testid="view-attributes">
-    <span
-      class="tooltip tooltip-right block w-fit text-[10px] font-semibold uppercase tracking-wider text-base-content/50"
-      data-testid="view-attributes-heading"
-      data-tip="Written to {SCOPE_FILE.view} — these apply to this diagram only"
-    >
-      This view
-    </span>
-    {@render sidePicker(
-      `${fromLabel} starting point`,
-      startSide,
-      onsetstartside,
-      readonly,
-    )}
-    {@render sidePicker(
-      `${toLabel} starting point`,
-      endSide,
-      onsetendside,
-      readonly,
-    )}
   </div>
 
   <div class="divider my-2"></div>

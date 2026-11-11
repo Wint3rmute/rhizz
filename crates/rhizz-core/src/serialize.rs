@@ -734,12 +734,6 @@ fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
 
 fn serialize_connection_layout(out: &mut String, conn: &ConnectionLayout) {
     let _ = writeln!(out, "  connection {} {{", escape_string(&conn.connection));
-    if let Some(side) = conn.start_side {
-        let _ = writeln!(out, "    start_side = {}", escape_string(side.as_str()));
-    }
-    if let Some(side) = conn.end_side {
-        let _ = writeln!(out, "    end_side   = {}", escape_string(side.as_str()));
-    }
     if conn.hidden {
         let _ = writeln!(out, "    hidden = true");
     }
@@ -807,8 +801,6 @@ struct RawNodeAttrs {
 #[derive(Deserialize, Default)]
 #[serde(deny_unknown_fields)]
 struct RawConnectionLayoutAttrs {
-    start_side: Option<String>,
-    end_side: Option<String>,
     hidden: Option<bool>,
 }
 
@@ -828,7 +820,7 @@ struct RawAnnotationAttrs {
     scale: Option<f64>,
 }
 
-fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
+fn parse_side(s: Option<&str>) -> Option<ConnectionSide> {
     match s {
         Some("top") => Some(ConnectionSide::Top),
         Some("bottom") => Some(ConnectionSide::Bottom),
@@ -839,8 +831,8 @@ fn parse_connection_side(s: Option<&str>) -> Option<ConnectionSide> {
 }
 
 /// Parses nested `port` blocks of a view `node` block into [`PortLayout`]s.
-/// Unknown sides are skipped (same as connection sides), so a newer side
-/// value round-trips as absent rather than failing the whole view.
+/// Unknown sides are skipped, so a newer side value round-trips as absent
+/// rather than failing the whole view.
 fn parse_port_layouts(body: &hcl::Body) -> anyhow::Result<Vec<PortLayout>> {
     let mut ports = Vec::new();
     for port_block in body.blocks() {
@@ -856,7 +848,7 @@ fn parse_port_layouts(body: &hcl::Body) -> anyhow::Result<Vec<PortLayout>> {
             port_block.body(),
             "failed to deserialize port layout attributes",
         )?;
-        if let Some(side) = parse_connection_side(pa.side.as_deref()) {
+        if let Some(side) = parse_side(pa.side.as_deref()) {
             ports.push(PortLayout {
                 port: port_label,
                 side,
@@ -949,8 +941,6 @@ pub fn parse_views(hcl_str: &str) -> anyhow::Result<Vec<ViewDefinition>> {
                         )?;
                         connections.push(ConnectionLayout {
                             connection: conn_label,
-                            start_side: parse_connection_side(ca.start_side.as_deref()),
-                            end_side: parse_connection_side(ca.end_side.as_deref()),
                             hidden: ca.hidden.unwrap_or(false),
                         });
                     }
@@ -2227,8 +2217,6 @@ system "main" {
             nodes: vec![],
             connections: vec![ConnectionLayout {
                 connection: "fc-to-prop".to_owned(),
-                start_side: None,
-                end_side: None,
                 hidden: false,
             }],
             annotations: vec![],
