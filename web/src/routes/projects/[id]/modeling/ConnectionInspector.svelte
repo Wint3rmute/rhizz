@@ -9,6 +9,7 @@
     type ProtocolData,
   } from "../../../../modelView";
   import { inventoryProtocolHref } from "../inventory/protocolLink";
+  import { resolveIcon } from "../../../../iconHelper";
 
   interface Props {
     /** The project the inspector belongs to, for the protocol deep link. */
@@ -20,6 +21,9 @@
     /** Labels of the components at each end, for the side pickers. */
     fromLabel: string;
     toLabel: string;
+    /** FontAwesome icon names of the endpoint components, drawn before the labels. */
+    fromIcon?: string | undefined;
+    toIcon?: string | undefined;
     /** Ports declared on the from/to endpoint component instances. */
     fromPorts: readonly PortData[];
     toPorts: readonly PortData[];
@@ -82,6 +86,8 @@
     connections,
     fromLabel,
     toLabel,
+    fromIcon = undefined,
+    toIcon = undefined,
     fromPorts,
     toPorts,
     fromConnectedPorts,
@@ -176,6 +182,12 @@
     return ref.scopePath === "" ? ref.label : `${ref.label} (${ref.scopePath})`;
   }
 
+  // Endpoint component icons, resolved the same way as the component tree
+  // (`ComponentHierarchyTree`): a FontAwesome name to drawable SVG geometry.
+  // Missing/unknown names draw nothing, keeping the label's left edge straight.
+  let fromIconData = $derived(resolveIcon(fromIcon ?? ""));
+  let toIconData = $derived(resolveIcon(toIcon ?? ""));
+
   let roleSummary = $derived(
     protocol === undefined || protocol.roles.length === 0
       ? "any"
@@ -264,35 +276,53 @@
   >
     <div class="flex items-center justify-between">
       <span class="text-base-content/60">From:</span>
-      <span class="font-semibold truncate max-w-[150px]"
-        >{fromLabel}{connection.from_port
-          ? `.${connection.from_port}`
-          : ""}</span
+      <span
+        class="flex items-center gap-1.5 font-semibold truncate max-w-[150px]"
       >
+        {#if fromIconData}
+          <svg
+            viewBox={`0 0 ${fromIconData.width} ${fromIconData.height}`}
+            class="w-3.5 h-3.5 shrink-0 fill-current text-base-content/60"
+            aria-hidden="true"
+          >
+            <path d={fromIconData.svgPath} />
+          </svg>
+        {/if}
+        <span class="truncate"
+          >{fromLabel}{connection.from_port
+            ? `.${connection.from_port}`
+            : ""}</span
+        >
+      </span>
     </div>
     <div class="flex items-center justify-between">
       <span class="text-base-content/60">To:</span>
-      <span class="font-semibold truncate max-w-[150px]"
-        >{toLabel}{connection.to_port ? `.${connection.to_port}` : ""}</span
+      <span
+        class="flex items-center gap-1.5 font-semibold truncate max-w-[150px]"
       >
+        {#if toIconData}
+          <svg
+            viewBox={`0 0 ${toIconData.width} ${toIconData.height}`}
+            class="w-3.5 h-3.5 shrink-0 fill-current text-base-content/60"
+            aria-hidden="true"
+          >
+            <path d={toIconData.svgPath} />
+          </svg>
+        {/if}
+        <span class="truncate"
+          >{toLabel}{connection.to_port ? `.${connection.to_port}` : ""}</span
+        >
+      </span>
     </div>
 
     <div class="divider my-0"></div>
 
     <div class="space-y-2" data-testid="endpoint-ports">
-      <div class="flex items-center justify-between gap-2">
-        <span
-          class="text-[10px] font-semibold uppercase tracking-wider text-base-content/60"
-        >
-          Endpoint ports
-        </span>
-        <span class="text-[10px] text-base-content/50">per placed instance</span
-        >
-      </div>
-      <p class="text-[11px] text-base-content/60">
-        A port counts as connected when any connection in the model ends on it
-        for this component instance.
-      </p>
+      <span
+        class="text-[10px] font-semibold uppercase tracking-wider text-base-content/60"
+      >
+        Endpoint ports
+      </span>
       {@render portList(
         `${fromLabel} ports`,
         fromPorts,

@@ -433,7 +433,7 @@ export function protocolUnresolvedReason(
     return "This connection requires a port path on each endpoint (e.g. `comp/port`).";
   }
   if (from.protocol === "" || to.protocol === "") {
-    return "A port on this connection has no protocol.";
+    return "No ports on this connection have a protocol assigned.";
   }
   if (from.protocol !== to.protocol) {
     return `The ports use different protocols (${from.protocol} and ${to.protocol}).`;
