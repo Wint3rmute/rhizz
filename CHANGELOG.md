@@ -1,5 +1,10 @@
 ## Unreleased
 
+### Feat
+
+- remove connection start_side/end_side routing overrides
+- **web**: endpoint icons in connection inspector, copy cleanup
+
 ## 0.11.1 (2026-11-09)
 
 ### Fix
