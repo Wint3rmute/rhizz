@@ -51,6 +51,15 @@ const SIZE_OVERRIDES: Record<string, { width: number; height: number }> = {
   "pages-projects--empty-landing": { width: 1920, height: 1080 },
 };
 
+// `Pages/*` stories render whole app views: capture them at FullHD, the most
+// common desktop resolution, so baselines reflect real-world layout instead
+// of the 1280×800 harness default.
+const FULL_HD = { width: 1920, height: 1080 };
+
+function pagesDefaultSize(story: IndexEntry): { width: number; height: number } | undefined {
+  return story.title.startsWith("Pages/") ? FULL_HD : undefined;
+}
+
 async function waitForStory(page: Page): Promise<void> {
   const shown = await page.waitForFunction(() => {
     const cls = document.body.classList;
@@ -290,7 +299,8 @@ for (const story of loadStories()) {
       const viewport = await storyViewport(page);
       const size =
         SIZE_OVERRIDES[story.id] ??
-        (viewport ? VIEWPORTS[viewport] : undefined);
+        (viewport ? VIEWPORTS[viewport] : undefined) ??
+        pagesDefaultSize(story);
       if (size) {
         // Reload so layouts measured on mount see the final size.
         await page.setViewportSize(size);
