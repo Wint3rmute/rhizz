@@ -203,29 +203,18 @@ describe("HCL View conversion and persistence", () => {
     expect(read.annotations).toEqual(layout.annotations);
   });
 
-  it("persists and reads connection startSide and endSide configuration", async () => {
-    const fs = await projectFs();
-    const layout = {
-      checked: {
-        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
-        "sys/b": { x: 200, y: 20, width: 100, height: 50 },
-      },
-      connections: {
-        "link-ab": { startSide: "bottom" as const, endSide: "left" as const },
-      },
-    };
-    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
-
-    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
-    expect(content).toContain('connection "link-ab"');
-    expect(content).toContain('start_side = "bottom"');
-    expect(content).toContain('end_side   = "left"');
-
-    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
-    expect(read.connections?.["link-ab"]).toEqual({
-      startSide: "bottom",
-      endSide: "left",
-    });
+  it("rejects removed routing sides when reading", () => {
+    // `start_side`/`end_side` no longer exist: routing follows the port
+    // dots. The view parser denies unknown attributes, so a file that
+    // still carries them fails instead of silently dropping them.
+    const hcl = `view "main" {
+  system = "sys"
+  connection "link-ab" {
+    start_side = "bottom"
+    end_side = "left"
+  }
+}`;
+    expect(() => parse_views(hcl)).toThrow();
   });
 
   it("persists hidden connections and omits the flag when false", async () => {
@@ -237,7 +226,7 @@ describe("HCL View conversion and persistence", () => {
       },
       connections: {
         "hidden-link": { hidden: true },
-        "shown-link": { startSide: "top" as const },
+        "shown-link": { hidden: false },
       },
     };
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
@@ -245,14 +234,15 @@ describe("HCL View conversion and persistence", () => {
     const content = await fs.readFile(MAIN_DIAGRAM_PATH);
     expect(content).toContain('connection "hidden-link"');
     expect(content).toContain("hidden = true");
+    expect(content).not.toContain("shown-link");
     expect(content).not.toContain("hidden = false");
 
     const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
     expect(read.connections?.["hidden-link"]).toEqual({ hidden: true });
-    expect(read.connections?.["shown-link"]).toEqual({ startSide: "top" });
+    expect(read.connections?.["shown-link"]).toBeUndefined();
   });
 
-  it("round-trips hidden alongside routing sides", async () => {
+  it("round-trips hidden connections", async () => {
     const fs = await projectFs();
     const layout = {
       checked: {
@@ -261,8 +251,6 @@ describe("HCL View conversion and persistence", () => {
       },
       connections: {
         "link-ab": {
-          startSide: "bottom" as const,
-          endSide: "left" as const,
           hidden: true,
         },
       },
@@ -270,8 +258,6 @@ describe("HCL View conversion and persistence", () => {
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
     const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
     expect(read.connections?.["link-ab"]).toEqual({
-      startSide: "bottom",
-      endSide: "left",
       hidden: true,
     });
   });

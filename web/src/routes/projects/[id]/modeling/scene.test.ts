@@ -95,7 +95,7 @@ describe("buildReadOnlyScene", () => {
   it("keeps logical edges and notes without treating them as selected", () => {
     const scene = buildReadOnlyScene({
       components: [{ label: "a" }, { label: "b" }],
-      connections: [{ from: 0, to: 1, label: "bus", startSide: "right" }],
+      connections: [{ from: 0, to: 1, label: "bus" }],
       boxes: { 0: box(0, 0) },
       portsByIndex: {},
       annotations: [
@@ -115,7 +115,6 @@ describe("buildReadOnlyScene", () => {
         label: "bus",
         from: 0,
         to: 1,
-        startSide: "right",
         selected: false,
       },
     ]);
@@ -164,7 +163,7 @@ describe("buildEditorScene", () => {
   it("preserves paint order and applies editor chrome from the host's sets", () => {
     const scene = buildEditorScene({
       nodes,
-      edges: [{ label: "bus", from: 3, to: 4, endSide: "left" }],
+      edges: [{ label: "bus", from: 3, to: 4 }],
       notes: [{ text: "keep", x: 1, y: 2 }],
       selectedNodeIndexes: new Set([4]),
       connectHandles: new Set([3]),
@@ -193,7 +192,6 @@ describe("buildEditorScene", () => {
     expect(scene.edges[0]).toMatchObject({
       id: diagramEdgeId("bus", 3, 4),
       selected: true,
-      endSide: "left",
     });
     expect(scene.notes[0]).toMatchObject({
       id: "note-0",

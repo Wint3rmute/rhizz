@@ -124,7 +124,7 @@
     snapPortSpot,
     unionBox,
   } from "./geometry";
-  import type { Box, ConnectionSide, TextAlign } from "./geometry";
+  import type { Box, TextAlign } from "./geometry";
   import {
     type ConnectionEndInfo,
     type NewConnectionRequest,
@@ -2211,7 +2211,6 @@
         type: "connecting";
         sourceComponentIndex: number;
         sourcePortLabel: string | null;
-        startSide?: ConnectionSide | undefined;
         sourcePoint: { x: number; y: number };
         currentPoint: { x: number; y: number };
       }
@@ -2568,7 +2567,6 @@
     compIndex: number,
     portLabel: string | null,
     worldPoint: { x: number; y: number },
-    startSide?: ConnectionSide,
   ) {
     // Only the left button draws a connection. Every other button belongs to
     // what is underneath, and a port dot sits *on* the node's border — so the
@@ -2589,7 +2587,6 @@
       type: "connecting",
       sourceComponentIndex: compIndex,
       sourcePortLabel: portLabel,
-      startSide,
       sourcePoint: worldPoint,
       currentPoint: worldPoint,
     };
@@ -2702,7 +2699,6 @@
     sourcePortLabel: string | null,
     targetCompIndex: number,
     targetPortLabel: string | null,
-    startSide?: ConnectionSide,
   ): void {
     if (sourceCompIndex === targetCompIndex) return;
 
@@ -2719,26 +2715,20 @@
       scopePath: scope.lcaScopePath,
       from: connectionEndInfo(srcKey, scope.fromComponent, sourcePortLabel),
       to: connectionEndInfo(targetKey, scope.toComponent, targetPortLabel),
-      startSide,
     };
   }
 
   // Runs the op the dialog built. The dialog stays open when the model
   // refuses it, so the user can fix the input instead of drawing again.
   async function handleNewConnectionCreate(op: ModelMutationOp): Promise<void> {
-    const request = newConnectionRequest;
-    if (request === null || op.kind !== "connect_components") return;
+    if (newConnectionRequest === null || op.kind !== "connect_components")
+      return;
     if (isCreatingConnection) return;
     isCreatingConnection = true;
     try {
       const applied = await runModelLayoutTransaction(
         `connect ${op.label}`,
         op,
-        () => {
-          if (request.startSide) {
-            savedConnections[op.label] = { startSide: request.startSide };
-          }
-        },
       );
       if (applied) newConnectionRequest = null;
     } finally {
@@ -3502,7 +3492,6 @@
           current.sourcePortLabel,
           target.compIndex,
           target.portLabel,
-          current.startSide,
         );
       }
     }
@@ -3631,8 +3620,6 @@
       toPorts: toComponent?.ports ?? [],
       fromConnectedPorts: connectedPortLabels(model, fromKey),
       toConnectedPorts: connectedPortLabels(model, toKey),
-      startSide: savedConnections[conn.label]?.startSide,
-      endSide: savedConnections[conn.label]?.endSide,
       sharedWithCopies: !systemLabels.has(connection.ref.scopePath),
       protocol,
       protocolReason,
@@ -3661,40 +3648,6 @@
   function selectConnectionByRef(ref: ConnectionRef): void {
     selectedConnection = ref.label;
     clearSelection();
-  }
-
-  function setConnectionStartSide(side: ConnectionSide | undefined) {
-    if (!selectedConnection) return;
-    recordUndoPoint();
-    const existing = savedConnections[selectedConnection] || {};
-    if (side) {
-      savedConnections[selectedConnection] = { ...existing, startSide: side };
-    } else {
-      const updated = { ...existing };
-      delete updated.startSide;
-      if (updated.endSide) {
-        savedConnections[selectedConnection] = updated;
-      } else {
-        delete savedConnections[selectedConnection];
-      }
-    }
-  }
-
-  function setConnectionEndSide(side: ConnectionSide | undefined) {
-    if (!selectedConnection) return;
-    recordUndoPoint();
-    const existing = savedConnections[selectedConnection] || {};
-    if (side) {
-      savedConnections[selectedConnection] = { ...existing, endSide: side };
-    } else {
-      const updated = { ...existing };
-      delete updated.endSide;
-      if (updated.startSide) {
-        savedConnections[selectedConnection] = updated;
-      } else {
-        delete savedConnections[selectedConnection];
-      }
-    }
   }
 
   // Tells the user a model change was refused, and why. Shown instead of a
@@ -3948,9 +3901,6 @@
         // (original or projected `<rel-path>/<port>` dots from above).
         if (conn.fromPort !== undefined) edge.fromPort = conn.fromPort;
         if (conn.toPort !== undefined) edge.toPort = conn.toPort;
-        const saved = savedConnections[conn.label];
-        if (saved?.startSide !== undefined) edge.startSide = saved.startSide;
-        if (saved?.endSide !== undefined) edge.endSide = saved.endSide;
         return edge;
       });
     return buildEditorScene({
@@ -4484,8 +4434,6 @@
           toPorts={selectedConnectionInspector.toPorts}
           fromConnectedPorts={selectedConnectionInspector.fromConnectedPorts}
           toConnectedPorts={selectedConnectionInspector.toConnectedPorts}
-          startSide={selectedConnectionInspector.startSide}
-          endSide={selectedConnectionInspector.endSide}
           sharedWithCopies={selectedConnectionInspector.sharedWithCopies}
           protocol={selectedConnectionInspector.protocol}
           protocolReason={selectedConnectionInspector.protocolReason}
@@ -4497,8 +4445,6 @@
               reportDiagramError,
             )}
           onselect={selectConnectionByRef}
-          onsetstartside={setConnectionStartSide}
-          onsetendside={setConnectionEndSide}
           ondelete={() => deleteConnectionFromModel(selectedConnection ?? "")}
         />
       {:else}

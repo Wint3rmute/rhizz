@@ -611,17 +611,11 @@ impl std::fmt::Display for ConnectionSide {
     }
 }
 
-/// Connection layout metadata for visual diagrams.
+/// Per-view visibility flag for one connection.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ConnectionLayout {
     /// Connection label or key.
     pub connection: String,
-    /// Optional starting side ("top", "bottom", "left", "right").
-    #[serde(default)]
-    pub start_side: Option<ConnectionSide>,
-    /// Optional ending side ("top", "bottom", "left", "right").
-    #[serde(default)]
-    pub end_side: Option<ConnectionSide>,
     /// Per-view visibility flag. Omitted from canonical HCL when `false`.
     #[serde(default)]
     pub hidden: bool,

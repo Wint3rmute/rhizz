@@ -526,7 +526,7 @@ parsed and round-tripped, but no renderer applies it. See §9.
 
 **`connection` sub-block (zero or more per view):**
 
-Per-view routing and visibility for one system connection, keyed by the
+Per-view visibility for one system connection, keyed by the
 connection's name within its system. A connection is drawn when both
 endpoint components are placed in the view, belong to the view's system,
 and the connection is not hidden. Copies of one declaration (each instance
@@ -535,13 +535,12 @@ different declarations sharing a name in one system are rejected (E001).
 The same block also controls *projected connections* (see §6.2): when the
 actual endpoints are hidden but their nearest visible ancestors are placed,
 the connection is drawn between those ancestors under its original name, and
-`start_side`/`end_side`/`hidden` apply to that projected rendering.
+`hidden` applies to that projected rendering. Edge routing follows the port
+dots on the canvas.
 
-| Attribute    | Type   | Required | Default | Description                                              |
-| ------------ | ------ | -------- | ------- | -------------------------------------------------------- |
-| `start_side` | string | no       | —       | Border side the edge leaves (`top`, `bottom`, `left`, `right`) |
-| `end_side`   | string | no       | —       | Border side the edge arrives at (same values)            |
-| `hidden`     | bool   | no       | `false` | When `true`, the connection is not drawn in this view    |
+| Attribute | Type | Required | Default | Description                                           |
+| --------- | ---- | -------- | ------- | ----------------------------------------------------- |
+| `hidden`  | bool | no       | `false` | When `true`, the connection is not drawn in this view |
 
 - `hidden` is omitted from canonical output when `false`.
 - Hiding is per-view and survives an endpoint component being removed from
@@ -1001,7 +1000,7 @@ view "overview" {
 
 The same `side`/`offset` semantics apply as for direct ports; ports without a
 block fall back to the role default. Connection-level `connection` blocks
-(`start_side`/`end_side`/`hidden`) apply to the projected rendering under the
+(`hidden`) apply to the projected rendering under the
 original connection name, exactly as for direct renderings.
 
 If the underlying hierarchy changes so a previously customized projected port

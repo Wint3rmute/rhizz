@@ -14,7 +14,6 @@ import {
   computeResizedBox,
   computeResizeHandles,
   computeVisibleConnections,
-  type ConnectionSide,
   connectionLabelPoint,
   depthOf,
   elbowPath,
@@ -708,47 +707,6 @@ describe("computeVisibleConnections", () => {
     expect(visible[0]?.conn.label).toBe("valid");
   });
 
-  it("respects custom startSide on connection routing", () => {
-    const connTop = [
-      {
-        from: 0,
-        to: 1,
-        label: "top-link",
-        startSide: "top" as ConnectionSide,
-      },
-    ];
-    const visTop = computeVisibleConnections(connTop, (i) => boxes[i]);
-    expect(visTop[0]?.orientation).toBe("vertical");
-    expect(visTop[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visTop[0]?.b).toEqual({ x: 250, y: 0 }); // box 1 top midpoint (auto-oriented facing top)
-
-    const connBottom = [
-      {
-        from: 0,
-        to: 1,
-        label: "bottom-link",
-        startSide: "bottom" as ConnectionSide,
-      },
-    ];
-    const visBottom = computeVisibleConnections(connBottom, (i) => boxes[i]);
-    expect(visBottom[0]?.orientation).toBe("vertical");
-    expect(visBottom[0]?.a).toEqual({ x: 50, y: 50 }); // box 0 bottom midpoint
-    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
-
-    const connBoth = [
-      {
-        from: 0,
-        to: 1,
-        label: "both-link",
-        startSide: "top" as ConnectionSide,
-        endSide: "right" as ConnectionSide,
-      },
-    ];
-    const visBoth = computeVisibleConnections(connBoth, (i) => boxes[i]);
-    expect(visBoth[0]?.a).toEqual({ x: 50, y: 0 }); // box 0 top midpoint
-    expect(visBottom[0]?.b).toEqual({ x: 250, y: 50 }); // box 1 bottom midpoint
-  });
-
   it("anchors port-named ends to their dots and reports the knee count", () => {
     const getPort = (index: number, label: string): PortAnchor | undefined => {
       if (index === 0 && label === "out")
@@ -795,7 +753,7 @@ describe("computeVisibleConnections", () => {
     expect(visible[0]?.knees).toBe(1);
   });
 
-  it("falls back to box sides when a named port has no anchor", () => {
+  it("falls back to box centers when a named port has no anchor", () => {
     const visible = computeVisibleConnections(
       [
         {
@@ -803,8 +761,6 @@ describe("computeVisibleConnections", () => {
           to: 1,
           label: "bus",
           fromPort: "missing",
-          startSide: "right",
-          endSide: "left",
         },
       ],
       (i) => boxes[i],
