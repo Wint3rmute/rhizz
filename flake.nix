@@ -161,12 +161,13 @@
               playwright-driver.browsers
               flyctl
               gh
-              # Rootless container runtime for verifying `.#rhizz-docker`
+
+              # Commented out, not used often enough: verifies `.#rhizz-docker`
               # without a Docker daemon: `podman load -i result` then
               # `podman run`. Daemonless and runs in a user namespace, so it
               # needs no privileged service. Note the published port is
               # forwarded over IPv4 only — probe 127.0.0.1, not localhost.
-              podman
+              # podman
             ];
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
