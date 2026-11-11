@@ -15,6 +15,16 @@ view "main" {
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "dsky-bus" {
+      side   = "top"
+      offset = 0.3
+    }
+
+    port "rcs-commands" {
+      side   = "left"
+      offset = 0.2
+    }
   }
 
   node "apollo-11/cm/cabin" {
@@ -22,7 +32,22 @@ view "main" {
     y          = -780
     width      = 120
     height     = 120
-    text_align = "center"
+    text_align = "top-center"
+
+    port "docking-probe" {
+      side   = "bottom"
+      offset = 0.4166666666666667
+    }
+
+    port "manual-rotation" {
+      side   = "right"
+      offset = 0.75
+    }
+
+    port "power-in" {
+      side   = "bottom"
+      offset = 0.9166666666666666
+    }
   }
 
   node "apollo-11/cm/dsky" {
@@ -39,6 +64,11 @@ view "main" {
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "agc-coupling" {
+      side   = "right"
+      offset = 0.9
+    }
   }
 
   node "apollo-11/cm/optics" {
@@ -87,6 +117,16 @@ view "main" {
     width      = 120
     height     = 60
     text_align = "center"
+
+    port "docking-drogue" {
+      side   = "top"
+      offset = 0.25
+    }
+
+    port "power-in" {
+      side   = "bottom"
+      offset = 0.75
+    }
   }
 
   node "apollo-11/lm-ascent/comms" {
@@ -95,6 +135,16 @@ view "main" {
     width      = 110
     height     = 60
     text_align = "center"
+
+    port "s-band-ground" {
+      side   = "left"
+      offset = 0.8333333333333334
+    }
+
+    port "vhf-ranging" {
+      side   = "top"
+      offset = 0.6363636363636364
+    }
   }
 
   node "apollo-11/lm-ascent/dsky" {
@@ -143,6 +193,11 @@ view "main" {
     width      = 110
     height     = 60
     text_align = "center"
+
+    port "power-out" {
+      side   = "top"
+      offset = 0.7272727272727273
+    }
   }
 
   node "apollo-11/lm-descent/dps" {
@@ -167,14 +222,29 @@ view "main" {
     width      = 240
     height     = 60
     text_align = "center"
+
+    port "radar-returns" {
+      side   = "top"
+      offset = 0.4166666666666667
+    }
   }
 
   node "apollo-11/mcc" {
     x          = -760
     y          = -190
     width      = 120
-    height     = 60
+    height     = 80
     text_align = "center"
+
+    port "csm-ground-link" {
+      side   = "right"
+      offset = 0.5
+    }
+
+    port "lm-ground-link" {
+      side   = "right"
+      offset = 0.8333333333333334
+    }
   }
 
   node "apollo-11/saturn-v" {
@@ -191,6 +261,16 @@ view "main" {
     width      = 100
     height     = 110
     text_align = "center"
+
+    port "csm-umbilical" {
+      side   = "top"
+      offset = 0.5
+    }
+
+    port "s-ivb-control" {
+      side   = "left"
+      offset = 0.92
+    }
   }
 
   node "apollo-11/saturn-v/s-ic" {
@@ -199,6 +279,11 @@ view "main" {
     width      = 110
     height     = 110
     text_align = "center"
+
+    port "staging-link" {
+      side   = "right"
+      offset = 0.9090909090909091
+    }
   }
 
   node "apollo-11/saturn-v/s-ii" {
@@ -207,6 +292,16 @@ view "main" {
     width      = 140
     height     = 110
     text_align = "center"
+
+    port "staging-in" {
+      side   = "left"
+      offset = 0.9090909090909091
+    }
+
+    port "staging-out" {
+      side   = "right"
+      offset = 0.9090909090909091
+    }
   }
 
   node "apollo-11/saturn-v/s-ivb" {
@@ -215,6 +310,16 @@ view "main" {
     width      = 110
     height     = 110
     text_align = "center"
+
+    port "iu-mount" {
+      side   = "right"
+      offset = 0.92
+    }
+
+    port "staging-in" {
+      side   = "left"
+      offset = 0.9090909090909091
+    }
   }
 
   node "apollo-11/sm" {
@@ -237,24 +342,44 @@ view "main" {
     x          = -240
     y          = -410
     width      = 80
-    height     = 62
+    height     = 90
     text_align = "center"
+
+    port "power-out" {
+      side   = "top"
+      offset = 0.375
+    }
   }
 
   node "apollo-11/sm/hga" {
     x          = -470
-    y          = -400
+    y          = -410
     width      = 110
-    height     = 60
+    height     = 90
     text_align = "center"
+
+    port "rf-ground-link" {
+      side   = "left"
+      offset = 0.7777777777777778
+    }
+
+    port "vhf-transceiver" {
+      side   = "bottom"
+      offset = 0.6363636363636364
+    }
   }
 
   node "apollo-11/sm/rcs-quads" {
     x          = 70
     y          = -410
     width      = 80
-    height     = 62
+    height     = 90
     text_align = "center"
+
+    port "driver-signals" {
+      side   = "right"
+      offset = 0.8064516129032258
+    }
   }
 
   node "apollo-11/sm/sps" {
@@ -269,12 +394,65 @@ view "main" {
     x          = -70
     y          = -410
     width      = 80
-    height     = 62
+    height     = 90
     text_align = "center"
+  }
+
+  connection "agc-to-dsky" {
+    hidden = true
+  }
+
+  connection "agc-to-imu" {
+    hidden = true
+  }
+
+  connection "agc-to-optics" {
+    hidden = true
+  }
+
+  connection "agc-to-rcs" {
+    hidden = true
+  }
+
+  connection "aps-propellant-feed" {
+    hidden = true
+  }
+
+  connection "cabin-power-to-agc" {
+    hidden = true
+  }
+
+  connection "cabin-power-to-lgc" {
+    hidden = true
+  }
+
+  connection "cryo-to-fuel-cells" {
+    hidden = true
+  }
+
+  connection "dps-propellant-feed" {
+    hidden = true
   }
 
   connection "lgc-to-dsky" {
     start_side = "top"
     end_side   = "bottom"
+    hidden = true
+  }
+
+  connection "lgc-to-imu" {
+    hidden = true
+  }
+
+  connection "lgc-to-rcs" {
+    hidden = true
+  }
+
+  connection "rhc-manual-input" {
+    hidden = true
+  }
+
+  connection "sps-propellant-feed" {
+    hidden = true
   }
 }
