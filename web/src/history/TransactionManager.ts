@@ -139,7 +139,6 @@ export function snapshotTransaction<T>(options: {
       await options.restore(before);
       // Keep `after` for redo: redo re-runs `apply()` rather than
       // restoring `after`, so layout writes stay canonical.
-      void after;
     },
   };
 }
