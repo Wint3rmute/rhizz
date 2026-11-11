@@ -218,9 +218,7 @@
     </h4>
   </div>
 
-  <div
-    class="space-y-2 bg-base-200 p-2.5 rounded-box border border-base-300 text-xs font-mono"
-  >
+  <div class="space-y-2 text-xs font-mono">
     <div class="flex items-center justify-between">
       <span class="text-base-content/60">From:</span>
       <span
