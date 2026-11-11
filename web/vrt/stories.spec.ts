@@ -56,7 +56,9 @@ const SIZE_OVERRIDES: Record<string, { width: number; height: number }> = {
 // of the 1280×800 harness default.
 const FULL_HD = { width: 1920, height: 1080 };
 
-function pagesDefaultSize(story: IndexEntry): { width: number; height: number } | undefined {
+function pagesDefaultSize(
+  story: IndexEntry,
+): { width: number; height: number } | undefined {
   return story.title.startsWith("Pages/") ? FULL_HD : undefined;
 }
 
