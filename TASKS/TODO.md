@@ -153,6 +153,15 @@ After removing an override, run `npm audit` and confirm the finding stays clear.
 
 ---
 
+## Task <N> - somewhere around December - resolve cargo-llvm-cov regression workaround
+
+See the workaround in `flake.nix` around `inputs.nixpkgs-coverage.url`. Check if
+its possible to resolve it and drop the `nixpkgs-coverage` input completely. If
+no clear resolution is possible, immediately halt and inform the user.
+
+---
+
+
 ## Task <N> — Replace the Justfile with Nix-managed scripts
 
 Replace `Justfile` recipes with scripts defined in `flake.nix` and put them on
