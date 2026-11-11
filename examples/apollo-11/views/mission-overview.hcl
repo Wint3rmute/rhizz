@@ -48,4 +48,40 @@ view "mission-overview" {
     height     = 100
     text_align = "center"
   }
+
+  connection "cm-agc-to-sm-rcs" {
+    hidden = true
+  }
+
+  connection "csm-lm-docking-tunnel" {
+    hidden = true
+  }
+
+  connection "csm-lm-vhf-ranging" {
+    hidden = true
+  }
+
+  connection "launch-vehicle-eds" {
+    hidden = true
+  }
+
+  connection "lm-descent-battery-power" {
+    hidden = true
+  }
+
+  connection "lm-landing-radar-to-lgc" {
+    hidden = true
+  }
+
+  connection "msfn-to-csm-s-band" {
+    hidden = true
+  }
+
+  connection "msfn-to-lm-s-band" {
+    hidden = true
+  }
+
+  connection "sm-fuel-cell-power-to-cm" {
+    hidden = true
+  }
 }
