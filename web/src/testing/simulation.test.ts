@@ -92,14 +92,12 @@ describe("deterministic workspace simulation", () => {
               // Reversibility: undo then redo must both preserve
               // invariants; redo restores what undo removed.
               if (!workspace.canUndo) continue;
-              const hclBefore = workspace.snapshot().canonicalHcl;
               await workspace.dispatch({ type: "undo" });
               workspace.assertInvariants();
               if (workspace.canRedo) {
                 await workspace.dispatch({ type: "redo" });
                 workspace.assertInvariants();
               }
-              void hclBefore;
               continue;
             }
 
