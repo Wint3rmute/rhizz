@@ -71,6 +71,8 @@ const meta = {
     connection: fundTransfer,
     fromLabel: "bank-a",
     toLabel: "bank-b",
+    fromIcon: "server",
+    toIcon: "server",
     fromPorts: endpointPorts,
     toPorts: endpointPorts,
     fromConnectedPorts: new Set(["pay"]),
@@ -130,7 +132,7 @@ export const UndefinedProtocol: Story = {
 /**
  * Every port on both endpoint components is listed with a connected badge.
  * `pay` is an endpoint of this connection; `web` and `spare` are not, so they
- * show as not connected. Status is explicitly per placed instance.
+ * show as not connected.
  */
 export const PortConnectionStatus: Story = {
   args: {
@@ -149,7 +151,6 @@ export const PortConnectionStatus: Story = {
     await expect(within(from).getAllByText("Not connected")).toHaveLength(2);
     await expect(within(to).getAllByText("Connected")).toHaveLength(1);
     await expect(within(to).getAllByText("Not connected")).toHaveLength(2);
-    await expect(canvas.getByText(/per placed instance/i)).toBeTruthy();
   },
 };
 

@@ -3625,6 +3625,8 @@
       connection,
       fromLabel: components[conn.from]?.label ?? fromKey,
       toLabel: components[conn.to]?.label ?? toKey,
+      fromIcon: fromComponent?.icon ?? undefined,
+      toIcon: toComponent?.icon ?? undefined,
       fromPorts: fromComponent?.ports ?? [],
       toPorts: toComponent?.ports ?? [],
       fromConnectedPorts: connectedPortLabels(model, fromKey),
@@ -4476,6 +4478,8 @@
           connections={allConnectionData}
           fromLabel={selectedConnectionInspector.fromLabel}
           toLabel={selectedConnectionInspector.toLabel}
+          fromIcon={selectedConnectionInspector.fromIcon}
+          toIcon={selectedConnectionInspector.toIcon}
           fromPorts={selectedConnectionInspector.fromPorts}
           toPorts={selectedConnectionInspector.toPorts}
           fromConnectedPorts={selectedConnectionInspector.fromConnectedPorts}

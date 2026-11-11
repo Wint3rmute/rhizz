@@ -470,7 +470,7 @@ describe("protocolUnresolvedReason", () => {
       protocolUnresolvedReason({ protocol: "" }, { protocol: "https" }, [
         "https",
       ]),
-    ).toMatch(/no protocol/);
+    ).toMatch(/no ports.*protocol assigned/i);
   });
 
   it("names a mismatch and both protocols", () => {
