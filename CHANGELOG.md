@@ -5,6 +5,10 @@
 - remove connection start_side/end_side routing overrides
 - **web**: endpoint icons in connection inspector, copy cleanup
 
+### Fix
+
+- **deps**: bump rustix to 1.1.6 for RUSTSEC-2026-0486
+
 ## 0.11.1 (2026-11-09)
 
 ### Fix
