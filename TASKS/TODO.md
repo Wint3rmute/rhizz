@@ -18,16 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0006.2 Canvas draws delegation (closed/open/half-open)
-
-Implement `SPEC.md` §6.9 in the web app; spec text already merged, no view format change.
-
-- Closed box: delegation omitted (unplaced interior), proxy behaves like a normal port (single external edge).
-- Open box: assembly arrives at boundary dot (outer face), each delegation draws one internal segment boundary → child (no transitive collapsing). Proxy on side `S` → external uses `S` outward, delegation exits `opposite(S)` inward; delegation segments draw without arrowheads.
-- Half-open: segments to unplaced children omitted via draw-only-when-placed; proxy then connects only externally, if visible.
-- `hidden` applies to assembly only; `node { port { side offset } }` pins boundary dots; no collision with `/`-projected names (E004).
-- Geometry unit tests + VRT stories for closed/open/half-open + inward-exit + no-arrow first, then canvas change; e2e for boundary-dot drag/persist. `just test`, `just lint`, `just build` green.
-
 ## Task <N> — 0006.3 Inspector, MCP + inventory follow-through for proxy ports
 
 - Inspector/read model surfaces inherited `protocol`/`role` (and terminal source) for proxy ports; delegation edges labeled as delegation (no direction).

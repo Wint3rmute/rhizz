@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: delegation direct-or-omitted resolution and arrowless edges
 - **core**: delegation scoring, round-trip, weather-service example
 - **core**: delegation endpoints, proxy inference, E021/E022
 

@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0006.2 Canvas draws delegation (closed/open/half-open)
+
+Implements `SPEC.md` §6.9 in the web app (spec text already merged, no view format change).
+
+- **Resolver (`connectionProjection.ts`):** delegation edges are direct-or-omitted — drawn only when owner and child are both directly placed, never projected onto ancestors (an explicit branch; the pre-existing ancestor rules already omit these cases, now pinned). The view `hidden` flag is ignored for delegation segments (interior visibility rules instead). `normalizeEndpointRef` carries `isDelegation` (both casings).
+- **WASM:** `ConnectionJS.is_delegation` getter; read-only and editor paths pick it up via the existing `from_port`-style structural reads.
+- **Canvas:** `DiagramEdge`/`EditorSceneEdgeInput` gain `noArrow`; `DiagramCanvas` skips the arrowhead polygon for delegation segments. No router change needed: the child always sits inside the owner, so the outline-to-interior path heads inward by construction (verified in VRT).
+- **Tests (TDD):** 8 new resolver unit tests (direct/omitted/never-projected/hidden-ignored/normalize/sidebar/dots); `DelegationClosedBox` + `DelegationOpenBox` VRT stories with play assertions (2 edges, 1 arrowhead, boundary+inner dots); `e2e/delegation-edges.spec.ts` (closed→open→half-open edge/arrow counts, no `Projected` badge, boundary-dot drag persists as `port "api"`).
+- `just test` green (incl. new e2e), `just lint`, `just build` green; VRT baselines accepted (4 new).
+- Branch: `feat/proxy-delegation-canvas`.
+
+---
+
 ## Task <N> — 0006.1 Delegation scoring, validation follow-through + examples
 
 Spec text already merged; this task implements the remaining model-side behavior (no view changes).
