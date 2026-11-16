@@ -484,7 +484,10 @@ describe("delegation edges (SPEC.md §6.9)", () => {
   });
 
   it("ignores the view hidden flag and still draws when placed", () => {
-    const resolved = resolveConnectionProjection(delegation, ctx([1, 3], { hidden: ["api-delegation"] }));
+    const resolved = resolveConnectionProjection(
+      delegation,
+      ctx([1, 3], { hidden: ["api-delegation"] }),
+    );
     expect(resolved.hidden).toBe(false);
     expect(isProjectionDrawn(resolved)).toBe(true);
   });
@@ -501,17 +504,27 @@ describe("delegation edges (SPEC.md §6.9)", () => {
     expect(
       normalizeEndpointRef({ label: "d", from: 1, to: 3, isDelegation: true }),
     ).toMatchObject({ isDelegation: true });
-    expect(
-      normalizeEndpointRef({ label: "d", from: 1, to: 3 }),
-    ).toMatchObject({ isDelegation: undefined });
+    expect(normalizeEndpointRef({ label: "d", from: 1, to: 3 })).toMatchObject({
+      isDelegation: undefined,
+    });
   });
 
   it("sidebar lists delegation drawn only when placed, never badged", () => {
     expect(sidebarProjectionRows([delegation], ctx([1, 3]))).toEqual([
-      { label: "api-delegation", shown: true, projected: false, omitted: false },
+      {
+        label: "api-delegation",
+        shown: true,
+        projected: false,
+        omitted: false,
+      },
     ]);
     expect(sidebarProjectionRows([delegation], ctx([1]))).toEqual([
-      { label: "api-delegation", shown: false, projected: false, omitted: true },
+      {
+        label: "api-delegation",
+        shown: false,
+        projected: false,
+        omitted: true,
+      },
     ]);
   });
 

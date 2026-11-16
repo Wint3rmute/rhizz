@@ -559,3 +559,93 @@ export const DoubleKnee: Story = {
     );
   },
 };
+
+// Delegation (SPEC.md §6.9): the boundary dot forwards inward with one
+// segment per hop, drawn as a plain line without an arrowhead. Closed box
+// shows only the assembly edge; the open box adds the internal segment.
+const delegationComponents = [
+  {
+    label: "user",
+    ports: [{ label: "out", role: "consumer" as const }],
+  },
+  {
+    label: "weather-service",
+    ports: [{ label: "api", role: "provider" as const }],
+  },
+  {
+    label: "proxy",
+    parent_component_index: 1,
+    ports: [{ label: "http", role: "provider" as const }],
+  },
+];
+const delegationConnections = [
+  {
+    from: 0,
+    to: 1,
+    label: "forecast",
+    fromPort: "out",
+    toPort: "api",
+  },
+  {
+    from: 1,
+    to: 2,
+    label: "api-delegation",
+    fromPort: "api",
+    toPort: "http",
+    isDelegation: true,
+  },
+];
+
+export const DelegationClosedBox: Story = {
+  args: {
+    components: delegationComponents,
+    connections: delegationConnections,
+    boxes: {
+      0: { x: 0, y: 30, width: 100, height: 60 },
+      1: { x: 200, y: 0, width: 200, height: 140 },
+    },
+    portsByIndex: {},
+  },
+};
+
+export const DelegationOpenBox: Story = {
+  args: {
+    components: delegationComponents,
+    connections: delegationConnections,
+    boxes: {
+      0: { x: 0, y: 30, width: 100, height: 60 },
+      1: { x: 200, y: 0, width: 200, height: 140 },
+      2: { x: 220, y: 80, width: 110, height: 50 },
+    },
+    portsByIndex: {},
+  },
+  play: async ({ canvasElement }) => {
+    const edges = canvasElement.querySelectorAll(
+      "[data-testid='diagram-edge']",
+    );
+    await expect(edges.length).toBe(2);
+    // The assembly edge keeps its arrowhead; the delegation segment draws
+    // as a plain line (identity, no direction).
+    const polygons = canvasElement.querySelectorAll(
+      "[data-testid='diagram-edge'] polygon",
+    );
+    await expect(polygons.length).toBe(1);
+    const labels = Array.from(edges).map(
+      (edge) => edge.querySelector("text")?.textContent,
+    );
+    await expect(labels).toEqual(
+      expect.arrayContaining(["forecast", "api-delegation"]),
+    );
+    const delegation = Array.from(edges).find(
+      (edge) => edge.querySelector("text")?.textContent === "api-delegation",
+    );
+    await expect(delegation?.querySelector("polygon")).toBeNull();
+    // Boundary and inner dots both render: the edge names real ports.
+    const portLabels = Array.from(
+      canvasElement.querySelectorAll("[data-testid='diagram-port'] text"),
+    ).map((text) => text.textContent);
+    await expect(portLabels).toEqual(
+      expect.arrayContaining(["out", "api", "http"]),
+    );
+  },
+};
