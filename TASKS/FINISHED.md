@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0006.1 Delegation scoring, validation follow-through + examples
+
+Spec text already merged; this task implements the remaining model-side behavior (no view changes).
+
+- **Scoring (§5):** no production change needed — inferred ports score via inherited `protocol_id`/messages and delegation connections score as connections (matching strings → complete, empty → incomplete). Pinned by 3 new `score.rs` tests (inherited-complete, delegation-complete, undefined-terminal-incomplete with exact per-copy counts).
+- **Canonical round-trip:** `endpoint_path` already emits `./port` (0006.0); fixed one real bug found by the new round-trip test — the serializer emitted *inherited* `protocol`/`role` on proxy ports, making them explicit on re-parse (E022). `serialize_port` now omits both when `port.inferred`. `realized_by` untouched; deep bypass stays legal (pinned by 0006.0 resolve test).
+- **Worked example:** new `examples/weather-service/` (protocol `rest`, `listener` → `reverse-proxy` → `weather-service` N-hop chain, `user` + `system "app"`, overview + internals views, README). Compiles with 0 errors, 100% score. Wired into `build.rs` names, the idempotent + views round-trip lists, the server example-list test, and `examples/README.md`. New `score_weather_service` test pins 100%.
+- **Book:** delegation section with a self-contained ```rhizz block in `03_connections_ports.md`; `book.lock` regenerated via `just book-accept` (0 errors, 100% on the new block).
+- Red/green TDD (round-trip test failed first on the serializer bug); `just lint`, `just build` green; `just test` green except one unrelated `command-palette` e2e flake (varying failures across reruns, `web/` untouched by this branch).
+- Branch: `feat/proxy-delegation-scoring`.
+
+---
+
 ## Task <N> — 0006.0 Proxy/delegation core: `./port` resolution + inference + E021/E022
 
 Implements proposal `0006-proxy-ports.md` §2–§4 in `rhizz-core` (spec text was already merged in `SPEC.md` §2.6/§2.7/§3/§4, `SPEC/models.md`, `SPEC/diagnostics/E021.md|E022.md`).
