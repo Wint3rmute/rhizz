@@ -70,17 +70,17 @@ messages / fields. Key semantics:
   instances record the definition label they were cloned from (used by the
   serializer to re-emit `instance` blocks).
 - `Port { protocol: String, protocol_id: Option<ProtocolId>, external, required,
-  owner }` — `protocol_id` links to a top-level protocol when the name matches.
+  owner, inferred: bool }` — `protocol_id` links to a top-level protocol when the name matches. `inferred` marks a proxy port (omitted `protocol`/`role` with a delegation edge); its `protocol`/`role` are filled from the delegation target.
 - `Protocol { leaf, encapsulates: Vec<String>, encapsulates_ids: Vec<ProtocolId>,
   .. }` — `leaf` defaults to `false`; `encapsulates` holds the declared protocol
   labels, `encapsulates_ids` the resolved targets (undefined labels and cycle
   edges are dropped).
-- `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId> },
-  realized_by: Vec<String> }` — `port` holds the named port; `None` appears only
-  on error paths that abort compilation. W008–W009 fire on protocol and role
-  combinations. `realized_by` holds
+- `Connection { from/to: ConnectionEndpoint { component, port: Option<PortId>, is_self: bool },
+  realized_by: Vec<String>, is_delegation: bool }` — `port` holds the named port; `None` appears only
+  on error paths that abort compilation. `is_self` marks a `./port` endpoint on the declaring scope. `is_delegation` is true when exactly one end is self. W008–W009 fire on protocol and role
+  combinations (skipped between delegation ends). `realized_by` holds
   the raw path entries, resolved in `realized_by_ids`. A connection cannot carry
-  `encapsulates`: that attribute belongs to `protocol` blocks only.
+  `encapsulates`: that attribute belongs to `protocol` blocks only. Delegation edges never declare `realized_by`.
 
 ## Resolution pass
 
@@ -94,14 +94,24 @@ messages / fields. Key semantics:
 3. Register systems (E001).
 4. Expand each system's `instance`s depth-first (E012/E014/E013, clone body).
 5. Ports: allocate, validate `role` (E009), link `protocol_id`, default
-   `external = false`, `required = true`.
+   `external = false`, `required = true`. Ports omitting `protocol`/`role`
+   are marked as inference candidates (proxy) and resolved in step 6b.
 6. Connections per scope: parse `from`/`to` port paths relative to the declaring
-   scope; enforce LCA placement (E015); resolve endpoints (E003/E011/E010).
+   scope, including `./port` self endpoints (delegation only; bare `"port"`
+   stays E003); enforce LCA placement (E015, delegation lives in its owner);
+   resolve endpoints (E003/E011/E010). A connection with exactly one self
+   endpoint is a delegation edge; it must not declare `realized_by` (E019).
+6b. Delegation inference: bottom-up along the instance tree, iteratively, inherit
+   `protocol`/`role` from the delegation target through N hops; abort past 1024
+   hops (E021). Enforce exclusivity and shape (E022: D1/D2, `external = true`,
+   non-leaf owner). W008/W009 skip delegation pairs; outer assembly checks use
+   inherited values.
 7. `realized_by`: once every connection in every scope is registered, each
    entry resolves to a `ConnectionId` (E017, the entry is dropped). Duplicates
    collapse. A DFS over the resolved graph reports each cycle once (E018) and
    drops its back edge. A connection whose protocol (`Model::connection_protocol`)
-   is `leaf` and that declares `realized_by` is E019.
+   is `leaf` and that declares `realized_by` is E019. Delegation edges never
+   appear in `realized_by`.
 8. Views (separate pass): one `view` per file with label matching the filename
    (E016), `system` resolving to a real system (E006); every `node` path checked
    against component keys (W016).
