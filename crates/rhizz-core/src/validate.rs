@@ -172,8 +172,12 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W008 -- both sides name ports but protocol values differ
+    // W008 -- both sides name ports but protocol values differ.
+    // Skipped between delegation ends (identity, not complementarity).
     for conn in &model.connections {
+        if conn.is_delegation {
+            continue;
+        }
         if let (Some(from_pid), Some(to_pid)) = (conn.from.port, conn.to.port) {
             let from_proto = model
                 .port(from_pid)
@@ -195,14 +199,19 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         }
     }
 
-    // W010 -- port is defined but not referenced by any connection endpoint
+    // W010 -- port is defined but not referenced by any connection endpoint.
+    // A delegation edge satisfies its inner (non-self) end from inside, but
+    // the outer (self) end still needs an outside assembly edge: the self end
+    // does not count as use here.
     let mut used_ports: HashSet<usize> = HashSet::new();
     for conn in &model.connections {
-        if let Some(pid) = conn.from.port {
-            used_ports.insert(pid.0);
-        }
-        if let Some(pid) = conn.to.port {
-            used_ports.insert(pid.0);
+        for end in [&conn.from, &conn.to] {
+            if conn.is_delegation && end.is_self {
+                continue;
+            }
+            if let Some(pid) = end.port {
+                used_ports.insert(pid.0);
+            }
         }
     }
     for (idx, port) in model.ports.iter().enumerate() {
@@ -327,6 +336,10 @@ fn completeness_warnings(model: &Model) -> Vec<Diagnostic> {
         .zip(connection_completeness(model))
         .enumerate()
     {
+        // Delegation edges carry no protocol of their own to complete.
+        if conn.is_delegation {
+            continue;
+        }
         let Completeness::Incomplete { blocking } = state else {
             continue;
         };

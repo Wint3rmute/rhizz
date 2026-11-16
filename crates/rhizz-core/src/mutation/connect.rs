@@ -213,8 +213,8 @@ fn attach_port(raw: &mut RawFile, definition: usize, spec: &PortSpec) -> Result<
     }
 }
 
-/// The connection endpoint string for an end: `component/port`, or just the
-/// port when the end is the scope's own component.
+/// The connection endpoint string for an end: `component/port`, or `./port`
+/// when the end is the scope's own component (delegation).
 fn endpoint(end: &ConnectEnd) -> String {
     let port = match &end.port {
         PortSpec::Existing(label) => label,
@@ -222,7 +222,7 @@ fn endpoint(end: &ConnectEnd) -> String {
     };
     let component = end.component.trim_matches('/');
     if component.is_empty() {
-        port.clone()
+        format!("./{port}")
     } else {
         format!("{component}/{port}")
     }

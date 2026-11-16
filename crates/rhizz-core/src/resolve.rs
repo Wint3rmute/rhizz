@@ -296,7 +296,12 @@ fn resolve_pass(raw: RawFile) -> Resolver {
         }
     }
 
-    // ── realized_by: after every connection in every scope is registered ─────
+    // ── delegation: infer proxy port types (E021/E022) ───────────────────
+    // Runs before `realized_by` so `connection_protocol` (E019 leaf checks,
+    // W019/W020/W021) reads inherited values on assembly edges.
+    resolve_delegation(&mut r);
+
+    // ── realized_by: after every connection is registered ─────
     resolve_realized_by(&mut r);
 
     // ── E001: one connection name per system ─────────────────────────────────
@@ -695,6 +700,9 @@ fn process_ports(
             required: lp.inner.required.unwrap_or(true),
             tags: lp.inner.tags.clone(),
             owner,
+            // Proxy candidacy (omitted `protocol`/`role`) is decided in
+            // `resolve_delegation`, once every connection is registered.
+            inferred: false,
         });
         port_ids.push(pid);
     }
@@ -759,6 +767,7 @@ fn process_connections_in_scope(
         let sentinel = ConnectionEndpoint {
             component: ComponentId(usize::MAX),
             port: None,
+            is_self: false,
         };
         let from_ep = from.unwrap_or_else(|| sentinel.clone());
         let to_ep = to.unwrap_or(sentinel);
@@ -776,6 +785,44 @@ fn process_connections_in_scope(
                     ),
                 );
             }
+            // Delegation lives in its owner by definition: the self end's
+            // component must be the declaring scope itself.
+            if from_ep.is_self ^ to_ep.is_self {
+                let self_cid = if from_ep.is_self {
+                    from_ep.component
+                } else {
+                    to_ep.component
+                };
+                if Scope::Component(self_cid) != scope {
+                    r.push_error(
+                        DiagnosticCode::E015,
+                        format!(
+                            "connection `{}` is a delegation edge and must be declared inside its owning component",
+                            lc.label
+                        ),
+                    );
+                }
+            }
+        }
+
+        let is_delegation = from_ep.is_self ^ to_ep.is_self;
+        if from_ep.is_self && to_ep.is_self {
+            r.push_error(
+                DiagnosticCode::E022,
+                format!(
+                    "connection `{}` has two self (`./port`) endpoints; a delegation edge must have exactly one",
+                    lc.label
+                ),
+            );
+        }
+        if is_delegation && !lc.inner.realized_by.is_empty() {
+            r.push_error(
+                DiagnosticCode::E019,
+                format!(
+                    "connection `{}` is a delegation edge and must not declare `realized_by`",
+                    lc.label
+                ),
+            );
         }
 
         r.model.connections.push(Connection {
@@ -788,6 +835,7 @@ fn process_connections_in_scope(
             to: to_ep,
             realized_by: lc.inner.realized_by.clone(),
             realized_by_ids: vec![], // filled by resolve_realized_by
+            is_delegation,
         });
 
         conn_ids.push(conn_id);
@@ -990,6 +1038,34 @@ fn resolve_endpoint(
         return None;
     };
 
+    // A bare single segment (`"api"`) names a component without a port.
+    // Only `"./api"` names the declaring scope's own port (delegation).
+    // Anything else bare falls through to the usual undefined-component
+    // errors below (E002/E011).
+    if !is_absolute && path.len() == 1 {
+        let seg = path[0];
+        let names_component = r
+            .scope_index
+            .components
+            .contains_key(&(scope, seg.to_owned()));
+        let names_own_port = match scope {
+            Scope::Component(cid) => r
+                .scope_index
+                .ports
+                .contains_key(&(cid, seg.to_owned())),
+            Scope::System(_) => false,
+        };
+        if names_component || names_own_port {
+            r.push_error(
+                DiagnosticCode::E003,
+                format!(
+                    "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port` or `./port` for the declaring scope's own port)"
+                ),
+            );
+            return None;
+        }
+    }
+
     if last == "." || last == ".." {
         // A trailing `.` or `..` names neither a component nor a port: walk
         // the path for its errors, then give no endpoint (as before).
@@ -1023,9 +1099,12 @@ fn resolve_endpoint(
     }
     if let Scope::Component(cid) = owner_scope {
         if let Some(pid) = r.scope_index.ports.get(&(cid, last.to_owned())) {
+            // A `./port` endpoint resolves against the declaring scope itself.
+            let is_self = owner_scope == scope;
             return Some(ConnectionEndpoint {
                 component: cid,
                 port: Some(*pid),
+                is_self,
             });
         }
         let comp_label = r
@@ -1364,6 +1443,282 @@ fn scope_root(model: &Model, scope: Scope) -> Scope {
     current
 }
 
+/// Infer proxy port types along delegation chains (`SPEC.md` §2.6/§2.7).
+///
+/// A port that omits `protocol`/`role` and appears as the self endpoint of
+/// exactly one delegation edge in its owner inherits both (transitively) from
+/// the delegation target. Chains abort past 1024 hops (`E021`); exclusivity
+/// and shape violations are `E022`. Errors are reported once per top-level
+/// definition — instance copies share the declaration — while inherited values
+/// are filled on every copy.
+fn resolve_delegation(r: &mut Resolver) {
+    const MAX_HOPS: usize = 1024;
+
+    // In-scope self-endpoint uses per outer port.
+    // An entry exists for every connection declared in the owner's own scope
+    // whose self end names the port (delegation or both-self assembly).
+    // Built for every owner (definitions and instance copies alike) so chain
+    // following works per copy; diagnostics below only fire for definitions.
+    let mut self_uses: HashMap<PortId, Vec<(ConnectionId, Option<PortId>)>> = HashMap::new();
+    for comp in &r.model.components {
+        for cid in &comp.connections {
+            let Some(conn) = r.model.connection(*cid) else {
+                continue;
+            };
+            let ends = [&conn.from, &conn.to];
+            // The non-self end of a delegation edge is its target; a
+            // both-self assembly edge carries no target.
+            let target = if conn.is_delegation {
+                ends.iter().find_map(|end| {
+                    if end.is_self {
+                        None
+                    } else {
+                        end.port
+                    }
+                })
+            } else {
+                None
+            };
+            for end in ends {
+                if !end.is_self {
+                    continue;
+                }
+                let Some(outer) = end.port else {
+                    continue;
+                };
+                // A both-self assembly edge still counts as a self use.
+                self_uses.entry(outer).or_default().push((*cid, target));
+            }
+        }
+    }
+    // Single in-scope self edge per outer port: `outer -> target`.
+    let mut single_edge: HashMap<PortId, PortId> = HashMap::new();
+    // Outers with more than one in-scope self edge (fan-out).
+    let mut multi_edge: HashSet<PortId> = HashSet::new();
+    for (outer, uses) in &self_uses {
+        if uses.len() == 1 {
+            if let Some(target) = uses[0].1 {
+                single_edge.insert(*outer, target);
+            } else {
+                // Both-self assembly edge: a self use with no target.
+                multi_edge.insert(*outer);
+            }
+        } else {
+            multi_edge.insert(*outer);
+        }
+    }
+
+    // Candidate proxy ports: omitted `protocol` and `role`.
+    let is_candidate = |r: &Resolver, pid: PortId| -> bool {
+        r.model.port(pid).is_some_and(|p| p.protocol.is_empty() && p.role.is_none())
+    };
+
+    // Explicitly typed ports used as a self endpoint (never inferred).
+    let mut explicit_self: HashSet<PortId> = HashSet::new();
+    // Record explicitly typed self endpoints for E022.
+    for pid in single_edge
+        .keys()
+        .chain(multi_edge.iter())
+        .copied()
+        .collect::<Vec<_>>()
+    {
+        if !is_candidate(r, pid) {
+            explicit_self.insert(pid);
+        }
+    }
+
+    // Fill inherited values on every copy (definitions and instances).
+    // Collect first to avoid borrow conflicts.
+    let mut fills: Vec<(PortId, String, Option<ProtocolId>, Option<String>)> = Vec::new();
+    let mut inferred: Vec<PortId> = Vec::new();
+    let mut depth_errors: Vec<(PortId, String)> = Vec::new();
+    for comp in &r.model.components {
+        for pid in &comp.ports {
+            if !is_candidate(r, *pid) {
+                continue;
+            }
+            let Some(mut current) = single_edge.get(pid).copied() else {
+                continue;
+            };
+            // Shape gate: inference only for boundary ports on non-leaf owners.
+            let Some(owner) = r.model.port(*pid).map(|p| p.owner) else {
+                continue;
+            };
+            let shape_ok = r
+                .model
+                .component(owner)
+                .is_some_and(|c| !c.leaf)
+                && r.model.port(*pid).is_some_and(|p| p.external);
+            if !shape_ok {
+                continue;
+            }
+            let mut hops: usize = 1;
+            let mut terminal: Option<PortId> = None;
+            loop {
+                let Some(port) = r.model.port(current) else {
+                    break;
+                };
+                let _ = port;
+                if is_candidate(r, current) {
+                    if let Some(next) = single_edge.get(&current).copied() {
+                        hops += 1;
+                        if hops > MAX_HOPS {
+                            let owner_label = r
+                                .model
+                                .component(owner)
+                                .map_or(String::new(), |c| c.label.clone());
+                            let port_label = r
+                                .model
+                                .port(*pid)
+                                .map_or(String::new(), |p| p.label.clone());
+                            depth_errors.push((*pid, format!(
+                                "proxy port `{port_label}` in component `{owner_label}` exceeds the 1024-hop delegation limit"
+                            )));
+                            terminal = None;
+                            break;
+                        }
+                        current = next;
+                        continue;
+                    }
+                }
+                terminal = Some(current);
+                break;
+            }
+            if let Some(tpid) = terminal {
+                if let Some(tport) = r.model.port(tpid) {
+                    fills.push((
+                        *pid,
+                        tport.protocol.clone(),
+                        tport.protocol_id,
+                        tport.role.clone(),
+                    ));
+                    inferred.push(*pid);
+                }
+            }
+        }
+    }
+    for (pid, protocol, protocol_id, role) in fills {
+        if let Some(port) = r.model.ports.get_mut(pid.0) {
+            port.protocol = protocol;
+            port.protocol_id = protocol_id;
+            port.role = role;
+        }
+    }
+    for pid in inferred {
+        if let Some(port) = r.model.ports.get_mut(pid.0) {
+            port.inferred = true;
+        }
+    }
+    // Depth errors fire once per definition (copies share the declaration).
+    for (pid, msg) in depth_errors {
+        let is_def = r
+            .model
+            .port(pid)
+            .and_then(|p| r.model.component(p.owner))
+            .is_some_and(|c| c.kind == ComponentKind::Definition);
+        if is_def {
+            r.push_error(DiagnosticCode::E021, msg);
+        }
+    }
+
+    // E022 shape + exclusivity checks, once per definition.
+    let mut e022: Vec<String> = Vec::new();
+    for comp in &r.model.components {
+        if comp.kind != ComponentKind::Definition {
+            continue;
+        }
+        // Shape: inferred candidates require `external = true` and non-leaf.
+        for pid in &comp.ports {
+            let Some(port) = r.model.port(*pid) else {
+                continue;
+            };
+            // Only ports that participate in delegation (or omit their type
+            // while a delegation edge exists nearby) are proxy candidates.
+            let participates = single_edge.contains_key(pid)
+                || multi_edge.contains(pid)
+                || explicit_self.contains(pid);
+            if !participates {
+                continue;
+            }
+            if is_candidate(r, *pid) {
+                if comp.leaf {
+                    e022.push(format!(
+                        "proxy port `{}` in leaf component `{}` cannot delegate (a leaf has no children)",
+                        port.label, comp.label
+                    ));
+                } else if !port.external {
+                    e022.push(format!(
+                        "proxy port `{}` in component `{}` must set `external = true`",
+                        port.label, comp.label
+                    ));
+                }
+            } else if explicit_self.contains(pid) {
+                e022.push(format!(
+                    "port `{}` in component `{}` declares `protocol`/`role` and must not be a delegation endpoint (omit both to declare a proxy port)",
+                    port.label, comp.label
+                ));
+            }
+        }
+        // D1: an inferred outer appears as the self endpoint in exactly one
+        // in-scope connection. Omission without any self use keeps today's
+        // meaning (undefined port), so only multi-use (fan-out) reports here;
+        // a misplaced edge (declared outside the owner) is already E015.
+        for pid in &comp.ports {
+            if !is_candidate(r, *pid) {
+                continue;
+            }
+            let in_scope_uses = comp
+                .connections
+                .iter()
+                .filter_map(|cid| r.model.connection(*cid))
+                .filter(|conn| {
+                    [&conn.from, &conn.to].iter().any(|end| end.is_self && end.port == Some(*pid))
+                })
+                .count();
+            if in_scope_uses > 1 {
+                let port_label = r.model.port(*pid).map_or("".to_owned(), |p| p.label.clone());
+                e022.push(format!(
+                    "proxy port `{port_label}` in component `{}` fans out to {in_scope_uses} delegation edges (a proxy port must delegate to exactly one child port)",
+                    comp.label
+                ));
+            }
+        }
+        // D2: a delegation target appears in no other in-scope connection.
+        for cid in &comp.connections {
+            let Some(conn) = r.model.connection(*cid) else {
+                continue;
+            };
+            if !conn.is_delegation {
+                continue;
+            }
+            let target = if conn.from.is_self {
+                conn.to.port
+            } else {
+                conn.from.port
+            };
+            let Some(target) = target else {
+                continue;
+            };
+            let target_label = r.model.port(target).map_or("".to_owned(), |p| p.label.clone());
+            let others = comp
+                .connections
+                .iter()
+                .filter(|other| **other != *cid)
+                .filter_map(|other| r.model.connection(*other))
+                .any(|other| other.from.port == Some(target) || other.to.port == Some(target));
+            if others {
+                e022.push(format!(
+                    "delegation target `{target_label}` in component `{}` is double-driven (it must appear in no other connection in the same scope)",
+                    comp.label
+                ));
+            }
+        }
+    }
+    for msg in e022 {
+        r.push_error(DiagnosticCode::E022, msg);
+    }
+}
+
 /// Resolve one `realized_by` entry written in `declaring`. The last segment is
 /// a connection label; the segments before it are walked like an endpoint's
 /// component path. The target must share the declaring system or definition
@@ -1463,7 +1818,14 @@ fn resolve_realized_by(r: &mut Resolver) {
         for entry in &entries {
             match resolve_realized_by_entry(r, entry, *scope) {
                 Ok(target) => {
-                    if !targets.contains(&target) {
+                    // Delegation edges relate port to port within one
+                    // component; they can neither realize nor be realized.
+                    if r.model.connection(target).is_some_and(|c| c.is_delegation) {
+                        messages.push(format!(
+                            "connection `{label}` in `{here}` has unresolved realized_by entry `{entry}`: delegation edges must not appear in `realized_by`"
+                        ));
+                        r.unresolved_realized_by.push((*cid, entry.clone()));
+                    } else if !targets.contains(&target) {
                         targets.push(target);
                     }
                 }
@@ -1504,6 +1866,10 @@ fn resolve_realized_by(r: &mut Resolver) {
     let mut leaf_messages: Vec<String> = Vec::new();
     for (idx, conn) in r.model.connections.iter().enumerate() {
         if conn.realized_by.is_empty() {
+            continue;
+        }
+        if conn.is_delegation {
+            // Already E019 at registration; skip the leaf-protocol check here.
             continue;
         }
         let Some(pid) = r.model.connection_protocol(ConnectionId(idx)) else {
