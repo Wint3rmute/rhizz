@@ -283,6 +283,7 @@ pub struct ConnectionJS {
     blocking: Option<ConnectionRefJS>,
     pub from: usize,
     pub to: usize,
+    is_delegation: bool,
 }
 
 impl ConnectionJS {
@@ -326,6 +327,7 @@ impl ConnectionJS {
             blocking,
             from: conn.from.component.0,
             to: conn.to.component.0,
+            is_delegation: conn.is_delegation,
         }
     }
 }
@@ -412,6 +414,16 @@ impl ConnectionJS {
     #[must_use]
     pub fn blocking(&self) -> Option<ConnectionRefJS> {
         self.blocking.clone()
+    }
+
+    /// Whether this connection is a delegation edge (exactly one `./port`
+    /// self endpoint): it draws without an arrowhead and only when both
+    /// ends are directly placed (see SPEC.md §6.9).
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
+    pub fn is_delegation(&self) -> bool {
+        self.is_delegation
     }
 }
 

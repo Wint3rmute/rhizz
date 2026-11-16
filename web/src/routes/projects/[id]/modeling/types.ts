@@ -29,6 +29,8 @@ export interface DiagramStaticConnection {
   fromPort?: string | undefined;
   /** Port label on the `to` component. Anchors the edge to that dot. */
   toPort?: string | undefined;
+  /** Delegation edge (SPEC.md §6.9): draws without an arrowhead. */
+  isDelegation?: boolean | undefined;
 }
 
 /** A placed node's position/size/label alignment — `textAlign` defaults to "center" when omitted. */

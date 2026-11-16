@@ -53,6 +53,9 @@ export interface DiagramEdge {
   toPort?: string | undefined;
   selected: boolean;
   opacity?: number | undefined;
+  /** Delegation segments (SPEC.md §6.9) draw as plain lines: identity, no
+   * direction, hence no arrowhead. */
+  noArrow?: boolean | undefined;
 }
 
 export interface DiagramNote {
@@ -271,6 +274,11 @@ export function buildReadOnlyScene(input: {
       const toPort = conn.toPort ?? typed.to_port ?? undefined;
       if (fromPort !== undefined) edge.fromPort = fromPort;
       if (toPort !== undefined) edge.toPort = toPort;
+      const delegation =
+        conn.isDelegation ??
+        (conn as unknown as { is_delegation?: boolean }).is_delegation ??
+        false;
+      if (delegation) edge.noArrow = true;
       return edge;
     }),
     notes: (input.annotations ?? []).map((ann, index) =>
@@ -302,6 +310,7 @@ export interface EditorSceneEdgeInput {
   toKey?: string | undefined;
   fromPort?: string | undefined;
   toPort?: string | undefined;
+  noArrow?: boolean | undefined;
 }
 
 export function buildEditorScene(input: {
@@ -372,6 +381,7 @@ export function buildEditorScene(input: {
       };
       if (edge.fromPort !== undefined) built.fromPort = edge.fromPort;
       if (edge.toPort !== undefined) built.toPort = edge.toPort;
+      if (edge.noArrow === true) built.noArrow = true;
       return built;
     }),
     notes: input.notes.map((note, index) =>

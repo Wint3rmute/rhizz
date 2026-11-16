@@ -571,8 +571,17 @@
   // not), grouped by name. A name is checked when drawn on the canvas and
   // badged `Projected` when it resolves through visible ancestors instead of
   // directly placed endpoints. Hidden connections stay listed but unchecked.
+  // Normalized like the canvas edges below so wasm snake_case getters
+  // (`from_port`, `is_delegation`) survive and both agree on delegation.
   let systemConnections = $derived.by(() =>
-    sidebarProjectionRows(connections, projectionContext),
+    sidebarProjectionRows(
+      connections.map((conn) =>
+        normalizeEndpointRef(
+          conn as unknown as Parameters<typeof normalizeEndpointRef>[0],
+        ),
+      ),
+      projectionContext,
+    ),
   );
 
   // Labels for the inspector's per-realization "Show" buttons: connections
@@ -3901,6 +3910,8 @@
         // (original or projected `<rel-path>/<port>` dots from above).
         if (conn.fromPort !== undefined) edge.fromPort = conn.fromPort;
         if (conn.toPort !== undefined) edge.toPort = conn.toPort;
+        // Delegation segments (§6.9) draw as plain lines without arrowheads.
+        if (conn.isDelegation === true) edge.noArrow = true;
         return edge;
       });
     return buildEditorScene({
