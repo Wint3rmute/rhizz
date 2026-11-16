@@ -21,3 +21,4 @@
 - [0003 MCP Introduction](proposals/0003-mcp-introduction.md)
 - [0004 Locking and Collaboration](proposals/0004-locking-and-collab.md)
 - [0005 Projected Connections](proposals/0005-projected-connections.md)
+- [0006 Proxy Ports and Delegation](proposals/0006-proxy-ports.md)
