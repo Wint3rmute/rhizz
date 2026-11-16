@@ -6,8 +6,8 @@ project {
 
 protocol "rest" {
   full_name = "REST over HTTP"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 
   message "forecast-request" {
     full_name = "Weather forecast request"
@@ -30,6 +30,7 @@ protocol "rest" {
 
 component "listener" {
   full_name = "HTTP listener socket"
+  color       = "secondary"
   tags        = ["network"]
   leaf        = true
 
@@ -44,6 +45,7 @@ component "listener" {
 
 component "reverse-proxy" {
   full_name = "Reverse proxy terminating TLS"
+  color       = "primary"
   tags        = ["network"]
 
   port "http" {
@@ -54,27 +56,9 @@ component "reverse-proxy" {
   instance "listener" { source = "listener" }
 
   connection "http-delegation" {
-    full_name = "Boundary forwards to the listener socket"
+    full_name  = "Boundary forwards to the listener socket"
     from         = "./http"
     to           = "listener/http"
-  }
-}
-
-component "weather-service" {
-  full_name = "Weather forecast service"
-  tags        = ["backend"]
-
-  port "api" {
-    full_name = "Forecast REST API"
-    external    = true
-  }
-
-  instance "proxy" { source = "reverse-proxy" }
-
-  connection "api-delegation" {
-    full_name = "Boundary forwards to the reverse proxy"
-    from         = "./api"
-    to           = "proxy/http"
   }
 }
 
@@ -92,6 +76,24 @@ component "user" {
   }
 }
 
+component "weather-service" {
+  full_name = "Weather forecast service"
+  tags        = ["backend"]
+
+  port "api" {
+    full_name = "Forecast REST API"
+    external    = true
+  }
+
+  instance "proxy" { source = "reverse-proxy" }
+
+  connection "api-delegation" {
+    full_name  = "Boundary forwards to the reverse proxy"
+    from         = "./api"
+    to           = "proxy/http"
+  }
+}
+
 system "app" {
   full_name = "Weather app with an encapsulated forecast service"
   tags        = ["backend", "frontend"]
@@ -101,7 +103,7 @@ system "app" {
   instance "weather-service" { source = "weather-service" }
 
   connection "forecast" {
-    full_name = "Forecast API used by the mobile client"
+    full_name  = "Forecast API used by the mobile client"
     tags         = ["data"]
     from         = "/app/user/out"
     to           = "/app/weather-service/api"
