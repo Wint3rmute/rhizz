@@ -18,16 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0006.0 Proxy/delegation core: `./port` resolution + inference + E021/E022
-
-Implement proposal `0006-proxy-ports.md` §2–§4 in `rhizz-core` (spec text already in `SPEC.md` §2.6/§2.7/§3/§4, `SPEC/models.md`, `SPEC/diagnostics/E021.md|E022.md`).
-
-- Parse `./port` self endpoints (bare `"port"` stays E003); mark connections with exactly one self endpoint as delegation (`is_delegation`), enforce LCA-in-owner (E015), forbid `realized_by` on delegation (E019).
-- Bottom-up iterative inference: proxy ports (omitted `protocol`/`role` + delegation edge) inherit `protocol`/`role` transitively; terminal freeform/undefined → whole chain undefined. Abort past 1024 hops (E021).
-- Enforce E022: D1 (outer in exactly one delegation), D2 (target in no other internal connection), `external = true`, non-leaf owner.
-- W008/W009 skip delegation pairs; outer assembly uses inherited values. W010 satisfied on both ends.
-- Red/green TDD with exact-code assertions (E003/E015/E019/E021/E022, no new warnings); `just test`, `just lint`, `just build` green.
-
 ## Task <N> — 0006.1 Delegation scoring, validation follow-through + examples
 
 - Scoring (§5): inferred ports score via inherited protocol/messages; delegation connections score as connections (incomplete only if terminal undefined).

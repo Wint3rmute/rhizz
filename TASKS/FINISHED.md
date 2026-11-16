@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0006.0 Proxy/delegation core: `./port` resolution + inference + E021/E022
+
+Implements proposal `0006-proxy-ports.md` §2–§4 in `rhizz-core` (spec text was already merged in `SPEC.md` §2.6/§2.7/§3/§4, `SPEC/models.md`, `SPEC/diagnostics/E021.md|E022.md`).
+
+- **Endpoints:** `./port` names the declaring scope's own port (self endpoint, `is_self`); bare `"port"` stays E003 (E002 for truly unknown names preserved). A connection with exactly one self end is a delegation edge (`is_delegation`); two self ends is E022; delegation declaring `realized_by` is E019; delegation declared outside its owner is E015.
+- **Inference:** proxy ports (omitted `protocol`/`role` + one in-scope self edge) inherit `protocol`/`role`/`protocol_id` transitively via memoized chain following (linear, suffix-shared); terminal freeform/undefined stays undefined. Cap at 1024 hops (E021, once per definition). Shape gates: `external = true`, non-leaf owner, else E022.
+- **Exclusivity (E022, once per definition):** fan-out (>1 self use), explicit outer types, internal proxy, leaf owner, double-driven target. `realized_by` naming a delegation edge is E017; delegation edges skip the leaf-`realized_by` E019 check (already reported at registration).
+- **Validation:** W008 skipped between delegation ends; W010 excludes delegation self ends (outer still needs outside assembly, inner satisfied from inside); W019 skips delegation edges.
+- **Serialize/mutation:** `endpoint_path` round-trips self ends as `./port`; `connect_components` with an empty component emits `./port` (existing `an_empty_component...` test now exercises the delegation path).
+- Red/green TDD: 13 resolve tests (inheritance, transitive N-hop, E003/E015/E017/E018-adjacent/E019/E021-via-follower-unit-tests + 40-deep e2e, E022 ×6, deep-bypass-legal) + 2 W010 validate tests + chain-follower unit tests (cap, dangling, memo reuse). Full `just test` green (Rust 325 + vitest 115 files + e2e 169/170, one unrelated `debounced-writes` flake passing on retry), `just lint`, `just build` green.
+- Branch: `feat/proxy-delegation-core`.
+
+---
+
 ## Task <N> - unify port fading mechanics
 
 Ports rode only the node opacity, so a port whose edge left during a view
