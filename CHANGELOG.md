@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **core**: delegation scoring, round-trip, weather-service example
 - **core**: delegation endpoints, proxy inference, E021/E022
 
 ## 0.12.0 (2026-11-16)

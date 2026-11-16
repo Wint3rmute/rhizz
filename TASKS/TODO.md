@@ -18,13 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0006.1 Delegation scoring, validation follow-through + examples
-
-- Scoring (§5): inferred ports score via inherited protocol/messages; delegation connections score as connections (incomplete only if terminal undefined).
-- Canonical round-trip of `./port` as written; `realized_by` untouched; deep bypass (`weather-service/proxy/http`) stays legal, no new diagnostic.
-- Add/extend a worked example (weather-service `api → proxy/http`, N-hop chain) under `examples/` + book snippet; existing examples unaffected.
-- Red/green TDD (scoring + round-trip + W010/W019 on chains); `just test`, `just lint`, `just build` green.
-
 ## Task <N> — 0006.2 Canvas draws delegation (closed/open/half-open)
 
 Implement `SPEC.md` §6.9 in the web app; spec text already merged, no view format change.
