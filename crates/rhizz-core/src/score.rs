@@ -368,6 +368,22 @@ mod tests {
         );
     }
 
+    // ── weather-service (proxy/delegation example) ─────────────────────────
+
+    #[test]
+    fn score_weather_service() {
+        let raw = parse_dir(&example_dir("weather-service")).expect("weather-service should parse");
+        let (model, _) = resolve(raw).expect("weather-service should resolve");
+        let report = score(&model);
+        // Fully specified: leaf protocol with messages, every port typed
+        // (proxies via inheritance), every connection between matching ports.
+        assert_eq!(report.components.incomplete, 0, "{report:?}");
+        assert_eq!(report.ports.incomplete, 0, "{report:?}");
+        assert_eq!(report.connections.incomplete, 0, "{report:?}");
+        assert_eq!(report.messages.incomplete, 0, "{report:?}");
+        assert_eq!(report.overall_percentage(), 100.0, "{report:?}");
+    }
+
     // ── display format ─────────────────────────────────────────────────────
 
     #[test]
@@ -633,6 +649,121 @@ mod tests {
         let (model, _) = resolve(raw).unwrap();
         let report = score(&model);
         assert_eq!(report.connections.partial, 1, "differing protocols -> 0.5");
+    }
+
+    // ── delegation scoring (0006.1) ──────────────────────────────────────────
+
+    /// Weather-service shape with a leaf `rest` protocol carrying messages.
+    fn delegation_scoring_fixture() -> &'static str {
+        r#"
+protocol "rest" {
+  leaf = true
+  roles = ["provider", "consumer"]
+  message "req" {
+    field "path" { type = "string" }
+  }
+}
+component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+component "user" {
+  leaf = true
+  port "out" {
+    protocol = "rest"
+    role = "consumer"
+    external = true
+  }
+}
+system "app" {
+  instance "user" { source = "user" }
+  instance "weather-service" { source = "weather-service" }
+  connection "forecast" {
+    from = "user/out"
+    to   = "weather-service/api"
+  }
+}
+"#
+    }
+
+    #[test]
+    fn proxy_port_scores_via_inherited_protocol() {
+        let raw = crate::parse::parse_file(
+            delegation_scoring_fixture(),
+            std::path::Path::new("test.hcl"),
+        )
+        .unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        // http x3 (def + instance-in-def + instance-in-system-copy), api x2
+        // (def + instance, inferred), out x2 (def + instance): all bound to
+        // `rest` with complete messages.
+        assert_eq!(report.ports.complete, 7, "{report:?}");
+        assert_eq!(report.ports.incomplete, 0, "{report:?}");
+    }
+
+    #[test]
+    fn delegation_connection_scores_like_assembly() {
+        let raw = crate::parse::parse_file(
+            delegation_scoring_fixture(),
+            std::path::Path::new("test.hcl"),
+        )
+        .unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        // api-delegation x2 (def + instance) + forecast: matching `rest`.
+        assert_eq!(report.connections.complete, 3, "{report:?}");
+        assert_eq!(report.connections.incomplete, 0, "{report:?}");
+    }
+
+    #[test]
+    fn proxy_to_undefined_terminal_scores_incomplete() {
+        // No protocol anywhere in the chain: every proxy stays undefined.
+        let src = r#"
+component "db" {
+  leaf = true
+  port "q" { external = true }
+}
+component "proxy" {
+  port "http" { external = true }
+  instance "db" { source = "db" }
+  connection "http-delegation" {
+    from = "./http"
+    to   = "db/q"
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "proxy" { source = "proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+system "s" {
+  instance "svc" { source = "svc" }
+}
+"#;
+        let raw = crate::parse::parse_file(src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let report = score(&model);
+        // q x4, http x3, api x2 (defs + nested instance copies): no protocol.
+        assert_eq!(report.ports.incomplete, 9, "{report:?}");
+        // http-delegation x3 (def + two nested copies), api-delegation x2
+        // (def + instance): empty protocol.
+        assert_eq!(report.connections.incomplete, 5, "{report:?}");
     }
 
     #[test]

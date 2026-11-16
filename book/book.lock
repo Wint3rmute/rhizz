@@ -343,6 +343,40 @@
       }
     },
     {
+      "chapter": "03_connections_ports.md",
+      "hcl": "protocol \"rest\" {\n  full_name = \"REST over HTTP\"\n  leaf = true\n  roles = [\"provider\", \"consumer\"]\n\n  message \"forecast-request\" {\n    field \"location\" { type = \"string\" }\n  }\n}\n\ncomponent \"listener\" {\n  full_name = \"HTTP listener socket\"\n  leaf = true\n\n  port \"http\" {\n    protocol = \"rest\"\n    role = \"provider\"\n    external = true\n  }\n}\n\ncomponent \"reverse-proxy\" {\n  full_name = \"Reverse proxy\"\n\n  port \"http\" {\n    external = true\n  }\n\n  instance \"listener\" { source = \"listener\" }\n\n  connection \"http-delegation\" {\n    from = \"./http\"\n    to = \"listener/http\"\n  }\n}\n\ncomponent \"weather-service\" {\n  full_name = \"Weather forecast service\"\n\n  port \"api\" {\n    external = true\n  }\n\n  instance \"proxy\" { source = \"reverse-proxy\" }\n\n  connection \"api-delegation\" {\n    from = \"./api\"\n    to = \"proxy/http\"\n  }\n}\n\ncomponent \"user\" {\n  full_name = \"Mobile app client\"\n  leaf = true\n\n  port \"out\" {\n    protocol = \"rest\"\n    role = \"consumer\"\n    external = true\n  }\n}\n\nsystem \"app\" {\n  full_name = \"Weather app\"\n\n  instance \"user\" { source = \"user\" }\n  instance \"weather-service\" { source = \"weather-service\" }\n\n  connection \"forecast\" {\n    from = \"user/out\"\n    to = \"weather-service/api\"\n  }\n}",
+      "input_sha256": "711ccacc7a1804e7d4436703d801519a2775e4b86d9481c513216354fee3ccd6",
+      "level": "architectural",
+      "output": {
+        "errors": [],
+        "score": {
+          "components": {
+            "complete": 11,
+            "total": 11
+          },
+          "connections": {
+            "complete": 6,
+            "total": 6
+          },
+          "messages": {
+            "complete": 1,
+            "total": 1
+          },
+          "overall": {
+            "complete": 29,
+            "percent": 100.0,
+            "total": 29
+          },
+          "ports": {
+            "complete": 11,
+            "total": 11
+          },
+          "system": ""
+        },
+        "warnings": []
+      }
+    },
+    {
       "chapter": "04_warnings_errors.md",
       "hcl": "protocol \"serial\" {\n  # No messages are defined yet.\n}\n\ncomponent \"sensor-hat\" {\n  full_name = \"Reusable sensor board\"\n  leaf        = true\n\n  port \"data\" {\n    protocol = \"serial\"\n  }\n}\n\ncomponent \"controller\" {\n  leaf = true\n\n  port \"uart\" {\n    protocol = \"serial\"\n  }\n}\n\nsystem \"dev-rig\" {\n  full_name = \"A rough first sketch\"\n\n  instance \"controller\" {\n    source = \"controller\"\n  }\n\n  instance \"sensor\" {\n    source = \"sensor-hat\"\n  }\n\n  connection \"link\" {\n    from = \"controller/uart\"\n    to   = \"sensor/data\"\n  }\n}",
       "input_sha256": "68f0de96b196262d0f9ec810adf9fa07a4276f01ffcf4802630d14e6a5b54534",

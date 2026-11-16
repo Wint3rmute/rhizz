@@ -99,3 +99,94 @@ from some iteration of your product, while designing a new version of that
 product. Having ports specified inside components allows you to quickly see what
 parts can be easily re-used and which ones will require changes at interface
 level, or even need a complete rework.
+
+## Hiding internals behind a boundary port
+
+A component is not a black box forever: a `weather-service` exposing one REST
+`api` port may internally decompose into a `reverse-proxy` and a `listener`
+socket. Instead of leaking those internals into every system that uses the
+service, the outer port *delegates* inward with an ordinary `connection` whose
+one end names the declaring scope itself (`./api`). The outer port omits
+`protocol` and `role` and inherits both from its target — one truth, no drift.
+The system-level edge stays clean: it names only the boundary, never
+`weather-service/proxy/...`:
+
+```rhizz,level=architectural
+protocol "rest" {
+  full_name = "REST over HTTP"
+  leaf = true
+  roles = ["provider", "consumer"]
+
+  message "forecast-request" {
+    field "location" { type = "string" }
+  }
+}
+
+component "listener" {
+  full_name = "HTTP listener socket"
+  leaf = true
+
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+
+component "reverse-proxy" {
+  full_name = "Reverse proxy"
+
+  port "http" {
+    external = true
+  }
+
+  instance "listener" { source = "listener" }
+
+  connection "http-delegation" {
+    from = "./http"
+    to = "listener/http"
+  }
+}
+
+component "weather-service" {
+  full_name = "Weather forecast service"
+
+  port "api" {
+    external = true
+  }
+
+  instance "proxy" { source = "reverse-proxy" }
+
+  connection "api-delegation" {
+    from = "./api"
+    to = "proxy/http"
+  }
+}
+
+component "user" {
+  full_name = "Mobile app client"
+  leaf = true
+
+  port "out" {
+    protocol = "rest"
+    role = "consumer"
+    external = true
+  }
+}
+
+system "app" {
+  full_name = "Weather app"
+
+  instance "user" { source = "user" }
+  instance "weather-service" { source = "weather-service" }
+
+  connection "forecast" {
+    from = "user/out"
+    to = "weather-service/api"
+  }
+}
+```
+
+The `api` port inherits `rest`/`provider` transitively through `proxy/http`
+down to `listener/http`, so the `forecast` connection scores complete with no
+re-declaration — and no internal path ever leaks into `system "app"`.

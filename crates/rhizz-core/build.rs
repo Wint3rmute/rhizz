@@ -290,6 +290,10 @@ fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
                 "Web Application".to_string(),
                 "Full-stack web application with frontend, backend API, and database".to_string(),
             ),
+            "weather-service" => (
+                "Weather Service".to_string(),
+                "Encapsulated backend with proxy ports and delegation".to_string(),
+            ),
             _ => (id.clone(), "Example architecture project".to_string()),
         };
 

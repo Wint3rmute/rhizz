@@ -339,19 +339,23 @@ fn serialize_port(out: &mut String, port: &Port, depth: usize) {
             escape_string(&port.full_name)
         );
     }
-    if !port.protocol.is_empty() {
-        let _ = writeln!(
-            out,
-            "{inner_indent}protocol    = {}",
-            escape_string(&port.protocol)
-        );
-    }
-    if let Some(role_str) = &port.role {
-        let _ = writeln!(
-            out,
-            "{inner_indent}role        = {}",
-            escape_string(role_str)
-        );
+    // Inferred proxy ports round-trip as written (omitted `protocol`/`role`);
+    // emitting the inherited values would make them explicit on re-parse.
+    if !port.inferred {
+        if !port.protocol.is_empty() {
+            let _ = writeln!(
+                out,
+                "{inner_indent}protocol    = {}",
+                escape_string(&port.protocol)
+            );
+        }
+        if let Some(role_str) = &port.role {
+            let _ = writeln!(
+                out,
+                "{inner_indent}role        = {}",
+                escape_string(role_str)
+            );
+        }
     }
 
     if !port.tags.is_empty() {
@@ -1571,6 +1575,63 @@ system "style-demo" {
     }
 
     #[test]
+    fn test_delegation_connection_roundtrip() {
+        // A delegation edge (`./api`) must round-trip as written and stay
+        // idempotent: the self endpoint re-resolves to the owner's own port.
+        let hcl = r#"component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" {
+    external = true
+  }
+  instance "proxy" {
+    source = "reverse-proxy"
+  }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+"#;
+        let res1 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res1.diagnostics.iter().all(|d| !d.is_error()),
+            "errors in res1: {:?}",
+            res1.diagnostics
+        );
+        let model1 = res1.model.expect("model1 should resolve");
+        let serialized1 = serialize_model(&model1);
+        assert!(
+            serialized1.contains("from         = \"./api\""),
+            "self endpoint must round-trip as ./api, got:\n{serialized1}"
+        );
+        let res2 = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized1.clone(),
+        }]);
+        assert!(
+            res2.diagnostics.iter().all(|d| !d.is_error()),
+            "errors recompiling serialized delegation model: {:?}",
+            res2.diagnostics
+        );
+        let model2 = res2.model.expect("model2 should resolve");
+        let serialized2 = serialize_model(&model2);
+        assert_eq!(
+            serialized1, serialized2,
+            "delegation serialization must be idempotent"
+        );
+    }
+
+    #[test]
     fn test_nested_connection_roundtrip() {
         // A connection at the system level referencing a deeply-nested
         // component (cm/agc/rcs-commands) must round-trip. Regression test for
@@ -1656,6 +1717,7 @@ system "apollo" {
             "single-file",
             "web-app",
             "apollo-11",
+            "weather-service",
         ] {
             let example_path = examples_dir.join(example_name);
             if !example_path.exists() {
@@ -1817,7 +1879,13 @@ system "apollo" {
             .expect("should find workspace root");
         let examples_dir = workspace_dir.join("examples");
 
-        for example_name in ["drone", "social-media", "software-house", "web-app"] {
+        for example_name in [
+            "drone",
+            "social-media",
+            "software-house",
+            "web-app",
+            "weather-service",
+        ] {
             let views_dir = examples_dir.join(example_name).join("views");
             if !views_dir.exists() {
                 continue;
