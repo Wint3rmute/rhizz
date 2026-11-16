@@ -15,6 +15,9 @@ export interface ProjectionEndpointRef {
   to: number;
   fromPort?: string | undefined;
   toPort?: string | undefined;
+  /** Delegation edge (SPEC.md §6.9): draws only when both ends are directly
+   * placed, never projects, and ignores the view `hidden` flag. */
+  isDelegation?: boolean | undefined;
 }
 
 export interface ProjectionContext {
@@ -127,9 +130,12 @@ export function resolveConnectionProjection(
   conn: ProjectionEndpointRef,
   context: ProjectionContext,
 ): ConnectionProjection {
-  const hidden = context.isHidden?.(conn.label) ?? false;
   const fromVisible = nearestVisibleAncestor(conn.from, context);
   const toVisible = nearestVisibleAncestor(conn.to, context);
+  if (conn.isDelegation === true) {
+    return resolveDelegationProjection(conn, fromVisible, toVisible);
+  }
+  const hidden = context.isHidden?.(conn.label) ?? false;
   const kind = resolutionKind(fromVisible, toVisible, context.parentOf);
   if (kind === "direct") {
     return {
@@ -173,14 +179,52 @@ export function resolveConnectionProjections<T extends ProjectionEndpointRef>(
 }
 
 /**
+ * A delegation edge draws only when both ends are directly placed (SPEC.md
+ * §6.9): the owner and the child themselves, no projection onto ancestors,
+ * and the view `hidden` flag does not apply — the segment follows interior
+ * visibility instead.
+ */
+function resolveDelegationProjection(
+  conn: ProjectionEndpointRef,
+  fromVisible: VisibleAncestor | undefined,
+  toVisible: VisibleAncestor | undefined,
+): ConnectionProjection {
+  const direct =
+    fromVisible !== undefined &&
+    toVisible !== undefined &&
+    fromVisible.relLabels.length === 0 &&
+    toVisible.relLabels.length === 0;
+  if (direct) {
+    return {
+      kind: "direct",
+      from: conn.from,
+      to: conn.to,
+      fromPort: conn.fromPort,
+      toPort: conn.toPort,
+      hidden: false,
+    };
+  }
+  return {
+    kind: "omitted",
+    from: conn.from,
+    to: conn.to,
+    fromPort: conn.fromPort,
+    toPort: conn.toPort,
+    hidden: false,
+  };
+}
+
+/**
  * ConnectionJS (wasm) exposes ports as `from_port`/`to_port` getters while the
  * resolver speaks camelCase. Read both so a spread (which drops prototype
- * getters) can never silently lose the anchoring ports.
+ * getters) can never silently lose the anchoring ports. Same for the
+ * delegation flag (`is_delegation` on the wire, `isDelegation` in the resolver).
  */
 export function normalizeEndpointRef(
   conn: ProjectionEndpointRef & {
     from_port?: string | null | undefined;
     to_port?: string | null | undefined;
+    is_delegation?: boolean | null | undefined;
   },
 ): ProjectionEndpointRef {
   return {
@@ -189,6 +233,7 @@ export function normalizeEndpointRef(
     to: conn.to,
     fromPort: conn.fromPort ?? conn.from_port ?? undefined,
     toPort: conn.toPort ?? conn.to_port ?? undefined,
+    isDelegation: conn.isDelegation ?? conn.is_delegation ?? undefined,
   };
 }
 

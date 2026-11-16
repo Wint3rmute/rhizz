@@ -445,19 +445,21 @@
       fill="none"
       style={edgeInteractive ? undefined : "pointer-events: none"}
     />
-    <polygon
-      points={arrowHead(
-        b.x,
-        b.y,
-        endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
-        endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
-      )}
-      fill={conn.selected
-        ? "var(--color-primary)"
-        : "var(--color-base-content)"}
-      fill-opacity={conn.selected ? 1 : 0.5}
-      style="pointer-events: none"
-    />
+    {#if conn.noArrow !== true}
+      <polygon
+        points={arrowHead(
+          b.x,
+          b.y,
+          endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
+          endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
+        )}
+        fill={conn.selected
+          ? "var(--color-primary)"
+          : "var(--color-base-content)"}
+        fill-opacity={conn.selected ? 1 : 0.5}
+        style="pointer-events: none"
+      />
+    {/if}
     <DiagramConnectionLabel
       label={conn.label}
       selected={conn.selected}

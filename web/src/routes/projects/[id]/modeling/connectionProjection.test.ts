@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isProjectionDrawn,
   normalizeEndpointRef,
   projectedPortDots,
   resolveConnectionProjection,
@@ -428,6 +429,98 @@ describe("ancestor-descendant projections", () => {
       `#${String(index)}`;
     expect(
       projectedPortDots([inwards], ctx([0, 1]), keysOf, () => undefined),
+    ).toEqual([]);
+  });
+});
+
+describe("delegation edges (SPEC.md §6.9)", () => {
+  // Owner 1:B (proxy port "api") delegates inward to child 3:C (port "deep").
+  const delegation = {
+    label: "api-delegation",
+    from: 1,
+    to: 3,
+    fromPort: "api",
+    toPort: "deep",
+    isDelegation: true,
+  };
+
+  it("draws directly when owner and child are both placed", () => {
+    expect(resolveConnectionProjection(delegation, ctx([1, 3]))).toEqual({
+      kind: "direct",
+      from: 1,
+      to: 3,
+      fromPort: "api",
+      toPort: "deep",
+      hidden: false,
+    });
+  });
+
+  it("omits when the child is unplaced (half-open box)", () => {
+    const resolved = resolveConnectionProjection(delegation, ctx([1]));
+    expect(resolved.kind).toBe("omitted");
+    expect(isProjectionDrawn(resolved)).toBe(false);
+  });
+
+  it("omits when the owner is unplaced (closed box)", () => {
+    expect(resolveConnectionProjection(delegation, ctx([3]))).toEqual({
+      kind: "omitted",
+      from: 1,
+      to: 3,
+      fromPort: "api",
+      toPort: "deep",
+      hidden: false,
+    });
+  });
+
+  it("never projects onto a visible ancestor", () => {
+    // A normal connection 1→3 with [0, 3] placed would consult the mixed
+    // ancestor rules; delegation skips projection entirely: no B/api dot on A.
+    expect(resolveConnectionProjection(delegation, ctx([0, 3])).kind).toBe(
+      "omitted",
+    );
+    expect(resolveConnectionProjection(delegation, ctx([0, 4])).kind).toBe(
+      "omitted",
+    );
+  });
+
+  it("ignores the view hidden flag and still draws when placed", () => {
+    const resolved = resolveConnectionProjection(delegation, ctx([1, 3], { hidden: ["api-delegation"] }));
+    expect(resolved.hidden).toBe(false);
+    expect(isProjectionDrawn(resolved)).toBe(true);
+  });
+
+  it("normalizeEndpointRef preserves the delegation flag in both casings", () => {
+    expect(
+      normalizeEndpointRef({
+        label: "d",
+        from: 1,
+        to: 3,
+        is_delegation: true,
+      }),
+    ).toMatchObject({ isDelegation: true });
+    expect(
+      normalizeEndpointRef({ label: "d", from: 1, to: 3, isDelegation: true }),
+    ).toMatchObject({ isDelegation: true });
+    expect(
+      normalizeEndpointRef({ label: "d", from: 1, to: 3 }),
+    ).toMatchObject({ isDelegation: undefined });
+  });
+
+  it("sidebar lists delegation drawn only when placed, never badged", () => {
+    expect(sidebarProjectionRows([delegation], ctx([1, 3]))).toEqual([
+      { label: "api-delegation", shown: true, projected: false, omitted: false },
+    ]);
+    expect(sidebarProjectionRows([delegation], ctx([1]))).toEqual([
+      { label: "api-delegation", shown: false, projected: false, omitted: true },
+    ]);
+  });
+
+  it("emits no projected dots for delegation endpoints", () => {
+    const keysOf = (index: number) =>
+      (["sys/A", "sys/A/B", "sys/A/f2", "sys/A/B/C"] as const)[index] ??
+      `#${String(index)}`;
+    expect(
+      projectedPortDots([delegation], ctx([1, 3]), keysOf, () => undefined),
     ).toEqual([]);
   });
 });
