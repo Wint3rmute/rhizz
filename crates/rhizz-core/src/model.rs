@@ -412,6 +412,10 @@ pub struct Port {
     pub tags: Vec<String>,
     /// The component that owns this port.
     pub owner: ComponentId,
+    /// Proxy port: omitted `protocol`/`role` with a delegation edge.
+    /// `protocol`/`role`/`protocol_id` are filled from the delegation target.
+    #[serde(default)]
+    pub inferred: bool,
 }
 
 /// One endpoint of a connection — a component and an optional port on that component.
@@ -421,6 +425,10 @@ pub struct ConnectionEndpoint {
     pub component: ComponentId,
     /// The referenced port, if a `comp/port` reference was used.
     pub port: Option<PortId>,
+    /// Self endpoint: `./port` names a port on the declaring scope itself
+    /// (delegation only).
+    #[serde(default)]
+    pub is_self: bool,
 }
 
 /// A resolved connection wiring two sibling components together.
@@ -454,6 +462,11 @@ pub struct Connection {
     /// absent, and edges on a `realized_by` cycle (`E018`) are removed.
     #[serde(default)]
     pub realized_by_ids: Vec<ConnectionId>,
+    /// Delegation edge: exactly one end is a self (`./port`) endpoint.
+    /// Delegation relates port to port within one component and never
+    /// declares `realized_by`.
+    #[serde(default)]
+    pub is_delegation: bool,
 }
 
 /// A resolved message carried by a port.
