@@ -696,3 +696,71 @@ system "demo" {
     }
   });
 });
+
+describe("proxy ports and delegation (SPEC.md §6.9)", () => {
+  const HCL = `protocol "rest" {
+  leaf = true
+  roles = ["provider", "consumer"]
+  message "req" {
+    field "path" { type = "string" }
+  }
+}
+component "leaf" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "proxy" { source = "leaf" }
+  connection "api-delegation" {
+    from = "./api"
+    to = "proxy/http"
+  }
+}
+component "user" {
+  leaf = true
+  port "out" {
+    protocol = "rest"
+    role = "consumer"
+    external = true
+  }
+}
+system "app" {
+  instance "user" { source = "user" }
+  instance "svc" { source = "svc" }
+  connection "forecast" {
+    from = "user/out"
+    to = "svc/api"
+  }
+}
+`;
+
+  it("marks the proxy port inferred with its terminal source", () => {
+    const view = viewOf(HCL);
+    const svc = view.get("app/svc");
+    expect(svc).toBeDefined();
+    const api = svc?.ports.find((p) => p.label === "api");
+    expect(api?.inferred).toBe(true);
+    expect(api?.protocol).toBe("rest");
+    expect(api?.inferredFrom).toEqual({ port: "http", owner: "proxy" });
+    // The terminal port itself is explicit, not inferred.
+    const leaf = view.get("app/svc/proxy");
+    const http = leaf?.ports.find((p) => p.label === "http");
+    expect(http?.inferred).toBeUndefined();
+    expect(http?.inferredFrom).toBeUndefined();
+  });
+
+  it("marks delegation connections and leaves assembly alone", () => {
+    const list = connectionDataList(
+      modelOf([{ filename: "system.hcl", content: HCL }]),
+    );
+    const delegation = list.find((c) => c.ref.label === "api-delegation");
+    expect(delegation?.isDelegation).toBe(true);
+    const forecast = list.find((c) => c.ref.label === "forecast");
+    expect(forecast?.isDelegation).toBe(false);
+  });
+});

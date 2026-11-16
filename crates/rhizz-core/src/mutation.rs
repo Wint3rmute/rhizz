@@ -1559,13 +1559,50 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
         body.leaf = Some(leaf);
     }
     if let Some(ports) = &patch.ports {
+        // Delegation outers must stay omitted: explicit values on a `./port`
+        // self endpoint are always E022, so an inherited echo from a
+        // full-array write (inspector, MCP) must not cement them. A port can
+        // only gain an explicit type once its delegation edge is gone, which
+        // is always a separate op (connections are never patched here).
+        let delegated: std::collections::HashSet<&str> = body
+            .connections
+            .iter()
+            .flat_map(|c| [&c.inner.from, &c.inner.to])
+            .filter_map(|e| e.as_deref().and_then(self_port_endpoint))
+            .collect();
+        let omitted: std::collections::HashSet<&str> = body
+            .ports
+            .iter()
+            .filter(|p| {
+                p.inner
+                    .protocol
+                    .as_deref()
+                    .map_or(true, str::is_empty)
+                    && p.inner.role.is_none()
+            })
+            .map(|p| p.label.as_str())
+            .collect();
         let mut raw_ports = Vec::with_capacity(ports.len());
         for port in ports {
-            raw_ports.push(port_from_json(port)?);
+            let mut raw = port_from_json(port)?;
+            if delegated.contains(raw.label.as_str())
+                && omitted.contains(raw.label.as_str())
+            {
+                raw.inner.protocol = None;
+                raw.inner.role = None;
+            }
+            raw_ports.push(raw);
         }
         body.ports = raw_ports;
     }
     Ok(())
+}
+
+/// The port label when `endpoint` names the declaring scope's own port
+/// (`"./port"`, delegation only); `None` otherwise.
+fn self_port_endpoint(endpoint: &str) -> Option<&str> {
+    let rest = endpoint.strip_prefix("./")?;
+    (!rest.is_empty() && !rest.contains('/')).then_some(rest)
 }
 
 /// True when a connection endpoint names instance `label` inside the scope at
@@ -2515,6 +2552,61 @@ mod tests {
         let action = serde_json::to_value(&updated.actions).expect("json");
         assert_eq!(action[0]["op"], "update_component");
         assert_eq!(action[0]["path"], "cpu");
+    }
+
+    #[test]
+    fn update_keeps_omission_on_delegated_ports() {
+        // A full-array write (inspector, MCP) carries the inherited values of
+        // a proxy port. Writing them explicitly would be E022, so the update
+        // keeps the omission while applying the rest of the patch.
+        let base = r#"
+protocol "rest" { leaf = true }
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  port "other" { external = true }
+  instance "a" { source = "leaf-a" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+}
+"#;
+        let updated = mutate(
+            base,
+            r#"{"kind":"update_component","path":"svc","patch":{"ports":[{"label":"api","protocol":"rest","role":"provider","external":true,"required":true},{"label":"other","protocol":"rest","role":"consumer","external":true,"required":true}]}}"#,
+        )
+        .expect("update applies");
+        assert!(updated.applied);
+        let hcl = updated.hcl.expect("hcl");
+        // The unrelated port is typed as patched...
+        assert!(hcl.contains("port \"other\""), "hcl:\n{hcl}");
+        // ...while the delegated outer keeps its omission.
+        let api_block = hcl
+            .split("port \"api\"")
+            .nth(1)
+            .expect("api block")
+            .split("port \"")
+            .next()
+            .unwrap_or("");
+        assert!(
+            !api_block.contains("protocol"),
+            "proxy port must stay omitted, got:\n{hcl}"
+        );
+        // And the model still resolves (no E022).
+        let raw = crate::parse::parse_file(&hcl, std::path::Path::new("system.hcl"))
+            .expect("reparse");
+        assert!(
+            crate::resolve::resolve(raw).is_ok(),
+            "re-resolved model must compile"
+        );
     }
 
     #[test]
