@@ -990,6 +990,43 @@ fn endpoint_segments<'a>(
     Some((raw, raw_segments))
 }
 
+/// Reject a bare single segment that names a component or an own port.
+/// Only `"./port"` names the declaring scope's own port (delegation).
+/// Anything else bare falls through to the usual undefined-component errors
+/// (E002/E011). Returns `true` when an error was emitted.
+fn reject_bare_segment(
+    r: &mut Resolver,
+    scope: Scope,
+    segments: &[&str],
+    conn_label: &str,
+    field: &str,
+) -> bool {
+    if segments.len() != 1 {
+        return false;
+    }
+    let Some(seg) = segments.first() else {
+        return false;
+    };
+    let names_component = r
+        .scope_index
+        .components
+        .contains_key(&(scope, (*seg).to_owned()));
+    let names_own_port = match scope {
+        Scope::Component(cid) => r.scope_index.ports.contains_key(&(cid, (*seg).to_owned())),
+        Scope::System(_) => false,
+    };
+    if !(names_component || names_own_port) {
+        return false;
+    }
+    r.push_error(
+        DiagnosticCode::E003,
+        format!(
+            "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port` or `./port` for the declaring scope's own port)"
+        ),
+    );
+    true
+}
+
 /// Resolve a single `from` or `to` string into a `ConnectionEndpoint`.
 ///
 /// Supports UNIX-style path notation:
@@ -997,6 +1034,7 @@ fn endpoint_segments<'a>(
 /// - Nested ports: `"comp/subcomp/port"`
 /// - Parent traversal: `"../sibling/port"`
 /// - Absolute root path: `"/system-name/comp/subcomp/port"`
+/// - Own port: `"./port"` (delegation only)
 ///
 /// Returns `None` and emits the appropriate error if resolution fails.
 fn resolve_endpoint(
@@ -1038,32 +1076,8 @@ fn resolve_endpoint(
         return None;
     };
 
-    // A bare single segment (`"api"`) names a component without a port.
-    // Only `"./api"` names the declaring scope's own port (delegation).
-    // Anything else bare falls through to the usual undefined-component
-    // errors below (E002/E011).
-    if !is_absolute && path.len() == 1 {
-        let seg = path[0];
-        let names_component = r
-            .scope_index
-            .components
-            .contains_key(&(scope, seg.to_owned()));
-        let names_own_port = match scope {
-            Scope::Component(cid) => r
-                .scope_index
-                .ports
-                .contains_key(&(cid, seg.to_owned())),
-            Scope::System(_) => false,
-        };
-        if names_component || names_own_port {
-            r.push_error(
-                DiagnosticCode::E003,
-                format!(
-                    "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port` or `./port` for the declaring scope's own port)"
-                ),
-            );
-            return None;
-        }
+    if !is_absolute && reject_bare_segment(r, scope, path, conn_label, field) {
+        return None;
     }
 
     if last == "." || last == ".." {
@@ -1452,13 +1466,31 @@ fn scope_root(model: &Model, scope: Scope) -> Scope {
 /// definition — instance copies share the declaration — while inherited values
 /// are filled on every copy.
 fn resolve_delegation(r: &mut Resolver) {
-    const MAX_HOPS: usize = 1024;
+    let (single_edge, multi_edge) = delegation_edges(r);
+    let candidates = proxy_candidates(&r.model);
+    let explicit_self = explicitly_typed_self_ends(&single_edge, &multi_edge, &candidates);
+    infer_proxy_types(r, &single_edge, &candidates);
+    check_delegation_shapes(r, &single_edge, &multi_edge, &explicit_self, &candidates);
+}
 
-    // In-scope self-endpoint uses per outer port.
-    // An entry exists for every connection declared in the owner's own scope
-    // whose self end names the port (delegation or both-self assembly).
-    // Built for every owner (definitions and instance copies alike) so chain
-    // following works per copy; diagnostics below only fire for definitions.
+/// Ports that omit `protocol` and `role`: proxy candidates.
+fn proxy_candidates(model: &Model) -> HashSet<PortId> {
+    model
+        .ports
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| p.protocol.is_empty() && p.role.is_none())
+        .map(|(i, _)| PortId(i))
+        .collect()
+}
+
+/// In-scope self-endpoint uses per outer port: `outer -> target` for outers
+/// with exactly one self edge, or fan-out membership otherwise. An entry
+/// exists for every connection declared in the owner's own scope whose self
+/// end names the port (delegation or both-self assembly). Built for every
+/// owner (definitions and instance copies alike) so chain following works per
+/// copy; diagnostics only fire for definitions.
+fn delegation_edges(r: &Resolver) -> (HashMap<PortId, PortId>, HashSet<PortId>) {
     let mut self_uses: HashMap<PortId, Vec<(ConnectionId, Option<PortId>)>> = HashMap::new();
     for comp in &r.model.components {
         for cid in &comp.connections {
@@ -1469,13 +1501,8 @@ fn resolve_delegation(r: &mut Resolver) {
             // The non-self end of a delegation edge is its target; a
             // both-self assembly edge carries no target.
             let target = if conn.is_delegation {
-                ends.iter().find_map(|end| {
-                    if end.is_self {
-                        None
-                    } else {
-                        end.port
-                    }
-                })
+                ends.iter()
+                    .find_map(|end| if end.is_self { None } else { end.port })
             } else {
                 None
             };
@@ -1497,7 +1524,7 @@ fn resolve_delegation(r: &mut Resolver) {
     let mut multi_edge: HashSet<PortId> = HashSet::new();
     for (outer, uses) in &self_uses {
         if uses.len() == 1 {
-            if let Some(target) = uses[0].1 {
+            if let Some(target) = uses.first().and_then(|(_, target)| *target) {
                 single_edge.insert(*outer, target);
             } else {
                 // Both-self assembly edge: a self use with no target.
@@ -1507,94 +1534,78 @@ fn resolve_delegation(r: &mut Resolver) {
             multi_edge.insert(*outer);
         }
     }
+    (single_edge, multi_edge)
+}
 
-    // Candidate proxy ports: omitted `protocol` and `role`.
-    let is_candidate = |r: &Resolver, pid: PortId| -> bool {
-        r.model.port(pid).is_some_and(|p| p.protocol.is_empty() && p.role.is_none())
-    };
-
-    // Explicitly typed ports used as a self endpoint (never inferred).
-    let mut explicit_self: HashSet<PortId> = HashSet::new();
-    // Record explicitly typed self endpoints for E022.
-    for pid in single_edge
+/// Explicitly typed ports used as a self endpoint (never inferred).
+fn explicitly_typed_self_ends(
+    single_edge: &HashMap<PortId, PortId>,
+    multi_edge: &HashSet<PortId>,
+    candidates: &HashSet<PortId>,
+) -> HashSet<PortId> {
+    single_edge
         .keys()
         .chain(multi_edge.iter())
         .copied()
-        .collect::<Vec<_>>()
-    {
-        if !is_candidate(r, pid) {
-            explicit_self.insert(pid);
-        }
-    }
+        .filter(|pid| !candidates.contains(pid))
+        .collect()
+}
 
-    // Fill inherited values on every copy (definitions and instances).
-    // Collect first to avoid borrow conflicts.
+/// Fill inherited `protocol`/`role` on every copy (definitions and
+/// instances) by following each single-edge chain to its terminal port.
+/// Chains abort past 1024 hops (`E021`, once per definition).
+fn infer_proxy_types(
+    r: &mut Resolver,
+    single_edge: &HashMap<PortId, PortId>,
+    candidates: &HashSet<PortId>,
+) {
+    const MAX_HOPS: usize = 1024;
+    let mut memo: HashMap<PortId, (Option<PortId>, usize)> = HashMap::new();
     let mut fills: Vec<(PortId, String, Option<ProtocolId>, Option<String>)> = Vec::new();
     let mut inferred: Vec<PortId> = Vec::new();
     let mut depth_errors: Vec<(PortId, String)> = Vec::new();
-    for comp in &r.model.components {
-        for pid in &comp.ports {
-            if !is_candidate(r, *pid) {
-                continue;
+    // Deterministic order so diagnostics read stable across runs.
+    let mut outers: Vec<PortId> = single_edge.keys().copied().collect();
+    outers.sort_by_key(|p| p.0);
+    for outer in outers {
+        if !candidates.contains(&outer) {
+            continue;
+        }
+        // Shape gate: inference only for boundary ports on non-leaf owners.
+        let Some(owner) = r.model.port(outer).map(|p| p.owner) else {
+            continue;
+        };
+        let shape_ok = r.model.component(owner).is_some_and(|c| !c.leaf)
+            && r.model.port(outer).is_some_and(|p| p.external);
+        if !shape_ok {
+            continue;
+        }
+        let (terminal, exceeded) =
+            follow_delegation_chain(single_edge, candidates, &mut memo, outer, MAX_HOPS);
+        let Some(tpid) = terminal else {
+            if exceeded {
+                let owner_label = r
+                    .model
+                    .component(owner)
+                    .map_or_else(String::new, |c| c.label.clone());
+                let port_label = r
+                    .model
+                    .port(outer)
+                    .map_or_else(String::new, |p| p.label.clone());
+                depth_errors.push((outer, format!(
+                    "proxy port `{port_label}` in component `{owner_label}` exceeds the 1024-hop delegation limit"
+                )));
             }
-            let Some(mut current) = single_edge.get(pid).copied() else {
-                continue;
-            };
-            // Shape gate: inference only for boundary ports on non-leaf owners.
-            let Some(owner) = r.model.port(*pid).map(|p| p.owner) else {
-                continue;
-            };
-            let shape_ok = r
-                .model
-                .component(owner)
-                .is_some_and(|c| !c.leaf)
-                && r.model.port(*pid).is_some_and(|p| p.external);
-            if !shape_ok {
-                continue;
-            }
-            let mut hops: usize = 1;
-            let mut terminal: Option<PortId> = None;
-            loop {
-                let Some(port) = r.model.port(current) else {
-                    break;
-                };
-                let _ = port;
-                if is_candidate(r, current) {
-                    if let Some(next) = single_edge.get(&current).copied() {
-                        hops += 1;
-                        if hops > MAX_HOPS {
-                            let owner_label = r
-                                .model
-                                .component(owner)
-                                .map_or(String::new(), |c| c.label.clone());
-                            let port_label = r
-                                .model
-                                .port(*pid)
-                                .map_or(String::new(), |p| p.label.clone());
-                            depth_errors.push((*pid, format!(
-                                "proxy port `{port_label}` in component `{owner_label}` exceeds the 1024-hop delegation limit"
-                            )));
-                            terminal = None;
-                            break;
-                        }
-                        current = next;
-                        continue;
-                    }
-                }
-                terminal = Some(current);
-                break;
-            }
-            if let Some(tpid) = terminal {
-                if let Some(tport) = r.model.port(tpid) {
-                    fills.push((
-                        *pid,
-                        tport.protocol.clone(),
-                        tport.protocol_id,
-                        tport.role.clone(),
-                    ));
-                    inferred.push(*pid);
-                }
-            }
+            continue;
+        };
+        if let Some(tport) = r.model.port(tpid) {
+            fills.push((
+                outer,
+                tport.protocol.clone(),
+                tport.protocol_id,
+                tport.role.clone(),
+            ));
+            inferred.push(outer);
         }
     }
     for (pid, protocol, protocol_id, role) in fills {
@@ -1620,8 +1631,17 @@ fn resolve_delegation(r: &mut Resolver) {
             r.push_error(DiagnosticCode::E021, msg);
         }
     }
+}
 
-    // E022 shape + exclusivity checks, once per definition.
+/// E022 shape + exclusivity checks, once per definition (instance copies
+/// share the declaration).
+fn check_delegation_shapes(
+    r: &mut Resolver,
+    single_edge: &HashMap<PortId, PortId>,
+    multi_edge: &HashSet<PortId>,
+    explicit_self: &HashSet<PortId>,
+    candidates: &HashSet<PortId>,
+) {
     let mut e022: Vec<String> = Vec::new();
     for comp in &r.model.components {
         if comp.kind != ComponentKind::Definition {
@@ -1640,7 +1660,7 @@ fn resolve_delegation(r: &mut Resolver) {
             if !participates {
                 continue;
             }
-            if is_candidate(r, *pid) {
+            if candidates.contains(pid) {
                 if comp.leaf {
                     e022.push(format!(
                         "proxy port `{}` in leaf component `{}` cannot delegate (a leaf has no children)",
@@ -1664,7 +1684,7 @@ fn resolve_delegation(r: &mut Resolver) {
         // meaning (undefined port), so only multi-use (fan-out) reports here;
         // a misplaced edge (declared outside the owner) is already E015.
         for pid in &comp.ports {
-            if !is_candidate(r, *pid) {
+            if !candidates.contains(pid) {
                 continue;
             }
             let in_scope_uses = comp
@@ -1672,11 +1692,16 @@ fn resolve_delegation(r: &mut Resolver) {
                 .iter()
                 .filter_map(|cid| r.model.connection(*cid))
                 .filter(|conn| {
-                    [&conn.from, &conn.to].iter().any(|end| end.is_self && end.port == Some(*pid))
+                    [&conn.from, &conn.to]
+                        .iter()
+                        .any(|end| end.is_self && end.port == Some(*pid))
                 })
                 .count();
             if in_scope_uses > 1 {
-                let port_label = r.model.port(*pid).map_or("".to_owned(), |p| p.label.clone());
+                let port_label = r
+                    .model
+                    .port(*pid)
+                    .map_or_else(String::new, |p| p.label.clone());
                 e022.push(format!(
                     "proxy port `{port_label}` in component `{}` fans out to {in_scope_uses} delegation edges (a proxy port must delegate to exactly one child port)",
                     comp.label
@@ -1699,7 +1724,10 @@ fn resolve_delegation(r: &mut Resolver) {
             let Some(target) = target else {
                 continue;
             };
-            let target_label = r.model.port(target).map_or("".to_owned(), |p| p.label.clone());
+            let target_label = r
+                .model
+                .port(target)
+                .map_or_else(String::new, |p| p.label.clone());
             let others = comp
                 .connections
                 .iter()
@@ -1717,6 +1745,54 @@ fn resolve_delegation(r: &mut Resolver) {
     for msg in e022 {
         r.push_error(DiagnosticCode::E022, msg);
     }
+}
+
+/// Follow a delegation chain from `start` through `single_edge` (outer ->
+/// target for outers with exactly one in-scope self edge). `candidates` holds
+/// the syntactically omitted ports. Returns the terminal port and whether the
+/// `max_hops` cap was exceeded. Suffixes are memoized in `memo` (port ->
+/// (terminal, hops from here)) so deep models stay linear.
+fn follow_delegation_chain(
+    single_edge: &HashMap<PortId, PortId>,
+    candidates: &HashSet<PortId>,
+    memo: &mut HashMap<PortId, (Option<PortId>, usize)>,
+    start: PortId,
+    max_hops: usize,
+) -> (Option<PortId>, bool) {
+    let mut path: Vec<PortId> = vec![start];
+    let mut current = match single_edge.get(&start) {
+        Some(next) => *next,
+        None => return (None, false),
+    };
+    let mut hops: usize = 1;
+    let terminal: Option<PortId> = loop {
+        if let Some(&(memo_term, memo_hops)) = memo.get(&current) {
+            hops = hops.saturating_add(memo_hops);
+            if hops > max_hops {
+                break None;
+            }
+            break memo_term;
+        }
+        if !candidates.contains(&current) {
+            break Some(current);
+        }
+        let Some(&next) = single_edge.get(&current) else {
+            // Dangling intermediate: no edge to follow.
+            break Some(current);
+        };
+        path.push(current);
+        hops = hops.saturating_add(1);
+        if hops > max_hops {
+            break None;
+        }
+        current = next;
+    };
+    let exceeded = terminal.is_none();
+    let total = hops;
+    for (i, pid) in path.iter().enumerate() {
+        memo.insert(*pid, (terminal, total.saturating_sub(i)));
+    }
+    (terminal, exceeded)
 }
 
 /// Resolve one `realized_by` entry written in `declaring`. The last segment is
@@ -1942,6 +2018,7 @@ mod tests {
     use super::*;
     use crate::model::DiagnosticCode;
     use crate::parse::parse_dir;
+    use std::fmt::Write as _;
     use std::path::PathBuf;
 
     fn example_dir(name: &str) -> PathBuf {
@@ -3840,6 +3917,616 @@ system "banking" {
             "connection",
             "a/b",
         );
+    }
+
+    // ── delegation + proxy ports (0006) ──────────────────────────────────────
+
+    /// Weather-service fixture: `weather-service/api` (proxy) delegates to
+    /// `proxy/http`; `user/out` talks to the boundary from outside.
+    fn delegation_fixture() -> &'static str {
+        r#"
+protocol "rest" {
+  leaf = true
+  roles = ["provider", "consumer"]
+  message "req" {
+    field "path" { type = "string" }
+  }
+}
+component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+component "user" {
+  leaf = true
+  port "out" {
+    protocol = "rest"
+    role = "consumer"
+    external = true
+  }
+}
+system "app" {
+  instance "user" { source = "user" }
+  instance "weather-service" { source = "weather-service" }
+  connection "forecast" {
+    from = "user/out"
+    to   = "weather-service/api"
+  }
+}
+"#
+    }
+
+    /// Instance-owned port `label` on the instance sourced from `definition`.
+    fn instance_port<'a>(model: &'a Model, definition: &str, label: &str) -> &'a Port {
+        model
+            .ports
+            .iter()
+            .find(|p| {
+                p.label == label
+                    && model.component(p.owner).is_some_and(|c| {
+                        c.kind == ComponentKind::Instance && c.source.as_deref() == Some(definition)
+                    })
+            })
+            .unwrap_or_else(|| panic!("instance port `{label}` sourced from `{definition}`"))
+    }
+
+    #[test]
+    fn delegation_proxy_port_inherits_type() {
+        let (model, warnings) = resolve_src(delegation_fixture()).expect("resolves");
+        assert!(
+            warnings.iter().all(|d| !d.is_error()),
+            "unexpected errors: {warnings:?}"
+        );
+        let api = instance_port(&model, "weather-service", "api");
+        assert!(api.inferred, "outer port must be marked inferred");
+        assert_eq!(api.protocol, "rest");
+        assert_eq!(api.role.as_deref(), Some("provider"));
+        assert_eq!(
+            api.protocol_id,
+            model
+                .protocols
+                .iter()
+                .position(|p| p.label == "rest")
+                .map(ProtocolId)
+        );
+        let delegations: Vec<&Connection> = model
+            .connections
+            .iter()
+            .filter(|c| c.label == "api-delegation")
+            .collect();
+        assert!(!delegations.is_empty(), "delegation edge must exist");
+        for conn in delegations {
+            assert!(conn.is_delegation, "must be marked delegation");
+            assert!(conn.from.is_self ^ conn.to.is_self, "exactly one self end");
+        }
+        // The outside assembly edge reads the inherited protocol.
+        let forecast = model
+            .connections
+            .iter()
+            .find(|c| c.label == "forecast")
+            .expect("forecast");
+        assert!(!forecast.is_delegation);
+        assert!(
+            model
+                .connection_protocol(ConnectionId(
+                    model
+                        .connections
+                        .iter()
+                        .position(|c| c.label == "forecast")
+                        .expect("idx")
+                ))
+                .is_some(),
+            "forecast must resolve a protocol via the inherited proxy type"
+        );
+    }
+
+    #[test]
+    fn delegation_transitive_nhop_inherits_terminal_type() {
+        let src = r#"
+protocol "rest" {
+  leaf = true
+  roles = ["provider", "consumer"]
+  message "req" {
+    field "path" { type = "string" }
+  }
+}
+component "listener" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "reverse-proxy" {
+  port "http" { external = true }
+  instance "listener" { source = "listener" }
+  connection "http-delegation" {
+    from = "./http"
+    to   = "listener/http"
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+system "app" {
+  instance "weather-service" { source = "weather-service" }
+}
+"#;
+        let (model, _) = resolve_src(src).expect("resolves");
+        let api = instance_port(&model, "weather-service", "api");
+        assert!(api.inferred);
+        assert_eq!(api.protocol, "rest");
+        assert_eq!(api.role.as_deref(), Some("provider"));
+        let mid = instance_port(&model, "reverse-proxy", "http");
+        assert!(mid.inferred);
+        assert_eq!(mid.protocol, "rest");
+    }
+
+    #[test]
+    fn delegation_bare_port_stays_e003() {
+        let src = r#"
+component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "api"
+    to   = "proxy/http"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E003"]);
+        assert!(diags[0].message.contains("./port"), "{}", diags[0].message);
+    }
+
+    #[test]
+    fn delegation_deep_bypass_from_system_stays_legal() {
+        // Naming internals directly from the system (deep bypass) stays legal
+        // for migration; it is an ordinary assembly edge, not delegation.
+        let src2 = r#"
+component "inner" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "outer" {
+  port "api" { external = true }
+  instance "inner" { source = "inner" }
+  connection "ok" {
+    from = "./api"
+    to   = "inner/p"
+  }
+}
+component "sibling" {
+  leaf = true
+  port "q" {
+    role = "consumer"
+    external = true
+  }
+}
+system "s" {
+  instance "outer" { source = "outer" }
+  instance "sibling" { source = "sibling" }
+  connection "clean" {
+    from = "outer/api"
+    to   = "sibling/q"
+  }
+  connection "bypass" {
+    from = "outer/inner/p"
+    to   = "sibling/q"
+  }
+}
+"#;
+        // The clean boundary edge and the deep bypass both resolve: deep
+        // bypass stays legal for migration (no new diagnostic).
+        let (model, _) = resolve_src(src2).expect("delegation plus deep bypass resolves");
+        assert!(
+            model
+                .connections
+                .iter()
+                .any(|c| c.label == "bypass" && !c.is_delegation),
+            "deep bypass is ordinary assembly"
+        );
+    }
+
+    #[test]
+    fn delegation_with_realized_by_is_e019() {
+        let src = r#"
+protocol "rest" { leaf = true }
+component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+  port "aux" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "other" {
+    from = "proxy/aux"
+    to   = "proxy/aux"
+  }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+    realized_by = ["other"]
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E019"]);
+        assert!(
+            diags[0].message.contains("delegation"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_fanout_is_e022() {
+        let src = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "leaf-b" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "a" { source = "leaf-a" }
+  instance "b" { source = "leaf-b" }
+  connection "d1" {
+    from = "./api"
+    to   = "a/p"
+  }
+  connection "d2" {
+    from = "./api"
+    to   = "b/p"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E022"]);
+        assert!(
+            diags[0].message.contains("fans out"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_explicit_outer_is_e022() {
+        let src = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+protocol "rest" { leaf = true }
+component "svc" {
+  port "api" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+  instance "a" { source = "leaf-a" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E022"]);
+        assert!(
+            diags[0]
+                .message
+                .contains("must not be a delegation endpoint"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_internal_proxy_is_e022() {
+        let src = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = false }
+  instance "a" { source = "leaf-a" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E022"]);
+        assert!(
+            diags[0].message.contains("external = true"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_on_leaf_is_e022() {
+        let src = r#"
+component "svc" {
+  leaf = true
+  port "api" { external = true }
+}
+"#;
+        // A leaf cannot delegate (E005 fires for children/connections, E022
+        // for the proxy shape itself) — shape check on a leaf with an edge:
+        let src2 = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "svc" {
+  leaf = true
+  port "api" { external = true }
+  instance "a" { source = "leaf-a" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+}
+"#;
+        let _ = src;
+        let diags = resolve_src(src2).expect_err("leaf delegation must fail");
+        assert!(
+            diags.iter().any(|d| d.code == DiagnosticCode::E022),
+            "expected E022, got: {diags:?}"
+        );
+    }
+
+    #[test]
+    fn delegation_double_driven_target_is_e022() {
+        let src = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "leaf-b" {
+  leaf = true
+  port "q" {
+    role = "consumer"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "a" { source = "leaf-a" }
+  instance "b" { source = "leaf-b" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+  connection "extra" {
+    from = "a/p"
+    to   = "b/q"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E022"]);
+        assert!(
+            diags[0].message.contains("double-driven"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_both_self_ends_is_e022() {
+        let src = r#"
+component "svc" {
+  port "a" { external = true }
+  port "b" { external = true }
+  connection "d" {
+    from = "./a"
+    to   = "./b"
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E022"]);
+        assert!(
+            diags[0].message.contains("exactly one"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    #[test]
+    fn delegation_realized_by_target_is_e017() {
+        let src = r#"
+component "leaf-a" {
+  leaf = true
+  port "p" {
+    role = "provider"
+    external = true
+  }
+}
+component "leaf-b" {
+  leaf = true
+  port "q" {
+    role = "consumer"
+    external = true
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "a" { source = "leaf-a" }
+  connection "d" {
+    from = "./api"
+    to   = "a/p"
+  }
+}
+system "s" {
+  instance "svc" { source = "svc" }
+  instance "b" { source = "leaf-b" }
+  connection "high" {
+    from = "svc/api"
+    to   = "b/q"
+    realized_by = ["svc/d"]
+  }
+}
+"#;
+        let diags = expect_codes(src, &["E017"]);
+        assert!(
+            diags[0].message.contains("delegation"),
+            "{}",
+            diags[0].message
+        );
+    }
+
+    /// Chain follower over hand-built maps: `outer -> target` with `max_hops`.
+    fn follow(
+        edges: &[(usize, usize)],
+        candidates: &[usize],
+        start: usize,
+        max_hops: usize,
+    ) -> (Option<PortId>, bool) {
+        let single_edge: HashMap<PortId, PortId> = edges
+            .iter()
+            .map(|(a, b)| (PortId(*a), PortId(*b)))
+            .collect();
+        let candidates: HashSet<PortId> = candidates.iter().copied().map(PortId).collect();
+        let mut memo = HashMap::new();
+        follow_delegation_chain(
+            &single_edge,
+            &candidates,
+            &mut memo,
+            PortId(start),
+            max_hops,
+        )
+    }
+
+    #[test]
+    fn delegation_chain_follows_to_terminal() {
+        // 0 -> 1 -> 2 -> 3(explicit): terminal is 3 within the cap.
+        let (terminal, exceeded) = follow(&[(0, 1), (1, 2), (2, 3)], &[0, 1, 2], 0, 1024);
+        assert!(!exceeded);
+        assert_eq!(terminal, Some(PortId(3)));
+    }
+
+    #[test]
+    fn delegation_chain_cap_reports_exceeded() {
+        // Same chain with a tiny cap: the walk aborts past 2 hops.
+        let (terminal, exceeded) = follow(&[(0, 1), (1, 2), (2, 3)], &[0, 1, 2], 0, 2);
+        assert!(exceeded);
+        assert_eq!(terminal, None);
+    }
+
+    #[test]
+    fn delegation_chain_dangling_intermediate_is_terminal() {
+        // 1 omits its type but has no edge: the chain ends there.
+        let (terminal, exceeded) = follow(&[(0, 1)], &[0, 1], 0, 1024);
+        assert!(!exceeded);
+        assert_eq!(terminal, Some(PortId(1)));
+    }
+
+    #[test]
+    fn delegation_chain_memoized_suffix_reused() {
+        // Two outers sharing a suffix: the second reuses the first's walk.
+        let single_edge: HashMap<PortId, PortId> = [(0, 2), (1, 2), (2, 3)]
+            .iter()
+            .map(|(a, b)| (PortId(*a), PortId(*b)))
+            .collect();
+        let candidates: HashSet<PortId> = [0, 1, 2].iter().copied().map(PortId).collect();
+        let mut memo = HashMap::new();
+        let (t0, e0) =
+            follow_delegation_chain(&single_edge, &candidates, &mut memo, PortId(0), 1024);
+        assert!(!e0);
+        assert_eq!(t0, Some(PortId(3)));
+        let memo_len = memo.len();
+        let (t1, e1) =
+            follow_delegation_chain(&single_edge, &candidates, &mut memo, PortId(1), 1024);
+        assert!(!e1);
+        assert_eq!(t1, Some(PortId(3)));
+        assert!(
+            memo.len() <= memo_len + 1,
+            "shared suffix must be reused, not rewalked"
+        );
+    }
+
+    #[test]
+    fn delegation_deep_chain_resolves_without_e021() {
+        // 40 nested levels: transitivity at depth, no false cap trip.
+        // (The 1024 cap itself is pinned by the `follow_*` unit tests above.)
+        let depth: usize = 40;
+        let mut src = String::from("protocol \"p\" { leaf = true }\n");
+        for i in 0..depth {
+            let next = i + 1;
+            if i + 1 == depth {
+                let _ = writeln!(
+                    src,
+                    "component \"c{i}\" {{\n  leaf = true\n  port \"p\" {{\n    protocol = \"p\"\n    role = \"provider\"\n    external = true\n  }}\n}}"
+                );
+            } else {
+                let _ = writeln!(
+                    src,
+                    "component \"c{i}\" {{\n  port \"p\" {{ external = true }}\n  instance \"sub\" {{ source = \"c{next}\" }}\n  connection \"d{i}\" {{\n    from = \"./p\"\n    to   = \"sub/p\"\n  }}\n}}"
+                );
+            }
+        }
+        src.push_str("system \"s\" {\n  instance \"top\" { source = \"c0\" }\n}\n");
+        let (model, _) = resolve_src(&src).expect("40-deep chain resolves");
+        let api = instance_port(&model, "c0", "p");
+        assert!(api.inferred);
+        assert_eq!(api.protocol, "p");
     }
 
     #[test]

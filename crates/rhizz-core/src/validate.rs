@@ -1044,6 +1044,93 @@ mod tests {
         );
     }
 
+    // ── W010 on delegation boundaries ─────────────────────────────────────
+
+    /// Weather-service shape (components only); tests add their own system.
+    fn delegation_components() -> &'static str {
+        r#"
+protocol "rest" {
+  leaf = true
+  roles = ["provider", "consumer"]
+  message "req" {
+    field "path" { type = "string" }
+  }
+}
+component "reverse-proxy" {
+  leaf = true
+  port "http" {
+    protocol = "rest"
+    role = "provider"
+    external = true
+  }
+}
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+component "user" {
+  leaf = true
+  port "out" {
+    protocol = "rest"
+    role = "consumer"
+    external = true
+  }
+}
+"#
+    }
+
+    #[test]
+    fn w010_proxy_outer_needs_outside_assembly() {
+        // The delegation self end does not count as use: the boundary dot
+        // still needs an outside edge, while the inner port is satisfied.
+        let src = format!(
+            "{}\nsystem \"app\" {{\n  instance \"weather-service\" {{ source = \"weather-service\" }}\n}}\n",
+            delegation_components()
+        );
+        let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            warnings
+                .iter()
+                .any(|d| d.code == DiagnosticCode::W010 && d.message.contains("`api`")),
+            "outer proxy port without outside assembly must emit W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert!(
+            !warnings
+                .iter()
+                .any(|d| d.code == DiagnosticCode::W010 && d.message.contains("`http`")),
+            "inner delegation target is satisfied from inside, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
+    #[test]
+    fn w010_proxy_chain_fully_wired_is_silent() {
+        let src = format!(
+            "{}\nsystem \"wired\" {{\n  instance \"weather-service\" {{ source = \"weather-service\" }}\n  instance \"user\" {{ source = \"user\" }}\n  connection \"forecast\" {{\n    from = \"user/out\"\n    to   = \"weather-service/api\"\n  }}\n}}\n",
+            delegation_components()
+        );
+        let raw = crate::parse::parse_file(&src, std::path::Path::new("test.hcl")).unwrap();
+        let (model, _) = resolve(raw).unwrap();
+        let warnings = validate(&model);
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W010),
+            "fully wired proxy chain must emit no W010, got: {:?}",
+            warning_codes(&warnings)
+        );
+        assert!(
+            !warnings.iter().any(|d| d.code == DiagnosticCode::W008),
+            "delegation ends are identical, never a mismatch, got: {:?}",
+            warning_codes(&warnings)
+        );
+    }
+
     // ── W018: missing documentation ─────────────────────────────────────
 
     fn docs(keys: &[&str]) -> HashSet<String> {
