@@ -555,12 +555,11 @@ fn serialize_connection(
 /// references rather than being mistaken for a `/system/...` absolute path.
 fn endpoint_path(endpoint: &ConnectionEndpoint, model: &Model) -> String {
     // Self endpoints (`./port`, delegation only) round-trip as written.
-    if endpoint.is_self {
-        if let Some(pid) = endpoint.port
-            && let Some(port) = model.port(pid)
-        {
-            return format!("./{}", port.label);
-        }
+    if endpoint.is_self
+        && let Some(pid) = endpoint.port
+        && let Some(port) = model.port(pid)
+    {
+        return format!("./{}", port.label);
     }
     let mut segments: Vec<String> = Vec::new();
     let mut definition_rooted = false;
