@@ -18,6 +18,40 @@ How to work on this file:
 
 ---
 
+## Task <N> — 0006.0 Proxy/delegation core: `./port` resolution + inference + E021/E022
+
+Implement proposal `0006-proxy-ports.md` §2–§4 in `rhizz-core` (spec text already in `SPEC.md` §2.6/§2.7/§3/§4, `SPEC/models.md`, `SPEC/diagnostics/E021.md|E022.md`).
+
+- Parse `./port` self endpoints (bare `"port"` stays E003); mark connections with exactly one self endpoint as delegation (`is_delegation`), enforce LCA-in-owner (E015), forbid `realized_by` on delegation (E019).
+- Bottom-up iterative inference: proxy ports (omitted `protocol`/`role` + delegation edge) inherit `protocol`/`role` transitively; terminal freeform/undefined → whole chain undefined. Abort past 1024 hops (E021).
+- Enforce E022: D1 (outer in exactly one delegation), D2 (target in no other internal connection), `external = true`, non-leaf owner.
+- W008/W009 skip delegation pairs; outer assembly uses inherited values. W010 satisfied on both ends.
+- Red/green TDD with exact-code assertions (E003/E015/E019/E021/E022, no new warnings); `just test`, `just lint`, `just build` green.
+
+## Task <N> — 0006.1 Delegation scoring, validation follow-through + examples
+
+- Scoring (§5): inferred ports score via inherited protocol/messages; delegation connections score as connections (incomplete only if terminal undefined).
+- Canonical round-trip of `./port` as written; `realized_by` untouched; deep bypass (`weather-service/proxy/http`) stays legal, no new diagnostic.
+- Add/extend a worked example (weather-service `api → proxy/http`, N-hop chain) under `examples/` + book snippet; existing examples unaffected.
+- Red/green TDD (scoring + round-trip + W010/W019 on chains); `just test`, `just lint`, `just build` green.
+
+## Task <N> — 0006.2 Canvas draws delegation (closed/open/half-open)
+
+Implement `SPEC.md` §6.9 in the web app; spec text already merged, no view format change.
+
+- Closed box: delegation omitted (unplaced interior), proxy behaves like a normal port (single external edge).
+- Open box: assembly arrives at boundary dot (outer face), each delegation draws one internal segment boundary → child (no transitive collapsing). Proxy on side `S` → external uses `S` outward, delegation exits `opposite(S)` inward; delegation segments draw without arrowheads.
+- Half-open: segments to unplaced children omitted via draw-only-when-placed; proxy then connects only externally, if visible.
+- `hidden` applies to assembly only; `node { port { side offset } }` pins boundary dots; no collision with `/`-projected names (E004).
+- Geometry unit tests + VRT stories for closed/open/half-open + inward-exit + no-arrow first, then canvas change; e2e for boundary-dot drag/persist. `just test`, `just lint`, `just build` green.
+
+## Task <N> — 0006.3 Inspector, MCP + inventory follow-through for proxy ports
+
+- Inspector/read model surfaces inherited `protocol`/`role` (and terminal source) for proxy ports; delegation edges labeled as delegation (no direction).
+- MCP `connect_components` + `add_connection` accept `./port`; `update_component` port patch documents omission-means-inferred when delegated.
+- Inventory/lint surfaces E021/E022 with the offending port/owner; no new warnings.
+- Red/green TDD (unit + e2e on inspector/MCP paths); `just test`, `just lint`, `just build` green.
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow

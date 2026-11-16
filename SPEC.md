@@ -273,6 +273,26 @@ port "spi" {
 
 **Children:** None
 
+#### Proxy ports (inferred ports)
+
+A `port` on a non-leaf component may omit `protocol` and `role` to declare a
+boundary without declaring its own type. Such a port is a **proxy port**: its
+`protocol` and `role` are inherited from its delegation target (see §2.7),
+transitively along the delegation chain. Only `protocol` and `role` are
+inherited; `external` / `required` stay declared, and scoring, direction
+inference (§6.1), and W008/W009 read the inherited values.
+
+Rules:
+
+- Omission without a delegation edge keeps today's meaning (undefined →
+  incomplete). Omission *with* a delegation edge means "inferred". This makes
+  the feature opt-in and backward compatible.
+- An inferred port MUST have `external = true` and MUST live on a non-leaf
+  component (`leaf = false`). A leaf has no children to delegate to; an
+  internal proxy is a contradiction. Violations are `E022`.
+- Explicit ports (with `protocol`/`role` written out) keep today's assembly
+  semantics untouched.
+
 ---
 
 ### 2.7 `connection` Block
@@ -292,9 +312,38 @@ sibling or outside component.
 
 The `from` and `to` fields accept UNIX-style port path references evaluated relative
 to the block declaring the connection (e.g. `mcu/spi`, `sensors/imu/spi`,
-`../sibling/port`, `/system/comp/port`). Protocol and role
+`../sibling/port`, `/system/comp/port`, `./api` for the declaring scope's own
+port). Protocol and role
 compatibility is validated at resolution time. The connection carries no
 messages and no direction — both are derived from the connected ports.
+
+#### Delegation connections
+
+A **delegation connection** is an ordinary `connection` block declared inside
+the component that owns the outer port, with exactly one endpoint naming the
+owner itself (`./port`) and the other naming a child port. Either `from` or `to`
+may be the self endpoint. Self-to-self and child-to-child edges in the same
+scope are assembly, not delegation.
+
+```hcl
+component "weather-service" {
+  port "api" { external = true }
+  instance "proxy" { source = "reverse-proxy" }
+  connection "api-delegation" {
+    from = "./api"
+    to   = "proxy/http"
+  }
+}
+```
+
+The LCA of a delegation connection is the owner itself, so it MUST be declared
+inside the owning component; placing it elsewhere is `E015`. Delegation is
+local by construction and can never leak to the top-level system. A delegation
+edge MUST NOT declare `realized_by` and MUST NOT appear in anyone's
+`realized_by` (delegation relates port to port within one component, while
+`realized_by` relates connection to connection across levels). Deep bypass from
+outside (e.g. `to = "weather-service/proxy/http"` alongside the clean
+`to = "weather-service/api"`) stays legal.
 
 ```hcl
 component "flight-controller" {
@@ -595,6 +644,7 @@ All references use **name-based or UNIX-style path notation**:
 | `port.protocol`                                   | Top-level `protocol` label (or freeform protocol name if undefined)    |
 | `connection.from` / `connection.to` (`comp/port`) | Component path + named `port` on target component                      |
 | `connection.from` / `connection.to` (nested path) | Relative (`../sibling/port`, `a/b/port`) or absolute port path from scope |
+| `connection.from` / `connection.to` (self port) | `"./port"` names a port on the declaring scope itself (delegation only) |
 
 | `encapsulates` (protocol)                         | Top-level `protocol` labels                                            |
 | `connection.realized_by`                          | `connection` path; the last segment is always a connection label       |
@@ -606,6 +656,20 @@ Projected port names (`<relative-component-path>/<original-port-name>`, see
 specific view for rendering purposes and are never valid as `connection.from` /
 `connection.to` endpoints, `realized_by` entries, or any other system-model
 reference. Only ports declared in `component` blocks exist in the system model.
+Delegation dots use the plain outer label (e.g. `api`), so they can never
+collide with `/`-containing projected names (see `E004`).
+
+### Delegation chain resolution
+
+Delegation chains resolve transitively, bottom-up along the instance tree,
+iteratively (no recursion). Each hop descends one hierarchy level. The chain's
+type is the type of its terminal explicit port; if the terminal port is
+freeform/undefined, the whole chain is undefined. A resolver MUST abort past
+**1024 hops** with `E021`. Each hop strictly increases tree depth, so cycles are
+structurally impossible and the cap never fires on a hand-written model; it
+exists as a termination and stack-safety guard for generated or pathological
+nesting. An unresolvable hop reports today's endpoint diagnostics (E003/E011)
+and leaves the outer port uninferred.
 
 ### `realized_by` reference syntax
 
@@ -685,9 +749,31 @@ unit-level checks) vs. verifying a fully instantiated system:
 ### Connection Placement Validation
 - A connection must be declared within the Lowest Common Ancestor (LCA) enclosing both `from` and `to` endpoints, or an ancestor above it.
 - Declaring a connection inside a child component that references sibling or external components is an error (E011/E015).
+- A delegation connection's LCA is its owner: exactly one endpoint is `./port`
+  on the declaring scope, so it MUST be declared inside the owning component.
 
 ### Connection Endpoint Typing
-- A connection `from`/`to` value names a port path such as `comp/port`. Resolution reports E003 when an endpoint names a component without naming one of its ports. Protocol and role checks (W008/W009), completeness (W019), and direction inference (§6) read the named ports.
+- A connection `from`/`to` value names a port path such as `comp/port`, or a
+  self port `./port` for delegation. Resolution reports E003 when an endpoint names a component without naming one of its ports (a bare `"api"` stays E003; only `"./api"` names the owner's own port). Protocol and role checks (W008/W009), completeness (W019), and direction inference (§6) read the named ports; for inferred proxy ports they read the inherited values.
+
+### Delegation Validation
+
+- **Exclusivity (`E022`):** an inferred port MUST appear as the self-endpoint in
+exactly one connection inside its owner (D1: zero → dangling proxy, more than
+one → fan-out). A delegation target MUST NOT appear in any other connection
+inside the same owner (D2: double-driven). Fan-out with behavior (e.g. a
+load-balancer) MUST be modeled explicitly as a Full Port with declared
+`protocol`/`role` plus ordinary assembly wiring, never via omission.
+- **Shape (`E022`):** inferred ports require `external = true` and a non-leaf
+owner. Delegation inside `leaf = true` is an error.
+- **Depth (`E021`):** chains abort past 1024 hops.
+- **Compatibility:** W008/W009 are skipped *between* delegation ends (identity,
+not complementarity). Assembly edges touching the outer port from outside are
+checked normally using inherited values.
+- **W010:** delegation satisfies both sides: the inner port is wired from inside,
+the outer port from outside via assembly. The chain as a whole is complete.
+- **Realization:** delegation edges MUST NOT declare `realized_by` and MUST NOT
+appear in `realized_by` (see `E019`); they do not participate in W019/W020/W021.
 
 ### Realization Validation
 
@@ -769,7 +855,10 @@ aggregated.
 
 A leaf component with a full_name and no ports scores Complete (1.0) — ports
 are optional detail. A port referencing a `protocol` block inherits that
-protocol's messages for completeness scoring. Top-level protocol messages are
+protocol's messages for completeness scoring. An inferred proxy port scores via
+its inherited protocol/messages exactly as if it had declared them. A delegation
+connection scores as a connection (both ends typed by construction when inference
+succeeds; incomplete only when the terminal port is undefined). Top-level protocol messages are
 scored under the Messages category.
 
 Projected connections and projected ports (see §6) do not affect scoring.
@@ -814,7 +903,10 @@ including via projection (§6.2–§6.8).
 ### 6.1 Connection direction
 
 Connection direction is inferred from the `role` values of the connected ports.
-For projected connections the roles of the original ports apply unchanged:
+For projected connections the roles of the original ports apply unchanged.
+For delegation, §6.1 reads *through* the chain via inherited roles: the
+delegation segment itself is identity and draws without an arrowhead, while the
+external assembly edge keeps its inferred arrow.
 
 | `from` role         | `to` role                | Inferred direction             |
 | ------------------- | ------------------------ | ------------------------------ |
@@ -1076,6 +1168,8 @@ original ports.
 | --------------------- | ----------------------------------------------------------------- |
 | System connection     | Defines actual connectivity                                       |
 | System port           | Defines an actual component interface                             |
+| Proxy port            | Boundary alias for a descendant port (inferred type)              |
+| Delegation connection | Forwards a boundary dot to its inner port (one segment per hop)   |
 | `realized_by`         | Defines implementation relationships between abstraction levels   |
 | Projected connection  | Represents an existing connection at a higher visual level        |
 | Projected port        | Represents an existing descendant port on a visible ancestor      |
@@ -1086,6 +1180,25 @@ connectivity. Views operate on the resolved system graph and derive projected
 connections and ports from it. `realized_by` is unchanged: it relates system
 connections across abstraction levels, while projection relates a single
 system connection to its visual representation in a particular view.
+
+### 6.9 Delegation rendering
+
+Delegation reuses existing blocks — no view format change.
+
+- **Closed box** (only the owner placed): the system-level assembly edge renders
+  normally against the boundary dot. Delegation edges inside are not drawn —
+  they belong to the unplaced interior.
+- **Open box** (owner + children placed): the assembly edge arrives at the
+  boundary dot on its outer face; each delegation edge draws one internal segment
+  from the boundary dot to the child dot. No transitive collapsing: two hops draw
+  two segments. If the proxy dot is on side `S`, external uses `S` outward and
+  delegation exits `opposite(S)` inward.
+- **Half-open** (owner + some interior placed): segments to unplaced children are
+  omitted like any undrawable edge under the existing draw-only-when-placed rule.
+  The proxy dot then connects only to the external component, if visible.
+- `node { port { side offset } }` pins the boundary dot as today. `hidden` on the
+  system connection applies to its assembly rendering only; delegation segments
+  follow the interior visibility of their owner.
 
 ---
 
