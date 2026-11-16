@@ -2304,6 +2304,7 @@ mod tests {
                 "single-file",
                 "social-media",
                 "software-house",
+                "weather-service",
                 "web-app",
             ]
         );
