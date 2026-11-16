@@ -31,6 +31,10 @@ export interface PortData {
   external?: boolean | undefined;
   required?: boolean | undefined;
   tags?: string[];
+  /** Proxy port: `protocol`/`role` are inherited, not declared. */
+  inferred?: boolean | undefined;
+  /** Where an inferred port inherits from: terminal port + owner label. */
+  inferredFrom?: { port: string; owner: string } | undefined;
 }
 
 /** The component fields the inspector reads and the `update_component` op patches.
@@ -145,6 +149,9 @@ export interface RawModelPayload {
     external?: boolean;
     required?: boolean;
     tags?: string[];
+    owner?: number;
+    inferred?: boolean;
+    inferred_from?: number | null;
   }[];
   connections?: {
     label: string;
@@ -215,6 +222,8 @@ export interface ConnectionData {
   complete: boolean;
   /** Root cause of an incomplete chain, when there is one. */
   blocking?: ConnectionRef | undefined;
+  /** Delegation edge (SPEC.md §6.9): draws without an arrowhead. */
+  isDelegation: boolean;
 }
 
 function toRole(role: string | undefined): PortData["role"] {
@@ -268,14 +277,31 @@ export function componentDataByKey(
       leaf: component.leaf ?? false,
       ports: (component.ports ?? []).map((portIndex) => {
         const port = ports[portIndex];
+        const terminal =
+          typeof port?.inferred_from === "number"
+            ? ports[port.inferred_from]
+            : undefined;
+        const terminalOwner =
+          typeof terminal?.owner === "number"
+            ? components[terminal.owner]?.label
+            : undefined;
         return {
-          label: port?.label ?? `#${String(portIndex)}`,
+          label: port?.label ?? `#${portIndex}`,
           full_name: port?.full_name ?? "",
           protocol: port?.protocol ?? "",
           role: toRole(port?.role),
           external: port?.external,
           required: port?.required ?? true,
           tags: port?.tags ?? [],
+          ...(port?.inferred === true ? { inferred: true as const } : {}),
+          ...(terminal !== undefined && terminal.label !== undefined
+            ? {
+                inferredFrom: {
+                  port: terminal.label,
+                  owner: terminalOwner ?? `#${terminal.owner ?? "?"}`,
+                },
+              }
+            : {}),
         };
       }),
     });
@@ -325,6 +351,7 @@ export function connectionDataList(
       level: connection.level,
       from_port: connection.from_port,
       to_port: connection.to_port,
+      isDelegation: connection.is_delegation === true,
       protocol: connection.protocol,
       realized_by: connection.realized_by.map((target) => ({
         scopePath: target.scope_path,

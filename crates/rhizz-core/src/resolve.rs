@@ -703,6 +703,7 @@ fn process_ports(
             // Proxy candidacy (omitted `protocol`/`role`) is decided in
             // `resolve_delegation`, once every connection is registered.
             inferred: false,
+            inferred_from: None,
         });
         port_ids.push(pid);
     }
@@ -1561,7 +1562,13 @@ fn infer_proxy_types(
 ) {
     const MAX_HOPS: usize = 1024;
     let mut memo: HashMap<PortId, (Option<PortId>, usize)> = HashMap::new();
-    let mut fills: Vec<(PortId, String, Option<ProtocolId>, Option<String>)> = Vec::new();
+    let mut fills: Vec<(
+        PortId,
+        String,
+        Option<ProtocolId>,
+        Option<String>,
+        PortId,
+    )> = Vec::new();
     let mut inferred: Vec<PortId> = Vec::new();
     let mut depth_errors: Vec<(PortId, String)> = Vec::new();
     // Deterministic order so diagnostics read stable across runs.
@@ -1604,15 +1611,17 @@ fn infer_proxy_types(
                 tport.protocol.clone(),
                 tport.protocol_id,
                 tport.role.clone(),
+                tpid,
             ));
             inferred.push(outer);
         }
     }
-    for (pid, protocol, protocol_id, role) in fills {
+    for (pid, protocol, protocol_id, role, terminal) in fills {
         if let Some(port) = r.model.ports.get_mut(pid.0) {
             port.protocol = protocol;
             port.protocol_id = protocol_id;
             port.role = role;
+            port.inferred_from = Some(terminal);
         }
     }
     for pid in inferred {
@@ -3992,6 +4001,15 @@ system "app" {
         assert!(api.inferred, "outer port must be marked inferred");
         assert_eq!(api.protocol, "rest");
         assert_eq!(api.role.as_deref(), Some("provider"));
+        // Terminal provenance: the type comes from the inner listener port.
+        let terminal = api.inferred_from.and_then(|pid| model.port(pid));
+        let terminal = terminal.expect("inferred port names its terminal");
+        assert_eq!(terminal.label, "http");
+        assert_eq!(
+            model.component(terminal.owner).map(|c| c.label.as_str()),
+            Some("proxy"),
+            "terminal is the proxy copy at the end of the 1-hop chain"
+        );
         assert_eq!(
             api.protocol_id,
             model

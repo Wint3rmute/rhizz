@@ -416,6 +416,10 @@ pub struct Port {
     /// `protocol`/`role`/`protocol_id` are filled from the delegation target.
     #[serde(default)]
     pub inferred: bool,
+    /// Terminal port of the delegation chain the type was inherited from
+    /// (`None` unless `inferred`). Display-only provenance for inspectors.
+    #[serde(default)]
+    pub inferred_from: Option<PortId>,
 }
 
 /// One endpoint of a connection — a component and an optional port on that component.
