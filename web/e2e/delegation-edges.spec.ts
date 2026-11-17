@@ -205,10 +205,7 @@ test("the new-connection dialog offers a delegation variant for the scope itself
     .first()
     .boundingBox();
   if (!proxyBox) throw new Error("no box for proxy");
-  await page.mouse.move(
-    start.x + start.width / 2,
-    start.y + start.height / 2,
-  );
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
   await page.keyboard.down("Alt");
   await page.mouse.down();
   await page.mouse.move(
@@ -225,16 +222,12 @@ test("the new-connection dialog offers a delegation variant for the scope itself
     /delegates inward/i,
   );
   // The outer end inherits: no role field, existing port named.
+  await expect(dialog.getByTestId("new-connection-from-role")).toHaveCount(0);
   await expect(
-    dialog.getByTestId("new-connection-from-role")
-  ).toHaveCount(0);
-  await expect(
-    dialog.getByTestId("new-connection-existing-port")
+    dialog.getByTestId("new-connection-existing-port"),
   ).toContainText("api");
   // The inner end still takes a role.
-  await expect(
-    dialog.getByTestId("new-connection-to-role")
-  ).toBeVisible();
+  await expect(dialog.getByTestId("new-connection-to-role")).toBeVisible();
 
   // Create with the defaults: blank protocol, blank role.
   await page.keyboard.press("Enter");

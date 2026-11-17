@@ -231,9 +231,7 @@ export const DelegationVariant: Story = {
       modal.getByTestId("new-connection-delegation"),
     ).toHaveTextContent(/delegates inward/i);
     // The outer end inherits: no protocol or role fields of its own.
-    await expect(
-      modal.queryByTestId("new-connection-from-role"),
-    ).toBeNull();
+    await expect(modal.queryByTestId("new-connection-from-role")).toBeNull();
     await expect(
       modal.getAllByText(/inherits its type/i).length,
     ).toBeGreaterThan(0);
@@ -278,9 +276,7 @@ export const DelegationNewOuter: Story = {
     await expect(
       modal.getByTestId("new-connection-delegation"),
     ).toBeInTheDocument();
-    await expect(
-      modal.queryByTestId("new-connection-from-role"),
-    ).toBeNull();
+    await expect(modal.queryByTestId("new-connection-from-role")).toBeNull();
     const external = modal.getByTestId("new-connection-from-external");
     await expect(external).toBeChecked();
     await expect(external).toBeDisabled();

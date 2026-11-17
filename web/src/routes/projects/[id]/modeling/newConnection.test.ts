@@ -473,10 +473,12 @@ describe("protocolUsage", () => {
 });
 
 describe("delegation", () => {
-  const delegationRequest = (overrides: {
-    from?: Partial<ReturnType<typeof end>>;
-    to?: Partial<ReturnType<typeof end>>;
-  } = {}) =>
+  const delegationRequest = (
+    overrides: {
+      from?: Partial<ReturnType<typeof end>>;
+      to?: Partial<ReturnType<typeof end>>;
+    } = {},
+  ) =>
     request({
       scopePath: "demo/svc",
       from: end("svc", { component: "", ...overrides.from }),
@@ -519,7 +521,9 @@ describe("delegation", () => {
   describe("presetDelegationRoles", () => {
     it("gives the inner port the first role and leaves the outer blank", () => {
       expect(
-        presetDelegationRoles(protocol("spi", { roles: ["provider", "consumer"] })),
+        presetDelegationRoles(
+          protocol("spi", { roles: ["provider", "consumer"] }),
+        ),
       ).toEqual({ inner: "provider" });
       expect(presetDelegationRoles(protocol("bare"))).toEqual({ inner: "" });
       expect(presetDelegationRoles(undefined)).toEqual({ inner: "" });

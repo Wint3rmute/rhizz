@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — 0006.3 Inspector, MCP + follow-through, "delegates inward" dialog
+
+- **Read model:** `PortData` gains `inferred` + `inferredFrom` (terminal port + owner label, resolved from the raw payload) and `explicit`; `ConnectionData` gains `isDelegation` (WASM getter landed in 0006.2). Unit-tested in `modelView.test.ts`.
+- **Core:** `Port.inferred_from` tracks the terminal port; `update_component` preserves omission on delegated outers (a full-array inspector/MCP write no longer cements inherited values into an E022 refusal). Tested.
+- **Inspector:** `ConnectionInspector` shows a Delegation badge + note instead of the add-realization picker; `NodeInspector` shows a proxy badge with terminal source and locks protocol/role fields on inferred ports; Inventory table shows the proxy badge with tooltip. Stories + e2e.
+- **MCP:** `connect_components`/`add_connection` docs describe `./port` self ends and omission-means-inferred; `update_component` docs note the preservation; RPC tests (build a proxy via `connect_components`, read back `./api` + omission, clean `check_project`; `add_connection` with `./api`).
+- **"Delegates inward" dialog variant:** when exactly one end is the scope's own component, the dialog shows a delegation banner, locks the protocol picker to the inner port (or untyped), drops the outer protocol/role fields for an inherits note, and forces `external` on new outer ports; both-empty and explicit-outer are refused with E022 wording. Unit-tested (`newConnection.test.ts`), story-tested (variant + new-outer), e2e-tested end to end.
+- Pre-existing nested side-handle drop infinite-loop found while testing (reproduces on clean main; dot-drag path used instead). Filed as follow-up, out of scope here.
+- `just test` / `just lint` / `just build` green; VRT baselines accepted (dialog ×2, NodeInspector proxy).
+- Branch: `feat/proxy-delegation-followthrough`.
+
+---
+
 ## Task <N> — 0006.2 Canvas draws delegation (closed/open/half-open)
 
 Implements `SPEC.md` §6.9 in the web app (spec text already merged, no view format change).

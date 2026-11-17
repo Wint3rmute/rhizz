@@ -159,9 +159,9 @@ export function isDelegationRequest(request: NewConnectionRequest): boolean {
  * Roles for a delegation draft: the outer port always inherits (stays blank)
  * while the inner port takes the protocol's first role, if any.
  */
-export function presetDelegationRoles(
-  protocol: ProtocolData | undefined,
-): { inner: string } {
+export function presetDelegationRoles(protocol: ProtocolData | undefined): {
+  inner: string;
+} {
   const [first] = protocol?.roles ?? [];
   return { inner: first ?? "" };
 }
@@ -280,10 +280,7 @@ export function validateDraft(
   }
 
   const delegation = delegationOuterSide(request);
-  if (
-    request.from.component === "" &&
-    request.to.component === ""
-  ) {
+  if (request.from.component === "" && request.to.component === "") {
     problems.form =
       "A delegation needs a child component to forward to — pick two different components.";
   } else if (delegation !== null) {
@@ -298,8 +295,7 @@ export function validateDraft(
         problems.form = `Port “${outer.existingPort}” must be external to delegate.`;
       }
     } else if (!outerDraft.external) {
-      problems.form =
-        "The boundary port must stay external to delegate.";
+      problems.form = "The boundary port must stay external to delegate.";
     }
   }
 

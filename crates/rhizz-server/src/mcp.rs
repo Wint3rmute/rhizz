@@ -3323,7 +3323,10 @@ mod tests {
         )
         .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
-        let diagnostics = result_value(&payload)["diagnostics"].as_array().unwrap().clone();
+        let diagnostics = result_value(&payload)["diagnostics"]
+            .as_array()
+            .unwrap()
+            .clone();
         assert!(
             diagnostics.iter().all(|d| d["severity"] != json!("error")),
             "no errors expected, got: {diagnostics:?}"

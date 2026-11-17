@@ -279,8 +279,7 @@ export function componentDataByKey(
       leaf: component.leaf ?? false,
       ports: (component.ports ?? []).map((portIndex) => {
         const port = ports[portIndex];
-        const explicit =
-          (port?.protocol ?? "") !== "" || port?.role != null;
+        const explicit = (port?.protocol ?? "") !== "" || port?.role != null;
         const terminal =
           typeof port?.inferred_from === "number"
             ? ports[port.inferred_from]

@@ -416,13 +416,11 @@
             data-testid="new-connection-delegation"
           >
             <span>
-              Delegates inward — <span class="font-mono"
-                >./{outerPortName}</span
+              Delegates inward — <span class="font-mono">./{outerPortName}</span
               >
-              forwards to <span class="font-mono"
-                >{innerEnd.label}/{innerPortName}</span
-              >. The outer port inherits its type; leave protocol and role
-              blank.
+              forwards to
+              <span class="font-mono">{innerEnd.label}/{innerPortName}</span>.
+              The outer port inherits its type; leave protocol and role blank.
             </span>
           </div>
         {/if}
@@ -605,48 +603,48 @@
                     Inherits its type from the inner port — no role to pick.
                   </p>
                 {:else}
-                <div class="form-control">
-                  <label class="label py-1" for="new-conn-{column.side}-role">
-                    <span class="label-text text-xs text-base-content/70"
-                      >Role</span
-                    >
-                  </label>
-                  {#if activeProtocol !== undefined && activeProtocol.roles.length > 0}
-                    <select
-                      id="new-conn-{column.side}-role"
-                      bind:value={column.port.role}
-                      class="select select-sm select-bordered w-full"
-                      data-testid="new-connection-{column.side}-role"
-                    >
-                      {#each activeProtocol.roles as role (role)}
-                        <option value={role}>{role}</option>
-                      {/each}
-                    </select>
-                  {:else if protocolText !== ""}
-                    <select
-                      id="new-conn-{column.side}-role"
-                      class="select select-sm select-bordered w-full"
-                      data-testid="new-connection-{column.side}-role"
-                      disabled
-                    >
-                      <option>No roles defined</option>
-                    </select>
-                  {:else}
-                    <input
-                      id="new-conn-{column.side}-role"
-                      type="text"
-                      bind:value={column.port.role}
-                      placeholder="optional, e.g. provider"
-                      class="input input-sm input-bordered w-full"
-                      data-testid="new-connection-{column.side}-role"
-                    />
-                  {/if}
-                  {#if column.roleProblem !== undefined}
-                    <p class="text-xs text-error mt-1">
-                      {column.roleProblem}
-                    </p>
-                  {/if}
-                </div>
+                  <div class="form-control">
+                    <label class="label py-1" for="new-conn-{column.side}-role">
+                      <span class="label-text text-xs text-base-content/70"
+                        >Role</span
+                      >
+                    </label>
+                    {#if activeProtocol !== undefined && activeProtocol.roles.length > 0}
+                      <select
+                        id="new-conn-{column.side}-role"
+                        bind:value={column.port.role}
+                        class="select select-sm select-bordered w-full"
+                        data-testid="new-connection-{column.side}-role"
+                      >
+                        {#each activeProtocol.roles as role (role)}
+                          <option value={role}>{role}</option>
+                        {/each}
+                      </select>
+                    {:else if protocolText !== ""}
+                      <select
+                        id="new-conn-{column.side}-role"
+                        class="select select-sm select-bordered w-full"
+                        data-testid="new-connection-{column.side}-role"
+                        disabled
+                      >
+                        <option>No roles defined</option>
+                      </select>
+                    {:else}
+                      <input
+                        id="new-conn-{column.side}-role"
+                        type="text"
+                        bind:value={column.port.role}
+                        placeholder="optional, e.g. provider"
+                        class="input input-sm input-bordered w-full"
+                        data-testid="new-connection-{column.side}-role"
+                      />
+                    {/if}
+                    {#if column.roleProblem !== undefined}
+                      <p class="text-xs text-error mt-1">
+                        {column.roleProblem}
+                      </p>
+                    {/if}
+                  </div>
                 {/if}
 
                 <div class="flex flex-col">
@@ -680,10 +678,7 @@
       </div>
 
       {#if validation?.problems.form !== undefined}
-        <p
-          class="text-xs text-error"
-          data-testid="new-connection-problem"
-        >
+        <p class="text-xs text-error" data-testid="new-connection-problem">
           {validation.problems.form}
         </p>
       {/if}

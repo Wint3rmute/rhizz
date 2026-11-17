@@ -1574,17 +1574,14 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
             .ports
             .iter()
             .filter(|p| {
-                p.inner.protocol.as_deref().is_none_or(str::is_empty)
-                    && p.inner.role.is_none()
+                p.inner.protocol.as_deref().is_none_or(str::is_empty) && p.inner.role.is_none()
             })
             .map(|p| p.label.as_str())
             .collect();
         let mut raw_ports = Vec::with_capacity(ports.len());
         for port in ports {
             let mut raw = port_from_json(port)?;
-            if delegated.contains(raw.label.as_str())
-                && omitted.contains(raw.label.as_str())
-            {
+            if delegated.contains(raw.label.as_str()) && omitted.contains(raw.label.as_str()) {
                 raw.inner.protocol = None;
                 raw.inner.role = None;
             }
@@ -2598,8 +2595,8 @@ component "svc" {
             "proxy port must stay omitted, got:\n{hcl}"
         );
         // And the model still resolves (no E022).
-        let raw = crate::parse::parse_file(&hcl, std::path::Path::new("system.hcl"))
-            .expect("reparse");
+        let raw =
+            crate::parse::parse_file(&hcl, std::path::Path::new("system.hcl")).expect("reparse");
         assert!(
             crate::resolve::resolve(raw).is_ok(),
             "re-resolved model must compile"

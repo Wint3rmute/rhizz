@@ -330,8 +330,7 @@
                 onchange={(e) =>
                   handleUpdatePort(portIdx, {
                     label: (e.target as HTMLInputElement).value.trim(),
-                  })
-                }
+                  })}
                 class="input input-xs input-bordered font-semibold flex-1"
                 placeholder="Port name"
               />
@@ -379,8 +378,7 @@
                   onchange={(e) =>
                     handleUpdatePort(portIdx, {
                       protocol: (e.target as HTMLInputElement).value.trim(),
-                    })
-                  }
+                    })}
                   class="input input-xs input-bordered"
                   placeholder="e.g. spi, http"
                 />
@@ -400,11 +398,8 @@
                   onchange={(e) =>
                     handleUpdatePort(portIdx, {
                       role: (e.target as HTMLSelectElement).value as
-                        | "provider"
-                        | "consumer"
-                        | "peer",
-                    })
-                  }
+                        "provider" | "consumer" | "peer",
+                    })}
                   class="select select-xs select-bordered"
                 >
                   <option value="provider">Provider</option>
