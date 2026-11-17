@@ -4,6 +4,17 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Generic MCP file tools: `create_file` + `edit_file` (replacing `create_doc`/`edit_documentation`)
+
+- **Storage (`storage.rs`):** removed `create_doc`/`edit_documentation` + `EditDocError`/`DOC_EDIT_LOCK`; new `create_file`/`edit_file` with `FileWriteResult` (`version` + `totalLines` + `warnings`) and `FileWriteError::{Unknown,Locked,Io,Refused,Invalid}`. Any confined path writable (same `resolve_confined_path` as `read_file`), parents created, atomic writes, single `FILE_WRITE_LOCK` CAS (+ `MODEL_WRITE_LOCK` for model HCL so creates/edits serialize with `overwrite_model`/`mutate_project`, which now also holds it). Validation isolated per file: model HCL → model-only `compile`, zero errors; view HCL → `parse_views` + `validate_view` against current model (`E016`/`E006`/parse `E000` refuse, warnings pass through); other paths skip validation.
+- **MCP (`mcp.rs`):** removed `create_doc`/`edit_documentation` handlers, params, and all tests; new `create_file(project, path, content, version?)` (Zed `write_file` shape) + `edit_file(project, path, edits:[{old_text,new_text}], version)` (Zed `edit_file` shape, sequential, exact-once per edit). Success returns `version`/`totalLines`/`warnings`; `Invalid` maps to `mutation_refused` (exact diagnostic codes), `Refused`/`Locked` to tool errors. `overwrite_model` + all `ModelOp` tools untouched.
+- **Proposal:** `0003` step 3 marked superseded with generic-tools design note.
+- **TDD (red→green):** create→extend chained on `version`; stale/missing `version` refused byte-identical; zero/two/empty `old_text` refused byte-identical; sequential multi-edit application; concurrent same-version edits and overwrites — exactly one applies; breaking `system.hcl` edit/overwrite refused with `E014` byte-identical; invalid view edit refused with `E006` byte-identical, valid view edit applies; `check_project` clean after valid writes.
+- `just test` green (cargo + vitest + 174 e2e), `just lint` green, `just build` green; `just format` clean; no UI change so no new stories/e2e.
+- Branch: `feat/mcp-file-tools`.
+
+---
+
 ## Task <N> — Fix side-handle drop onto a nested child (delegation dialog + close crash)
 
 - **Finding:** the reported `effect_update_depth_exceeded` loop does not reproduce on this branch — a parent top/left/right side-handle drop onto its placed nested child opens the delegation dialog with no pageerror (likely fixed as a side effect of the 0006.x dialog `untrack` hardening). The bottom handle is a hit-test miss, not a loop: the parent's existing `api` boundary dot sits on that side and wins the drop, starting a port move instead of a connection.
