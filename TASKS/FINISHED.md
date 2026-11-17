@@ -4,6 +4,17 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Fix side-handle drop onto a nested child (delegation dialog + close crash)
+
+- **Finding:** the reported `effect_update_depth_exceeded` loop does not reproduce on this branch — a parent top/left/right side-handle drop onto its placed nested child opens the delegation dialog with no pageerror (likely fixed as a side effect of the 0006.x dialog `untrack` hardening). The bottom handle is a hit-test miss, not a loop: the parent's existing `api` boundary dot sits on that side and wins the drop, starting a port move instead of a connection.
+- **Real crash fixed:** closing the New-connection dialog (e.g. Escape after a side-handle drop) threw `TypeError: Cannot read properties of null (reading 'closest')` — the focus `$effect` guarded only `undefined`, but `bind:this` yields `null` after unmount; the `requestAnimationFrame` callback also ran on a detached input. Both are now guarded (`input == null` entry guard, `dialog === null` frame guard).
+- **Hardening:** the draft-init `$effect` now derives everything from the request inside a single `untrack` (the inner-end `request.to`/`request.from` read previously subscribed outside it) — same self-invalidation shape as the 0006.3 modal bug.
+- **Regression e2e:** new `delegation-edges.spec.ts` test "a parent side-handle drop onto its nested child delegates inward" (top handle, nodes spread to avoid overlap): opens the delegation dialog, asserts the inward-delegation badge and no outer role field, closes via Escape, and asserts no `effect_update_depth`/`closest` pageerrors or console errors. Verified red (fails on `closest` without the fix) → green.
+- `just test` green (cargo + vitest + 174 e2e), `just lint` green, `just format` clean.
+- Branch: `docs/nested-drop-loop-task`.
+
+---
+
 ## Task <N> — 0006.3 Inspector, MCP + follow-through, "delegates inward" dialog
 
 - **Read model:** `PortData` gains `inferred` + `inferredFrom` (terminal port + owner label, resolved from the raw payload) and `explicit`; `ConnectionData` gains `isDelegation` (WASM getter landed in 0006.2). Unit-tested in `modelView.test.ts`.
