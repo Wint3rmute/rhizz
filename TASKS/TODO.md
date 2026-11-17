@@ -18,55 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Generic MCP file tools: `create_file` + `edit_file` (replacing `create_doc`/`edit_documentation`)
-
-MCP can read every file but can only write `system.hcl` (via `ModelOp` tools +
-`overwrite_model`) and `docs/**.md` (via `create_doc`/`edit_documentation`).
-`views/**.hcl`, `README.md`, and everything else are unreachable via MCP —
-verified live: placing nodes in `drone-overview.hcl` required a raw disk edit
-bypassing the server pipeline. Replace the two docs-only tools with generic
-file tools shaped after Zed's own agent file tools (`write_file` whole-file +
-`edit_file` granular `edits` array), generalized with the server's lock + CAS
-+ validation discipline.
-
-Design decisions (locked):
-
-1. **Scope — everything, all paths**, with a model check: edits that break the
-   model or the views are rejected and leave the file untouched.
-2. **Validation on write — yes:** `.hcl` model file → full compile, zero
-   errors required (same gate as `overwrite_model`); `views/**.hcl` →
-   `parse_views` + resolution, error-severity diagnostics (`E016`/`E006`,
-   parse errors) refuse the write, warnings pass through and are returned;
-   all other paths → no validation (as docs today).
-3. **Shape — Zed patterns:** `create_file(project, path, content, version?)`
-   creates (parents included) or overwrites whole, mirroring Zed `write_file`;
-   `edit_file(project, path, edits: [{old_text, new_text}], version)` applies
-   granular edits sequentially, mirroring Zed `edit_file`. `old_text` must
-   match exactly once per edit (deterministic over the wire — no fuzzy
-   matching); zero/several matches refuse with the file untouched.
-4. **CAS mandatory:** `version` (content hash from `read_file`) required on
-   every overwrite/edit of an existing file; stale/missing refused with
-   re-read message. Only a brand-new file may omit it (ignored if passed).
-
-Definition of done:
-
-- `create_file` + `edit_file` ship on `/mcp` with AI-lock, project confinement
-  (relative paths, hidden/symlink/traversal excluded — same as `read_file`),
-  atomic writes, and `version` + `totalLines` in every success result.
-- `create_doc` + `edit_documentation` removed: handlers, params, tests, and
-  all references in code, docs, and proposals (proposal `0003` step 3 marked
-  superseded). `overwrite_model` and all `ModelOp` tools stay untouched.
-- Red/green TDD through `/mcp` RPC, exact-code assertions: create then extend
-  chained on `version`; overwrite/edit with stale or missing `version`
-  refused byte-identical; zero/two-match `old_text` refused; concurrent
-  same-version writes cannot both apply; breaking `system.hcl` edit refused
-  byte-identical; invalid view edit (e.g. unknown `system`) refused;
-  `check_project` clean after valid writes.
-- `just test`, `just lint`, `just build` green; no UI change so no new
-  stories/e2e needed.
-
----
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow

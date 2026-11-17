@@ -1231,6 +1231,10 @@ pub fn mutate_project(
         }
     }
 
+    let _guard = MODEL_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
     let mut primary: Option<(PathBuf, String)> = None;
     for candidate in ["system.hcl", "main.hcl"] {
         let Ok(absolute) = resolve_confined_path(&root, Path::new(candidate)) else {
@@ -1320,7 +1324,7 @@ pub enum WriteProjectError {
 /// Serializes per-project writes within this process, so two writes sent
 /// with the same base version cannot both pass the check. The project lock
 /// (proposal 0004) is the outer admission check; this is the inner
-/// compare-and-swap, mirroring [`MODEL_WRITE_LOCK`] and [`DOC_EDIT_LOCK`].
+/// compare-and-swap, mirroring [`MODEL_WRITE_LOCK`] and [`FILE_WRITE_LOCK`].
 static PROJECT_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Replaces one project's directory tree with `files`, creating the project
@@ -1506,7 +1510,7 @@ fn hash_dir_version(data_dir: &Path, project_id: &str) -> Result<String, WritePr
 /// Serializes whole-model overwrites within this process, so two overwrites
 /// sent with the same version cannot both pass the version check. This is
 /// the inner compare-and-swap; the project lock (proposal 0004) is the
-/// outer admission check, mirroring [`DOC_EDIT_LOCK`] for docs.
+/// outer admission check, mirroring [`FILE_WRITE_LOCK`] for generic files.
 static MODEL_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// The outcome of an `overwrite_model` call.
@@ -1662,26 +1666,38 @@ pub fn overwrite_model(
     })
 }
 
-/// Serializes `edit_documentation` read-check-write sequences within this
-/// process, so two edits sent with the same version cannot both pass the
+/// Serializes generic file read-check-write sequences within this
+/// process, so two writes sent with the same version cannot both pass the
 /// version check. This is the inner compare-and-swap; the project lock
 /// (proposal 0004) is the outer admission check.
-static DOC_EDIT_LOCK: Mutex<()> = Mutex::new(());
+static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
-/// The outcome of an `edit_documentation` call.
-#[derive(Debug)]
-pub struct EditDocResult {
-    /// Content-hash version of the file after the edit, for chaining
-    /// another edit without re-reading.
-    pub version: String,
-    /// Total line count of the file after the edit.
-    pub total_lines: usize,
+/// One granular text replacement inside an `edit_file` call.
+#[derive(Debug, Clone)]
+pub struct FileEdit {
+    /// The exact span to replace; must occur exactly once.
+    pub old_text: String,
+    /// The replacement text.
+    pub new_text: String,
 }
 
-/// Why a documentation edit was not persisted. Every variant leaves the file
+/// The outcome of a `create_file` / `edit_file` call.
+#[derive(Debug)]
+pub struct FileWriteResult {
+    /// Content-hash version of the file after the write, for chaining
+    /// another write without re-reading.
+    pub version: String,
+    /// Total line count of the file after the write.
+    pub total_lines: usize,
+    /// Non-blocking validation warnings accompanying the new content
+    /// (model/view files only; empty for every other path).
+    pub warnings: Vec<rhizz_core::Diagnostic>,
+}
+
+/// Why a generic file write was not persisted. Every variant leaves the file
 /// untouched.
 #[derive(Debug, Error)]
-pub enum EditDocError {
+pub enum FileWriteError {
     /// No project with this id.
     #[error("unknown project `{0}`")]
     Unknown(String),
@@ -1694,239 +1710,416 @@ pub enum EditDocError {
     /// The filesystem refused to read or write.
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    /// The edit was refused: bad path, match failure, or a stale version.
+    /// The write was refused: bad path, match failure, or a stale version.
+    /// Carries a human-readable message telling the client to re-read.
     #[error("{0}")]
     Refused(String),
+    /// The new content does not resolve; carries the resolver diagnostics.
+    #[error("refused")]
+    Invalid(Vec<rhizz_core::Diagnostic>),
 }
 
-/// Replaces one exact span of text in an existing Markdown doc under
-/// `docs/`.
+/// Whether `filename` (project-relative, `/`-separated) names a view source.
+fn is_view_filename(filename: &str) -> bool {
+    rhizz_core::is_view_source(filename)
+}
+
+/// Whether `filename` names a model HCL file: any `.hcl` that is not a view.
+fn is_model_hcl_filename(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .is_some_and(|ext| ext == "hcl")
+        && !is_view_filename(filename)
+}
+
+/// Whether `filename` needs compile validation: any `.hcl` file (model or
+/// view). Everything else writes through with no validation.
+fn needs_validation(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .is_some_and(|ext| ext == "hcl")
+}
+
+/// Validates `new_content` for `relative` (project-relative, `/`-separated)
+/// against the project's current sources with the file replaced/added.
+///
+/// Model HCL goes through a model-only `compile` (no views) with the proposed
+/// content substituted: any error refuses the write, warnings pass through.
+/// View HCL goes through `parse_views` + `validate_view` against the current
+/// model: `E016`/`E006`/parse `E000` errors refuse, warnings pass through.
+/// Every other path skips validation. Isolating the edited file (rather than
+/// demanding a fully clean project) keeps single-file tools usable: a valid
+/// fix applies even when an unrelated view is still broken, while a breaking
+/// edit is still refused byte-identical.
+fn validate_proposed_content(
+    sources: &[rhizz_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizz_core::Diagnostic>, Vec<rhizz_core::Diagnostic>> {
+    if !needs_validation(relative) {
+        return Ok(Vec::new());
+    }
+    if is_view_filename(relative) {
+        return validate_proposed_view(sources, relative, new_content);
+    }
+    validate_proposed_model(sources, relative, new_content)
+}
+
+/// Validates a proposed model HCL file: model-only compile, zero errors.
+fn validate_proposed_model(
+    sources: &[rhizz_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizz_core::Diagnostic>, Vec<rhizz_core::Diagnostic>> {
+    let mut proposed: Vec<rhizz_core::Source> = Vec::new();
+    let mut replaced = false;
+    for source in sources {
+        if rhizz_core::is_view_source(&source.filename) {
+            continue;
+        }
+        if source.filename == relative {
+            proposed.push(rhizz_core::Source {
+                filename: source.filename.clone(),
+                content: new_content.to_owned(),
+            });
+            replaced = true;
+        } else {
+            proposed.push(source.clone());
+        }
+    }
+    if !replaced {
+        proposed.push(rhizz_core::Source {
+            filename: relative.to_owned(),
+            content: new_content.to_owned(),
+        });
+    }
+    let result = rhizz_core::compile(&proposed);
+    if result
+        .diagnostics
+        .iter()
+        .any(rhizz_core::Diagnostic::is_error)
+    {
+        return Err(result.diagnostics);
+    }
+    Ok(result
+        .diagnostics
+        .into_iter()
+        .filter(|d| !d.is_error())
+        .collect())
+}
+
+/// Validates a proposed view HCL file against the current model.
+fn validate_proposed_view(
+    sources: &[rhizz_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizz_core::Diagnostic>, Vec<rhizz_core::Diagnostic>> {
+    let model_sources: Vec<rhizz_core::Source> = sources
+        .iter()
+        .filter(|source| !rhizz_core::is_view_source(&source.filename))
+        .cloned()
+        .collect();
+    let model_result = rhizz_core::compile(&model_sources);
+    if model_result
+        .diagnostics
+        .iter()
+        .any(rhizz_core::Diagnostic::is_error)
+    {
+        return Err(model_result.diagnostics);
+    }
+    let Some(model) = model_result.model else {
+        return Err(model_result.diagnostics);
+    };
+    let views = match rhizz_core::parse_views(new_content) {
+        Ok(views) => views,
+        Err(e) => {
+            return Err(vec![rhizz_core::Diagnostic {
+                code: rhizz_core::DiagnosticCode::E000,
+                file: Some(std::path::PathBuf::from(relative)),
+                line: None,
+                message: format!("{relative}: {e}"),
+            }]);
+        }
+    };
+    let diagnostics = rhizz_core::validate::validate_view(&model, &views, relative);
+    if diagnostics.iter().any(rhizz_core::Diagnostic::is_error) {
+        return Err(diagnostics);
+    }
+    Ok(diagnostics.into_iter().filter(|d| !d.is_error()).collect())
+}
+
+/// Project-relative `/`-separated path for `absolute` under `root`.
+fn relative_filename(root: &Path, absolute: &Path) -> String {
+    absolute
+        .strip_prefix(root)
+        .map(|relative| {
+            relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .unwrap_or_default()
+}
+
+/// Creates a new file at any project-confined path, or overwrites an
+/// existing one whole.
 ///
 /// The project lock is taken first (free projects auto-acquire; held-by-other
-/// is refused with [`EditDocError::Locked`]). Then the read, the version
-/// check, and the write happen under one held lock, so
-/// two edits sent with the same version cannot both apply: the loser sees
-/// the winner's version and is refused. `old_text` must occur exactly once;
-/// zero matches, several matches, and an empty `old_text` are all refused.
-/// The version must equal [`file_version`] of the file on disk, or the edit
-/// is refused with a message telling the client to re-read.
+/// is refused with [`FileWriteError::Locked`]).
 ///
-/// Confinement mirrors the read-only tools: the project is resolved with
+/// A missing file is created with `content` (parent directories are created
+/// as needed); an existing file is replaced whole, but only when `version`
+/// equals [`file_version`] of the file on disk — overwriting without a
+/// version, or with a stale one, is refused with a message telling the
+/// client to re-read. A `version` passed for a file that does not exist yet
+/// is ignored: there is nothing to check it against. The check and the write
+/// happen under the same `FILE_WRITE_LOCK` (plus `MODEL_WRITE_LOCK` for
+/// model HCL, so a create racing `overwrite_model` cannot silently win over
+/// it), so a create racing an edit of the same path cannot silently win.
+///
+/// Confinement mirrors `read_file`: the project is resolved with
 /// [`resolve_project`] and the path with [`resolve_confined_path`], so the
 /// path never escapes the project and hidden entries or symlinks are
-/// refused. The path must live under `docs/` and end in `.md`; anything else
-/// — `system.hcl`, views, or anything outside `docs/` — is refused, and a
-/// missing doc is refused since creating docs is a separate tool. Writes go
-/// through `write_atomic`.
-///
-/// # Errors
-///
-/// Returns [`EditDocError::Unknown`] for unknown projects,
-/// [`EditDocError::Locked`] when someone else holds the lock,
-/// [`EditDocError::Io`] when the filesystem fails, and
-/// [`EditDocError::Refused`] with a human-readable reason otherwise.
-#[allow(clippy::too_many_arguments)]
-pub fn edit_documentation(
-    data_dir: &Path,
-    locks: &crate::locks::LockManager,
-    project_id: &str,
-    user: &str,
-    doc_path: &str,
-    old_text: &str,
-    new_text: &str,
-    version: &str,
-) -> Result<EditDocResult, EditDocError> {
-    use crate::locks::AcquireOutcome;
-
-    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
-        ProjectError::Unknown(id) => EditDocError::Unknown(id),
-        ProjectError::Io(err) => EditDocError::Io(err),
-    })?;
-    match locks.acquire(project_id, user) {
-        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
-        AcquireOutcome::Refused { holder } => {
-            return Err(EditDocError::Locked { holder });
-        }
-    }
-
-    let _guard = DOC_EDIT_LOCK
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner);
-
-    let relative = Path::new(doc_path);
-    let absolute =
-        resolve_confined_path(&root, relative).map_err(|e| EditDocError::Refused(e.to_string()))?;
-
-    if !relative.starts_with("docs") || relative.components().count() < 2 {
-        return Err(EditDocError::Refused(format!(
-            "path `{doc_path}` is not under `docs/`"
-        )));
-    }
-    if relative.extension().is_none_or(|ext| ext != "md") {
-        return Err(EditDocError::Refused(format!(
-            "path `{doc_path}` is not a Markdown doc (`.md` only)"
-        )));
-    }
-
-    let metadata = fs::symlink_metadata(&absolute).map_err(|_| {
-        EditDocError::Refused(format!(
-            "unknown doc `{doc_path}` (creating docs is a separate tool)"
-        ))
-    })?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
-        return Err(EditDocError::Refused(format!(
-            "path `{doc_path}` is not a regular file"
-        )));
-    }
-
-    let content = fs::read_to_string(&absolute)?;
-    if old_text.is_empty() {
-        return Err(EditDocError::Refused(
-            "`old_text` must not be empty".to_owned(),
-        ));
-    }
-    match content.matches(old_text).count() {
-        0 => {
-            return Err(EditDocError::Refused(format!(
-                "`old_text` does not occur in `{doc_path}`"
-            )));
-        }
-        1 => {}
-        count => {
-            return Err(EditDocError::Refused(format!(
-                "`old_text` occurs {count} times in `{doc_path}`; it must occur exactly once"
-            )));
-        }
-    }
-    if file_version(&content) != version {
-        return Err(EditDocError::Refused(format!(
-            "version mismatch: `{doc_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
-            file_version(&content)
-        )));
-    }
-
-    let updated = content.replacen(old_text, new_text, 1);
-    write_atomic(&absolute, &updated).map_err(|e| match e {
-        SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
-        SaveVfsError::Io(err) => EditDocError::Io(err),
-    })?;
-    // The doc changed: the idle timer restarts. (Always held here — the
-    // acquire above succeeded.)
-    let _ = locks.note_edit(project_id, user);
-    Ok(EditDocResult {
-        version: file_version(&updated),
-        total_lines: updated.lines().count(),
-    })
-}
-
-/// Creates a new Markdown doc under `docs/`, or overwrites an existing one
-/// whole.
-///
-/// The project lock is taken first (free projects auto-acquire; held-by-other
-/// is refused with [`EditDocError::Locked`]).
-///
-/// A missing doc is created with `content` (parent directories are created as
-/// needed); an existing doc is replaced whole, but only when `version` equals
-/// [`file_version`] of the file on disk — overwriting without a version, or
-/// with a stale one, is refused with a message telling the client to re-read.
-/// A `version` passed for a doc that does not exist yet is ignored: there is
-/// nothing to check it against. The check and the write happen under the same
-/// `DOC_EDIT_LOCK` as [`edit_documentation`], so a create racing an edit of
-/// the same path cannot silently win over it.
-///
-/// Confinement mirrors [`edit_documentation`]: the project is resolved with
-/// [`resolve_project`] and the path with [`resolve_confined_path`], the path
-/// must live under `docs/` and end in `.md`, and symlinks, hidden entries,
-/// directories, and anything outside `docs/` are refused. Writes go through
+/// refused. Any confined path may be written — `system.hcl`, `views/**.hcl`,
+/// `docs/**.md`, `README.md`, and everything else. Writes go through
 /// `write_atomic`.
 ///
+/// Validation on write: `.hcl` model files go through a full compile (zero
+/// errors required, same gate as `overwrite_model`); `views/**.hcl` goes
+/// through `parse_views` + resolution as part of that compile
+/// (error-severity `E016`/`E006`/parse errors refuse, warnings pass through
+/// and are returned); every other path skips validation.
+///
 /// # Errors
 ///
-/// Returns [`EditDocError::Unknown`] for unknown projects,
-/// [`EditDocError::Locked`] when someone else holds the lock,
-/// [`EditDocError::Io`] when the filesystem fails, and
-/// [`EditDocError::Refused`] with a human-readable reason otherwise.
-pub fn create_doc(
+/// Returns [`FileWriteError::Unknown`] for unknown projects,
+/// [`FileWriteError::Locked`] when someone else holds the lock,
+/// [`FileWriteError::Io`] when the filesystem fails,
+/// [`FileWriteError::Refused`] with a human-readable reason for bad paths
+/// and version mismatches, and [`FileWriteError::Invalid`] with the resolver
+/// diagnostics when the new content does not resolve.
+pub fn create_file(
     data_dir: &Path,
     locks: &crate::locks::LockManager,
     project_id: &str,
     user: &str,
-    doc_path: &str,
+    file_path: &str,
     content: &str,
     version: Option<&str>,
-) -> Result<EditDocResult, EditDocError> {
+) -> Result<FileWriteResult, FileWriteError> {
     use crate::locks::AcquireOutcome;
 
     let root = resolve_project(data_dir, project_id).map_err(|e| match e {
-        ProjectError::Unknown(id) => EditDocError::Unknown(id),
-        ProjectError::Io(err) => EditDocError::Io(err),
+        ProjectError::Unknown(id) => FileWriteError::Unknown(id),
+        ProjectError::Io(err) => FileWriteError::Io(err),
     })?;
     match locks.acquire(project_id, user) {
         AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
         AcquireOutcome::Refused { holder } => {
-            return Err(EditDocError::Locked { holder });
+            return Err(FileWriteError::Locked { holder });
         }
     }
 
-    let _guard = DOC_EDIT_LOCK
+    let _file_guard = FILE_WRITE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    let relative = Path::new(doc_path);
-    let absolute =
-        resolve_confined_path(&root, relative).map_err(|e| EditDocError::Refused(e.to_string()))?;
+    let relative = Path::new(file_path);
+    let absolute = resolve_confined_path(&root, relative)
+        .map_err(|e| FileWriteError::Refused(e.to_string()))?;
 
-    if !relative.starts_with("docs") || relative.components().count() < 2 {
-        return Err(EditDocError::Refused(format!(
-            "path `{doc_path}` is not under `docs/`"
-        )));
-    }
-    if relative.extension().is_none_or(|ext| ext != "md") {
-        return Err(EditDocError::Refused(format!(
-            "path `{doc_path}` is not a Markdown doc (`.md` only)"
-        )));
-    }
+    let normalized = relative_filename(&root, &absolute);
+    // Model HCL additionally serializes with `overwrite_model`/`mutate_project`.
+    let _model_guard = if is_model_hcl_filename(&normalized) {
+        Some(
+            MODEL_WRITE_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    } else {
+        None
+    };
 
     match fs::symlink_metadata(&absolute) {
         Ok(metadata) => {
             if !metadata.is_file() || metadata.file_type().is_symlink() {
-                return Err(EditDocError::Refused(format!(
-                    "path `{doc_path}` is not a regular file"
+                return Err(FileWriteError::Refused(format!(
+                    "path `{file_path}` is not a regular file"
                 )));
             }
             let current = fs::read_to_string(&absolute)?;
             match version {
                 Some(version) if file_version(&current) == version => {}
                 Some(_) => {
-                    return Err(EditDocError::Refused(format!(
-                        "version mismatch: `{doc_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+                    return Err(FileWriteError::Refused(format!(
+                        "version mismatch: `{file_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
                         file_version(&current)
                     )));
                 }
                 None => {
-                    return Err(EditDocError::Refused(format!(
-                        "doc `{doc_path}` already exists; pass the `version` `read_file` returned to overwrite it whole"
+                    return Err(FileWriteError::Refused(format!(
+                        "file `{file_path}` already exists; pass the `version` `read_file` returned to overwrite it whole"
                     )));
                 }
             }
         }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-        Err(err) => return Err(EditDocError::Io(err)),
+        Err(err) => return Err(FileWriteError::Io(err)),
     }
+
+    let sources = match project_sources(data_dir, project_id) {
+        Ok(sources) => sources.unwrap_or_default(),
+        Err(err) => return Err(FileWriteError::Io(err)),
+    };
+    let warnings = validate_proposed_content(&sources, &normalized, content)
+        .map_err(FileWriteError::Invalid)?;
 
     if let Some(parent) = absolute.parent() {
         fs::create_dir_all(parent)?;
     }
     write_atomic(&absolute, content).map_err(|e| match e {
-        SaveVfsError::Malformed(message) => EditDocError::Io(std::io::Error::other(message)),
-        SaveVfsError::Io(err) => EditDocError::Io(err),
+        SaveVfsError::Malformed(message) => FileWriteError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => FileWriteError::Io(err),
     })?;
-    // The doc changed: the idle timer restarts. (Always held here — the
+    // The file changed: the idle timer restarts. (Always held here — the
     // acquire above succeeded.)
     let _ = locks.note_edit(project_id, user);
-    Ok(EditDocResult {
+    Ok(FileWriteResult {
         version: file_version(content),
         total_lines: content.lines().count(),
+        warnings,
+    })
+}
+
+/// Applies granular text replacements to an existing file at any
+/// project-confined path.
+///
+/// The project lock is taken first (free projects auto-acquire; held-by-other
+/// is refused with [`FileWriteError::Locked`]). Then the read, the version
+/// check, the sequential edit application, validation, and the write happen
+/// under one held lock, so two edits sent with the same version cannot both
+/// apply: the loser sees the winner's version and is refused.
+///
+/// `edits` apply sequentially in order: each `old_text` must occur exactly
+/// once in the intermediate content (zero matches, several matches, and an
+/// empty `old_text` are all refused with the file untouched). The version
+/// must equal [`file_version`] of the file on disk, or the edit is refused
+/// with a message telling the client to re-read.
+///
+/// Confinement and validation mirror [`create_file`]: any confined path may
+/// be edited, `.hcl` goes through a full compile (zero errors required),
+/// every other path skips validation. Writes go through `write_atomic`.
+///
+/// # Errors
+///
+/// Returns [`FileWriteError::Unknown`] for unknown projects,
+/// [`FileWriteError::Locked`] when someone else holds the lock,
+/// [`FileWriteError::Io`] when the filesystem fails,
+/// [`FileWriteError::Refused`] with a human-readable reason for bad paths,
+/// match failures, and version mismatches, and [`FileWriteError::Invalid`]
+/// with the resolver diagnostics when the edited content does not resolve.
+pub fn edit_file(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    file_path: &str,
+    edits: &[FileEdit],
+    version: &str,
+) -> Result<FileWriteResult, FileWriteError> {
+    use crate::locks::AcquireOutcome;
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => FileWriteError::Unknown(id),
+        ProjectError::Io(err) => FileWriteError::Io(err),
+    })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(FileWriteError::Locked { holder });
+        }
+    }
+
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let relative = Path::new(file_path);
+    let absolute = resolve_confined_path(&root, relative)
+        .map_err(|e| FileWriteError::Refused(e.to_string()))?;
+
+    let normalized = relative_filename(&root, &absolute);
+    let _model_guard = if is_model_hcl_filename(&normalized) {
+        Some(
+            MODEL_WRITE_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    } else {
+        None
+    };
+
+    let metadata = fs::symlink_metadata(&absolute).map_err(|_| {
+        FileWriteError::Refused(format!(
+            "unknown file `{file_path}` (create it with `create_file` first)"
+        ))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(FileWriteError::Refused(format!(
+            "path `{file_path}` is not a regular file"
+        )));
+    }
+
+    let content = fs::read_to_string(&absolute)?;
+    if file_version(&content) != version {
+        return Err(FileWriteError::Refused(format!(
+            "version mismatch: `{file_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+            file_version(&content)
+        )));
+    }
+
+    let mut updated = content;
+    for (index, edit) in edits.iter().enumerate() {
+        if edit.old_text.is_empty() {
+            return Err(FileWriteError::Refused(format!(
+                "edit {index}: `old_text` must not be empty"
+            )));
+        }
+        match updated.matches(&edit.old_text).count() {
+            0 => {
+                return Err(FileWriteError::Refused(format!(
+                    "edit {index}: `old_text` does not occur in `{file_path}`"
+                )));
+            }
+            1 => {}
+            count => {
+                return Err(FileWriteError::Refused(format!(
+                    "edit {index}: `old_text` occurs {count} times in `{file_path}`; it must occur exactly once"
+                )));
+            }
+        }
+        updated = updated.replacen(&edit.old_text, &edit.new_text, 1);
+    }
+
+    let sources = match project_sources(data_dir, project_id) {
+        Ok(sources) => sources.unwrap_or_default(),
+        Err(err) => return Err(FileWriteError::Io(err)),
+    };
+    let warnings = validate_proposed_content(&sources, &normalized, &updated)
+        .map_err(FileWriteError::Invalid)?;
+
+    write_atomic(&absolute, &updated).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => FileWriteError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => FileWriteError::Io(err),
+    })?;
+    // The file changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
+    Ok(FileWriteResult {
+        version: file_version(&updated),
+        total_lines: updated.lines().count(),
+        warnings,
     })
 }
 
@@ -3361,7 +3554,7 @@ mod tests {
     }
 
     #[test]
-    fn doc_writes_refuse_when_locked_by_someone_else() {
+    fn file_writes_refuse_when_locked_by_someone_else() {
         let dir = data_dir_with_drone();
         write_file(
             &dir.path().join("drone/docs/guide.md"),
@@ -3375,24 +3568,26 @@ mod tests {
             crate::locks::AcquireOutcome::Acquired
         ));
 
-        let refused = edit_documentation(
+        let refused = edit_file(
             dir.path(),
             &locks,
             "drone",
             "bob",
             "docs/guide.md",
-            "Old text.",
-            "New text.",
+            &[FileEdit {
+                old_text: "Old text.".to_owned(),
+                new_text: "New text.".to_owned(),
+            }],
             &version,
         );
         assert!(
             matches!(
                 refused,
-                Err(EditDocError::Locked { ref holder }) if holder == "alice"
+                Err(FileWriteError::Locked { ref holder }) if holder == "alice"
             ),
             "must name the holder: {refused:?}"
         );
-        let refused = create_doc(
+        let refused = create_file(
             dir.path(),
             &locks,
             "drone",
@@ -3404,25 +3599,27 @@ mod tests {
         assert!(
             matches!(
                 refused,
-                Err(EditDocError::Locked { ref holder }) if holder == "alice"
+                Err(FileWriteError::Locked { ref holder }) if holder == "alice"
             ),
             "must name the holder: {refused:?}"
         );
         assert_eq!(
             std::fs::read_to_string(dir.path().join("drone/docs/guide.md")).unwrap(),
             before,
-            "lock-refused doc writes must not touch the file"
+            "lock-refused file writes must not touch the file"
         );
 
         // The holder's own edit applies and keeps the lock.
-        let applied = edit_documentation(
+        let applied = edit_file(
             dir.path(),
             &locks,
             "drone",
             "alice",
             "docs/guide.md",
-            "Old text.",
-            "New text.",
+            &[FileEdit {
+                old_text: "Old text.".to_owned(),
+                new_text: "New text.".to_owned(),
+            }],
             &version,
         )
         .expect("the holder's edit must apply");
@@ -3431,6 +3628,237 @@ mod tests {
             locks.get("drone").expect("lock must be held").holder,
             "alice"
         );
+    }
+
+    #[test]
+    fn create_file_creates_parents_and_chains_into_edit_file() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+
+        let created = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guides/getting-started.md",
+            "# Getting started\n\nintro\n",
+            None,
+        )
+        .expect("new file must be created");
+        assert_eq!(created.total_lines, 3);
+        assert_eq!(created.version.len(), 64);
+
+        let extended = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guides/getting-started.md",
+            &[FileEdit {
+                old_text: "intro".to_owned(),
+                new_text: "intro\n\nmore\n".to_owned(),
+            }],
+            &created.version,
+        )
+        .expect("chained edit must apply");
+        assert_eq!(extended.total_lines, 6);
+        let stored =
+            std::fs::read_to_string(dir.path().join("drone/docs/guides/getting-started.md"))
+                .unwrap();
+        assert_eq!(stored, "# Getting started\n\nintro\n\nmore\n\n");
+        assert_eq!(extended.version, file_version(&stored));
+    }
+
+    #[test]
+    fn file_writes_refuse_stale_and_missing_versions_byte_identical() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/plan.md"), "v1\n");
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/plan.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+
+        assert!(matches!(
+            create_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                "v2\n",
+                None
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert!(matches!(
+            create_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                "v2\n",
+                Some("0".repeat(64).as_str())
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert!(matches!(
+            edit_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                &[FileEdit {
+                    old_text: "v1".to_owned(),
+                    new_text: "v2".to_owned(),
+                }],
+                "0".repeat(64).as_str()
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/plan.md")).unwrap(),
+            before,
+            "refused writes must not touch the file"
+        );
+
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/plan.md",
+            "v2\n",
+            Some(&version),
+        )
+        .expect("matching version must apply");
+        assert_eq!(applied.version, file_version("v2\n"));
+    }
+
+    #[test]
+    fn edit_file_refuses_zero_two_and_empty_matches_byte_identical() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/note.md"), "# Note\n\nalpha\n");
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/note.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+
+        for old in ["missing", "a", ""] {
+            let refused = edit_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/note.md",
+                &[FileEdit {
+                    old_text: old.to_owned(),
+                    new_text: "X".to_owned(),
+                }],
+                &version,
+            );
+            assert!(
+                matches!(refused, Err(FileWriteError::Refused(_))),
+                "{old:?} must be refused: {refused:?}"
+            );
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/note.md")).unwrap(),
+            before,
+            "refused edits must not touch the file"
+        );
+    }
+
+    #[test]
+    fn file_writes_validate_model_and_views() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/views/overview.hcl"),
+            "view \"overview\" {\n  system = \"quadcopter\"\n}\n",
+        );
+        let locks = crate::locks::LockManager::new();
+
+        // Breaking the model is refused with diagnostics, file untouched.
+        let before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&before);
+        let broken = "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "system.hcl",
+            broken,
+            Some(&version),
+        );
+        match refused {
+            Err(FileWriteError::Invalid(diagnostics)) => {
+                assert!(
+                    diagnostics.iter().any(|d| d.code.to_string() == "E014"),
+                    "expected E014, got {diagnostics:?}"
+                );
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before
+        );
+
+        // Invalid views are refused: unknown system is E006.
+        let view_before =
+            std::fs::read_to_string(dir.path().join("drone/views/overview.hcl")).unwrap();
+        let view_version = file_version(&view_before);
+        let bad_view = "view \"overview\" {\n  system = \"ghost\"\n}\n";
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "views/overview.hcl",
+            bad_view,
+            Some(&view_version),
+        );
+        match refused {
+            Err(FileWriteError::Invalid(diagnostics)) => {
+                assert!(
+                    diagnostics.iter().any(|d| d.code.to_string() == "E006"),
+                    "expected E006, got {diagnostics:?}"
+                );
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/views/overview.hcl")).unwrap(),
+            view_before
+        );
+
+        // Valid writes apply and carry warnings (possibly empty).
+        let valid_view = "view \"overview\" {\n  system = \"quadcopter\"\n}\n";
+        // Rewriting the same valid view with its version applies (idempotent).
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "views/overview.hcl",
+            valid_view,
+            Some(&view_version),
+        )
+        .expect("valid view must apply");
+        assert_eq!(applied.version.len(), 64);
+
+        // Non-HCL writes skip validation entirely.
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "README.md",
+            "# Drone\n",
+            None,
+        )
+        .expect("README must apply");
+        assert!(applied.warnings.is_empty());
     }
 
     #[test]

@@ -3,16 +3,16 @@
 //! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
 //! `read_file`, `check_project`, the step-2 structural mutation tools, and
-//! the step-3 `edit_documentation` doc-editing tool. Reads only touch the
+//! the generic `create_file` + `edit_file` file tools. Reads only touch the
 //! data dir; mutations load the project's single primary file (`system.hcl`),
 //! apply one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the
-//! canonical HCL back atomically. Doc edits replace one exact span in a
-//! `docs/**.md` file under a compare-and-swap version guard. A refused op
-//! leaves the file untouched.
+//! canonical HCL back atomically. File writes replace whole files or exact
+//! spans under a compare-and-swap version guard, with compile validation for
+//! `.hcl` paths. A refused op leaves the file untouched.
 //!
 //! This is a POC: there is no authentication. Writes take the project lock
 //! as the hardcoded `AI` user (proposal 0004): a project held by a human is
-//! refused naming the holder, and doc/model overwrites additionally
+//! refused naming the holder, and file/model overwrites additionally
 //! compare-and-swap on the file version. It must not be exposed beyond
 //! localhost.
 
@@ -520,12 +520,13 @@ struct OverwriteModelParams {
     version: Option<String>,
 }
 
-/// Arguments accepted by the `create_doc` tool.
+/// Arguments accepted by the `create_file` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-struct CreateDocParams {
+struct CreateFileParams {
     /// The project id as returned by `fetch_projects`.
     project: String,
-    /// A doc path under `docs/`, ending in `.md`.
+    /// A path relative to the project root (any file: `system.hcl`,
+    /// `views/*.hcl`, `docs/*.md`, `README.md`, …).
     path: String,
     /// The whole file content to write.
     content: String,
@@ -535,17 +536,24 @@ struct CreateDocParams {
     version: Option<String>,
 }
 
-/// Arguments accepted by the `edit_documentation` tool.
+/// One granular text replacement inside `edit_file`, after Zed's `edit_file`.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-struct EditDocumentationParams {
-    /// The project id as returned by `fetch_projects`.
-    project: String,
-    /// A doc path under `docs/`, ending in `.md`.
-    path: String,
+struct FileEditJson {
     /// The exact span to replace; must occur exactly once (empty is refused).
     old_text: String,
     /// The replacement text.
     new_text: String,
+}
+
+/// Arguments accepted by the `edit_file` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct EditFileParams {
+    /// The project id as returned by `fetch_projects`.
+    project: String,
+    /// A path relative to the project root (any file).
+    path: String,
+    /// Granular edits applied sequentially in order.
+    edits: Vec<FileEditJson>,
     /// The content-hash `version` `read_file` returned for the file.
     version: String,
 }
@@ -1253,18 +1261,18 @@ impl RhizzMcp {
         }
     }
 
-    /// Creates a new Markdown doc, or overwrites an existing one whole.
+    /// Creates a new file at any path, or overwrites an existing one whole.
     /// Compare-and-swap on the file version, under the project lock taken as
     /// the hardcoded `AI` identity (proposal 0004) — concurrent writes
     /// to the same path are serialized and an overwrite needs the version
-    /// `read_file` returned.
+    /// `read_file` returned. Shaped after Zed's `write_file`.
     #[tool(
-        name = "create_doc",
-        description = "Create a new Markdown doc in a Rhizz project, or overwrite an existing one whole (proposal 0003 step 3; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. Returns the new `version` and `totalLines` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+        name = "create_file",
+        description = "Create a new file in a Rhizz project, or overwrite an existing one whole (any path: `system.hcl`, `views/*.hcl`, `docs/*.md`, `README.md`, …). Pass the project id, `path` (relative, confined like `read_file`: no absolute, no `..`, no hidden/symlink), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. `.hcl` writes are validated (model files: full compile, zero errors required like `overwrite_model`; `views/**.hcl`: `parse_views` + resolution, error `E016`/`E006`/parse errors refuse, warnings pass through and are returned); other paths skip validation. Returns the new `version`, `totalLines`, and `warnings` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched."
     )]
-    async fn create_doc(
+    async fn create_file(
         &self,
-        params: Parameters<CreateDocParams>,
+        params: Parameters<CreateFileParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
         let locks = self.locks.clone();
@@ -1273,7 +1281,7 @@ impl RhizzMcp {
         // MCP clients have no username of their own: every write contends
         // as the hardcoded `AI` identity (proposal 0004).
         let loaded = tokio::task::spawn_blocking(move || {
-            storage::create_doc(
+            storage::create_file(
                 &data_dir,
                 &locks,
                 &params.project,
@@ -1286,48 +1294,54 @@ impl RhizzMcp {
         .await;
         let result = match loaded {
             Ok(Ok(result)) => result,
-            Ok(Err(storage::EditDocError::Unknown(id))) => {
+            Ok(Err(storage::FileWriteError::Unknown(id))) => {
                 return Ok(tool_error(format!("unknown project `{id}`")));
             }
-            Ok(Err(storage::EditDocError::Locked { holder })) => {
+            Ok(Err(storage::FileWriteError::Locked { holder })) => {
                 return Ok(tool_error(format!(
                     "project `{name}` is locked by `{holder}`; retry after they release it"
                 )));
             }
-            Ok(Err(storage::EditDocError::Io(err))) => {
-                tracing::error!(?err, "create_doc: failed to read or write doc");
-                return Ok(tool_error("failed to read or write doc"));
+            Ok(Err(storage::FileWriteError::Io(err))) => {
+                tracing::error!(?err, "create_file: failed to read or write file");
+                return Ok(tool_error("failed to read or write file"));
             }
-            Ok(Err(storage::EditDocError::Refused(message))) => return Ok(tool_error(message)),
+            Ok(Err(storage::FileWriteError::Refused(message))) => return Ok(tool_error(message)),
+            Ok(Err(storage::FileWriteError::Invalid(diagnostics))) => {
+                return Ok(mutation_refused(&diagnostics));
+            }
             Err(err) => {
-                tracing::error!(?err, "create_doc: worker task failed");
-                return Ok(tool_error("failed to create doc"));
+                tracing::error!(?err, "create_file: worker task failed");
+                return Ok(tool_error("failed to create file"));
             }
         };
+        let warnings: Vec<Value> = result.warnings.iter().map(diagnostic_json).collect();
         let payload = json!({
             "version": result.version,
             "totalLines": result.total_lines,
+            "warnings": warnings,
         });
         match serde_json::to_string(&payload) {
             Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
             Err(err) => {
-                tracing::error!(?err, "create_doc: failed to encode result");
+                tracing::error!(?err, "create_file: failed to encode result");
                 Ok(tool_error("failed to encode result"))
             }
         }
     }
 
-    /// Replaces one exact span of text in an existing Markdown doc.
+    /// Applies granular text replacements to an existing file.
     /// Compare-and-swap on the file version, under the project lock taken as
     /// the hardcoded `AI` identity (proposal 0004) — concurrent edits
     /// sent with the same version are serialized and only one applies.
+    /// Shaped after Zed's `edit_file` (`edits` array).
     #[tool(
-        name = "edit_documentation",
-        description = "Replace one exact span of text in an existing Markdown doc in a Rhizz project (proposal 0003 step 3, editing only; docs are not HCL so this does not go through `ModelOp`). Pass the project id, `path` (under `docs/`, `.md` only), `old_text` (must occur exactly once in the file; empty is refused), `new_text`, and the content-hash `version` `read_file` returned. Returns the new `version` and `totalLines` so another edit can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched and never touches `system.hcl`, views, or anything outside `docs/`."
+        name = "edit_file",
+        description = "Apply granular text replacements to an existing file in a Rhizz project (any path). Pass the project id, `path` (relative, confined like `read_file`), `edits` (array of `{old_text, new_text}` applied sequentially; each `old_text` must occur exactly once in the intermediate content, empty is refused), and the content-hash `version` `read_file` returned. Returns the new `version`, `totalLines`, and `warnings` so another edit can chain without re-reading. `.hcl` edits are validated (model files: full compile, zero errors required; `views/**.hcl`: `parse_views` + resolution, error `E016`/`E006`/parse errors refuse, warnings pass through); other paths skip validation. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched."
     )]
-    async fn edit_documentation(
+    async fn edit_file(
         &self,
-        params: Parameters<EditDocumentationParams>,
+        params: Parameters<EditFileParams>,
     ) -> Result<CallToolResult, ErrorData> {
         let data_dir = self.data_dir.clone();
         let locks = self.locks.clone();
@@ -1335,47 +1349,59 @@ impl RhizzMcp {
         let name = params.project.clone();
         // MCP clients have no username of their own: every write contends
         // as the hardcoded `AI` identity (proposal 0004).
+        let edits: Vec<storage::FileEdit> = params
+            .edits
+            .into_iter()
+            .map(|edit| storage::FileEdit {
+                old_text: edit.old_text,
+                new_text: edit.new_text,
+            })
+            .collect();
         let loaded = tokio::task::spawn_blocking(move || {
-            storage::edit_documentation(
+            storage::edit_file(
                 &data_dir,
                 &locks,
                 &params.project,
                 "AI",
                 &params.path,
-                &params.old_text,
-                &params.new_text,
+                &edits,
                 &params.version,
             )
         })
         .await;
         let result = match loaded {
             Ok(Ok(result)) => result,
-            Ok(Err(storage::EditDocError::Unknown(id))) => {
+            Ok(Err(storage::FileWriteError::Unknown(id))) => {
                 return Ok(tool_error(format!("unknown project `{id}`")));
             }
-            Ok(Err(storage::EditDocError::Locked { holder })) => {
+            Ok(Err(storage::FileWriteError::Locked { holder })) => {
                 return Ok(tool_error(format!(
                     "project `{name}` is locked by `{holder}`; retry after they release it"
                 )));
             }
-            Ok(Err(storage::EditDocError::Io(err))) => {
-                tracing::error!(?err, "edit_documentation: failed to read or write doc");
-                return Ok(tool_error("failed to read or write doc"));
+            Ok(Err(storage::FileWriteError::Io(err))) => {
+                tracing::error!(?err, "edit_file: failed to read or write file");
+                return Ok(tool_error("failed to read or write file"));
             }
-            Ok(Err(storage::EditDocError::Refused(message))) => return Ok(tool_error(message)),
+            Ok(Err(storage::FileWriteError::Refused(message))) => return Ok(tool_error(message)),
+            Ok(Err(storage::FileWriteError::Invalid(diagnostics))) => {
+                return Ok(mutation_refused(&diagnostics));
+            }
             Err(err) => {
-                tracing::error!(?err, "edit_documentation: worker task failed");
-                return Ok(tool_error("failed to edit doc"));
+                tracing::error!(?err, "edit_file: worker task failed");
+                return Ok(tool_error("failed to edit file"));
             }
         };
+        let warnings: Vec<Value> = result.warnings.iter().map(diagnostic_json).collect();
         let payload = json!({
             "version": result.version,
             "totalLines": result.total_lines,
+            "warnings": warnings,
         });
         match serde_json::to_string(&payload) {
             Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
             Err(err) => {
-                tracing::error!(?err, "edit_documentation: failed to encode result");
+                tracing::error!(?err, "edit_file: failed to encode result");
                 Ok(tool_error("failed to encode result"))
             }
         }
@@ -1952,12 +1978,12 @@ mod tests {
                 "add_system",
                 "check_project",
                 "connect_components",
-                "create_doc",
+                "create_file",
                 "delete_component",
                 "delete_connection_by_label",
                 "delete_protocol",
                 "delete_system",
-                "edit_documentation",
+                "edit_file",
                 "fetch_projects",
                 "list_files",
                 "overwrite_model",
@@ -2747,7 +2773,7 @@ mod tests {
     #[tokio::test]
     async fn tools_call_writes_refuse_while_a_human_holds_the_lock() {
         // Every MCP write tool contends as `AI`: held by a human, model
-        // overwrites, doc edits, and doc creates are all refused naming the
+        // overwrites, file edits, and file creates are all refused naming the
         // holder, with every file byte-identical.
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
@@ -2775,18 +2801,17 @@ mod tests {
             ),
             (
                 204,
-                "edit_documentation",
+                "edit_file",
                 json!({
                     "project": "demo",
                     "path": "docs/note.md",
-                    "old_text": "alpha",
-                    "new_text": "ALPHA",
+                    "edits": [{ "old_text": "alpha", "new_text": "ALPHA" }],
                     "version": "whatever",
                 }),
             ),
             (
                 205,
-                "create_doc",
+                "create_file",
                 json!({
                     "project": "demo",
                     "path": "docs/note.md",
@@ -3601,21 +3626,29 @@ mod tests {
         );
     }
 
-    /// Writes a project with a doc for the `edit_documentation` tests,
+    /// Writes a project with a doc for the `edit_file` tests,
     /// including a hidden doc and a symlinked doc that must both be refused.
+    /// Also lays out a valid `views/overview.hcl` so view validation has a
+    /// clean baseline (`check_project` clean).
     fn write_docs_project(data_dir: &std::path::Path) {
         let project = data_dir.join("demo");
         std::fs::create_dir_all(project.join("docs")).unwrap();
+        std::fs::create_dir_all(project.join("views")).unwrap();
         std::fs::write(project.join("system.hcl"), "system \"demo\" {}\n").unwrap();
+        std::fs::write(
+            project.join("views/overview.hcl"),
+            "view \"overview\" {\n  system = \"demo\"\n}\n",
+        )
+        .unwrap();
         std::fs::write(project.join("docs/note.md"), "# Note\n\nalpha\n\nbeta\n").unwrap();
         std::fs::write(project.join("docs/.secret.md"), "hidden\n").unwrap();
         std::os::unix::fs::symlink(project.join("docs/note.md"), project.join("docs/linked.md"))
             .unwrap();
     }
 
-    /// Reads a doc's content-hash `version` through the `read_file` tool, the
-    /// same value `edit_documentation` requires.
-    async fn read_doc_version(app: &Router, session: &str, id: i64, path: &str) -> String {
+    /// Reads a file's content-hash `version` through the `read_file` tool, the
+    /// same value `create_file`/`edit_file` require.
+    async fn read_file_version(app: &Router, session: &str, id: i64, path: &str) -> String {
         let payload = call_tool(
             app,
             session,
@@ -3632,23 +3665,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_edit_documentation_replaces_a_single_match() {
+    async fn tools_call_edit_file_replaces_a_single_match() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let version = read_doc_version(&app, &session, 300, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 300, "docs/note.md").await;
         let payload = call_tool(
             &app,
             &session,
             301,
-            "edit_documentation",
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "alpha",
-                "new_text": "ALPHA",
+                "edits": [{ "old_text": "alpha", "new_text": "ALPHA" }],
                 "version": version,
             }),
         )
@@ -3661,16 +3693,17 @@ mod tests {
         assert_eq!(result["totalLines"], json!(content.lines().count()));
         assert_eq!(result["version"].as_str().unwrap().len(), 64);
         assert_ne!(result["version"], json!(version));
+        assert!(result.get("warnings").is_some());
     }
 
     #[tokio::test]
-    async fn tools_call_edit_documentation_refuses_zero_two_and_empty_matches() {
+    async fn tools_call_edit_file_refuses_zero_two_and_empty_matches() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let version = read_doc_version(&app, &session, 302, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 302, "docs/note.md").await;
         let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
 
         // Zero matches, several matches (`a` occurs three times), and an
@@ -3680,12 +3713,11 @@ mod tests {
                 &app,
                 &session,
                 id,
-                "edit_documentation",
+                "edit_file",
                 json!({
                     "project": "demo",
                     "path": "docs/note.md",
-                    "old_text": old,
-                    "new_text": "X",
+                    "edits": [{ "old_text": old, "new_text": "X" }],
                     "version": version,
                 }),
             )
@@ -3702,23 +3734,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_edit_documentation_stale_version_is_refused() {
+    async fn tools_call_edit_file_stale_version_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let stale = read_doc_version(&app, &session, 306, "docs/note.md").await;
+        let stale = read_file_version(&app, &session, 306, "docs/note.md").await;
         let applied = call_tool(
             &app,
             &session,
             307,
-            "edit_documentation",
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "alpha",
-                "new_text": "ALPHA",
+                "edits": [{ "old_text": "alpha", "new_text": "ALPHA" }],
                 "version": stale,
             }),
         )
@@ -3735,12 +3766,11 @@ mod tests {
             &app,
             &session,
             308,
-            "edit_documentation",
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "beta",
-                "new_text": "BETA",
+                "edits": [{ "old_text": "beta", "new_text": "BETA" }],
                 "version": stale,
             }),
         )
@@ -3756,12 +3786,11 @@ mod tests {
             &app,
             &session,
             309,
-            "edit_documentation",
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "beta",
-                "new_text": "BETA",
+                "edits": [{ "old_text": "beta", "new_text": "BETA" }],
                 "version": fresh,
             }),
         )
@@ -3773,7 +3802,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_edit_documentation_refuses_paths_outside_docs() {
+    async fn tools_call_edit_file_refuses_confined_paths() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
@@ -3781,23 +3810,21 @@ mod tests {
         let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
 
         for (id, bad) in [
-            (310, "system.hcl"),
-            (311, "docs/note.hcl"),
-            (312, "../outside"),
-            (313, "docs/.secret.md"),
-            (314, "docs/linked.md"),
-            (315, "docs/nope.md"),
+            (310, "../outside"),
+            (311, "/etc/passwd"),
+            (312, "docs/.secret.md"),
+            (313, "docs/linked.md"),
+            (314, "docs/nope.md"),
         ] {
             let payload = call_tool(
                 &app,
                 &session,
                 id,
-                "edit_documentation",
+                "edit_file",
                 json!({
                     "project": "demo",
                     "path": bad,
-                    "old_text": "alpha",
-                    "new_text": "X",
+                    "edits": [{ "old_text": "alpha", "new_text": "X" }],
                     "version": "deadbeef",
                 }),
             )
@@ -3814,36 +3841,133 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_edit_documentation_concurrent_edits_cannot_both_apply() {
+    async fn tools_call_edit_file_allows_any_confined_path() {
+        // Generic file tools cover everything: `system.hcl`, `views/**.hcl`,
+        // and non-`docs` Markdown are all writable (unlike the old docs-only
+        // tools). Each write here is validation-clean so it applies.
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let version = read_doc_version(&app, &session, 316, "docs/note.md").await;
-        let edit_alpha = call_tool(
+        // A non-HCL file under `docs/` writes through with no validation.
+        let created = call_tool(
             &app,
             &session,
-            317,
-            "edit_documentation",
+            315,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "docs/notes.txt",
+                "content": "note\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+
+        // `README.md` writes through with no validation.
+        let created = call_tool(
+            &app,
+            &session,
+            316,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "README.md",
+                "content": "# Demo\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("demo/README.md")).unwrap(),
+            "# Demo\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_file_applies_multiple_edits_sequentially() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_file_version(&app, &session, 317, "docs/note.md").await;
+        let payload = call_tool(
+            &app,
+            &session,
+            318,
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "alpha",
-                "new_text": "ALPHA",
+                "edits": [
+                    { "old_text": "alpha", "new_text": "ALPHA" },
+                    { "old_text": "beta", "new_text": "BETA" },
+                ],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert_eq!(content, "# Note\n\nALPHA\n\nBETA\n");
+
+        // Sequential application: the second edit sees the first edit's output.
+        let version = result_value(&payload)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let payload = call_tool(
+            &app,
+            &session,
+            319,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "edits": [
+                    { "old_text": "ALPHA", "new_text": "alpha1" },
+                    { "old_text": "alpha1\n\nBETA", "new_text": "both" },
+                ],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
+        assert!(content.contains("both"), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_file_concurrent_edits_cannot_both_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let version = read_file_version(&app, &session, 320, "docs/note.md").await;
+        let edit_alpha = call_tool(
+            &app,
+            &session,
+            321,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "edits": [{ "old_text": "alpha", "new_text": "ALPHA" }],
                 "version": version,
             }),
         );
         let edit_beta = call_tool(
             &app,
             &session,
-            318,
-            "edit_documentation",
+            322,
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/note.md",
-                "old_text": "beta",
-                "new_text": "BETA",
+                "edits": [{ "old_text": "beta", "new_text": "BETA" }],
                 "version": version,
             }),
         );
@@ -3873,7 +3997,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_create_doc_creates_then_edit_documentation_extends() {
+    async fn tools_call_create_file_creates_then_edit_file_extends() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
@@ -3884,8 +4008,8 @@ mod tests {
         let created = call_tool(
             &app,
             &session,
-            319,
-            "create_doc",
+            323,
+            "create_file",
             json!({
                 "project": "demo",
                 "path": "docs/guides/getting-started.md",
@@ -3902,19 +4026,18 @@ mod tests {
         let content = std::fs::read_to_string(&path).unwrap();
         assert_eq!(content, "# Getting started\n\nintro\n");
 
-        // 2. The created doc is extended through `edit_documentation`,
+        // 2. The created doc is extended through `edit_file`,
         // chaining on the created version without re-reading.
         let version = created_result["version"].as_str().unwrap().to_owned();
         let edited = call_tool(
             &app,
             &session,
-            320,
-            "edit_documentation",
+            324,
+            "edit_file",
             json!({
                 "project": "demo",
                 "path": "docs/guides/getting-started.md",
-                "old_text": "intro",
-                "new_text": "intro\n\nmore\n",
+                "edits": [{ "old_text": "intro", "new_text": "intro\n\nmore\n" }],
                 "version": version,
             }),
         )
@@ -3926,7 +4049,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_create_doc_overwrite_needs_matching_version() {
+    async fn tools_call_create_file_overwrite_needs_matching_version() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
@@ -3935,8 +4058,8 @@ mod tests {
         let created = call_tool(
             &app,
             &session,
-            321,
-            "create_doc",
+            325,
+            "create_file",
             json!({
                 "project": "demo",
                 "path": "docs/plan.md",
@@ -3954,8 +4077,8 @@ mod tests {
         let missing = call_tool(
             &app,
             &session,
-            322,
-            "create_doc",
+            326,
+            "create_file",
             json!({
                 "project": "demo",
                 "path": "docs/plan.md",
@@ -3969,8 +4092,8 @@ mod tests {
         let stale = call_tool(
             &app,
             &session,
-            323,
-            "create_doc",
+            327,
+            "create_file",
             json!({
                 "project": "demo",
                 "path": "docs/plan.md",
@@ -3992,8 +4115,8 @@ mod tests {
         let overwritten = call_tool(
             &app,
             &session,
-            324,
-            "create_doc",
+            328,
+            "create_file",
             json!({
                 "project": "demo",
                 "path": "docs/plan.md",
@@ -4013,25 +4136,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_create_doc_refuses_paths_outside_docs() {
+    async fn tools_call_create_file_refuses_confined_paths() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
         for (id, bad) in [
-            (325, "system.hcl"),
-            (326, "docs/note.hcl"),
-            (327, "../outside.md"),
-            (328, "docs/.secret.md"),
-            (329, "docs/linked.md"),
-            (330, "docs/note.md"),
+            (329, "../outside.md"),
+            (330, "/etc/passwd"),
+            (331, "docs/.secret.md"),
+            (332, "docs/linked.md"),
         ] {
             let payload = call_tool(
                 &app,
                 &session,
                 id,
-                "create_doc",
+                "create_file",
                 json!({
                     "project": "demo",
                     "path": bad,
@@ -4047,14 +4168,256 @@ mod tests {
         }
 
         assert!(
-            !tmp.path().join("demo/docs/.secret.md").exists()
-                || std::fs::read_to_string(tmp.path().join("demo/docs/.secret.md")).unwrap()
-                    == "hidden\n",
-            "refused creates must not touch anything"
-        );
-        assert!(
             !tmp.path().join("demo/outside.md").exists(),
             "a confined-out path must not be created"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_file_concurrent_same_version_writes_cannot_both_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        // Seed a file, then race two overwrites with the same version.
+        let created = call_tool(
+            &app,
+            &session,
+            333,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "docs/race.md",
+                "content": "v1\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+        let version = result_value(&created)["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        let first = call_tool(
+            &app,
+            &session,
+            334,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "docs/race.md",
+                "content": "winner-a\n",
+                "version": version,
+            }),
+        );
+        let second = call_tool(
+            &app,
+            &session,
+            335,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "docs/race.md",
+                "content": "winner-b\n",
+                "version": version,
+            }),
+        );
+        let (a, b) = tokio::join!(first, second);
+        let a_ok = a["result"]["isError"] != json!(true);
+        let b_ok = b["result"]["isError"] != json!(true);
+        assert!(
+            a_ok ^ b_ok,
+            "exactly one same-version overwrite must apply: {a} / {b}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_edit_file_refuses_breaking_model_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        // A resolvable model: an instance of a defined component.
+        std::fs::write(
+            tmp.path().join("demo/system.hcl"),
+            "component \"cpu\" {\n  leaf = true\n}\nsystem \"demo\" {\n  instance \"a\" { source = \"cpu\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        let version = read_file_version(&app, &session, 336, "system.hcl").await;
+
+        // Breaking the model (unknown source `missing` is E014) is refused
+        // byte-identical.
+        let refused = call_tool(
+            &app,
+            &session,
+            337,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "system.hcl",
+                "edits": [{ "old_text": "source = \"cpu\"", "new_text": "source = \"missing\"" }],
+                "version": version,
+            }),
+        )
+        .await;
+        let text = tool_error_text(&refused);
+        assert!(text.contains("E014"), "expected E014 in refusal: {text}");
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "refused edits must not touch the file");
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_file_refuses_breaking_model_overwrite() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        let version = read_file_version(&app, &session, 338, "system.hcl").await;
+
+        let broken = "system \"demo\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
+        let refused = call_tool(
+            &app,
+            &session,
+            339,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "system.hcl",
+                "content": broken,
+                "version": version,
+            }),
+        )
+        .await;
+        let text = tool_error_text(&refused);
+        assert!(text.contains("E014"), "expected E014 in refusal: {text}");
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "refused overwrites must not touch the file");
+    }
+
+    #[tokio::test]
+    async fn tools_call_file_tools_refuse_invalid_view_and_accept_valid_view() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read_to_string(tmp.path().join("demo/views/overview.hcl")).unwrap();
+        let version = read_file_version(&app, &session, 340, "views/overview.hcl").await;
+
+        // Unknown system is E006: refused, file untouched.
+        let refused = call_tool(
+            &app,
+            &session,
+            341,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "views/overview.hcl",
+                "edits": [{ "old_text": "system = \"demo\"", "new_text": "system = \"ghost\"" }],
+                "version": version,
+            }),
+        )
+        .await;
+        let text = tool_error_text(&refused);
+        assert!(text.contains("E006"), "expected E006 in refusal: {text}");
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("demo/views/overview.hcl")).unwrap(),
+            before,
+            "refused view edits must not touch the file"
+        );
+
+        // A valid view edit applies and `check_project` stays clean.
+        let applied = call_tool(
+            &app,
+            &session,
+            342,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "views/overview.hcl",
+                "edits": [{ "old_text": "system = \"demo\"", "new_text": "system = \"demo\"\n  annotation {\n    x = 1\n    y = 2\n    text = \"hi\"\n  }" }],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(applied["result"]["isError"], json!(true), "{applied}");
+
+        let check = call_tool(
+            &app,
+            &session,
+            343,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        assert_ne!(check["result"]["isError"], json!(true), "{check}");
+        let diagnostics = result_value(&check)["diagnostics"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            diagnostics.iter().all(|d| d["severity"] != json!("error")),
+            "no errors expected after valid view edit, got: {diagnostics:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_file_writes_keep_check_project_clean() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        // Valid model edit via `edit_file`.
+        let version = read_file_version(&app, &session, 344, "system.hcl").await;
+        let edited = call_tool(
+            &app,
+            &session,
+            345,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "system.hcl",
+                "edits": [{ "old_text": "system \"demo\" {}", "new_text": "system \"demo\" {\n  full_name = \"Demo\"\n}" }],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(edited["result"]["isError"], json!(true), "{edited}");
+
+        // Valid doc write via `create_file`.
+        let created = call_tool(
+            &app,
+            &session,
+            346,
+            "create_file",
+            json!({
+                "project": "demo",
+                "path": "README.md",
+                "content": "# Demo\n",
+            }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+
+        let check = call_tool(
+            &app,
+            &session,
+            347,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        assert_ne!(check["result"]["isError"], json!(true), "{check}");
+        let diagnostics = result_value(&check)["diagnostics"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(
+            diagnostics.iter().all(|d| d["severity"] != json!("error")),
+            "no errors expected after valid writes, got: {diagnostics:?}"
         );
     }
 

@@ -121,10 +121,15 @@ one tool per op, with the op's name and parameters.
 - **No auth:** like the rest of the server, the endpoint has no authentication
   at this stage of the project and assumes a trusted environment.
 
-### Step 3: documentation
+### Step 3: generic file tools (supersedes documentation-only tools)
+
+> **Superseded:** the docs-only `create_doc` / `edit_documentation` tools
+> described below are replaced by generic `create_file` + `edit_file` file
+> tools (all paths, with model/view validation). `overwrite_model` and all
+> `ModelOp` tools stay untouched.
 
 Docs (`docs/**.md`) are plain Markdown, not HCL, so they are edited through a
-text-oriented interface rather than `ModelOp`s. The tools are:
+text-oriented interface rather than `ModelOp`s. The tools were:
 
 | Tool | Purpose |
 | ---- | ------- |
@@ -149,18 +154,25 @@ text-oriented interface rather than `ModelOp`s. The tools are:
 - **Locking and identity:** as in step 2, the edit acquires the project lock
   as user `AI` and is refused while a human holds it. A successful edit
   counts as an edit and resets the lock's idle timer.
-- **Implemented (2026-10, updated 2026-11):** `edit_documentation` and
-  `create_doc` ship on `/mcp`. `edit_documentation` replaces one exact span
-  in an existing `docs/**.md` file; `create_doc` creates a new doc (parents
-  included) or overwrites an existing one whole, requiring the `version`
-  `read_file` returned when the file already exists. Both return the new
-  `version` and `totalLines`. Since 0004 the tools also take the project lock
-  as the hardcoded `AI` user and are refused while a human holds the
-  project: reads, version checks, and writes still happen under one held
+- **Implemented (2026-10, updated 2026-11, superseded):** `edit_documentation` and
+  `create_doc` shipped on `/mcp`. `edit_documentation` replaced one exact span
+  in an existing `docs/**.md` file; `create_doc` created a new doc (parents
+  included) or overwrote an existing one whole, requiring the `version`
+  `read_file` returned when the file already existed. Both returned the new
+  `version` and `totalLines`. Since 0004 the tools also took the project lock
+  as the hardcoded `AI` user and were refused while a human held the
+  project: reads, version checks, and writes still happened under one held
   inner lock inside the blocking task, so two writes sent with the same
-  version cannot both apply.
-- **Scope:** docs only. Changes to `system.hcl` still go through the step 2
-  ops.
+  version could not both apply.
+- **Scope (superseded):** docs only. Changes to `system.hcl` still went through the step 2
+  ops. Replaced by generic `create_file` (whole-file create/overwrite, Zed
+  `write_file` shape) + `edit_file` (granular `edits` array, Zed `edit_file`
+  shape) covering every confined path: `.hcl` model files go through a full
+  compile (zero errors required, same gate as `overwrite_model`);
+  `views/**.hcl` goes through `parse_views` + resolution (`E016`/`E006`/parse
+  errors refuse, warnings pass through); all other paths skip validation.
+  CAS stays mandatory (`version` required on overwrite/edit, ignored for
+  brand-new files).
 
 ## Diagnostics
 
