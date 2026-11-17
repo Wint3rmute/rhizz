@@ -200,3 +200,89 @@ export const TakenName: Story = {
     await expect(modal.getByTestId("new-connection-create")).toBeDisabled();
   },
 };
+
+// Dragging from the scope's own port dot into a child: the dialog switches to
+// the delegation variant — the outer port inherits its type, so it offers no
+// protocol or role fields, and the preview draws no arrowhead.
+export const DelegationVariant: Story = {
+  args: {
+    request: {
+      scopePath: "demo/weather-service",
+      from: {
+        key: "demo/weather-service",
+        label: "weather-service",
+        component: "",
+        definition: "weather-service",
+        portLabels: ["api"],
+        existingPort: "api",
+      },
+      to: {
+        key: "demo/weather-service/proxy",
+        label: "proxy",
+        component: "proxy",
+        definition: "reverse-proxy",
+        portLabels: ["http"],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    await expect(
+      modal.getByTestId("new-connection-delegation"),
+    ).toHaveTextContent(/delegates inward/i);
+    // The outer end inherits: no protocol or role fields of its own.
+    await expect(
+      modal.queryByTestId("new-connection-from-role"),
+    ).toBeNull();
+    await expect(
+      modal.getAllByText(/inherits its type/i).length,
+    ).toBeGreaterThan(0);
+    // The inner end still takes a protocol and role.
+    await expect(
+      modal.getByTestId("new-connection-to-role"),
+    ).toBeInTheDocument();
+    // No arrowhead on the preview: delegation has no direction.
+    await expect(
+      modal.getByTestId("new-connection-preview-line"),
+    ).not.toHaveAttribute("marker-end");
+    await expect(
+      modal.getByTestId("new-connection-preview-line"),
+    ).not.toHaveAttribute("marker-start");
+  },
+};
+
+// Delegation with a brand-new outer port: external is forced on (a proxy
+// must be a boundary), the role field is replaced by the inherits note.
+export const DelegationNewOuter: Story = {
+  args: {
+    request: {
+      scopePath: "demo/weather-service",
+      from: {
+        key: "demo/weather-service",
+        label: "weather-service",
+        component: "",
+        definition: "weather-service",
+        portLabels: [],
+      },
+      to: {
+        key: "demo/weather-service/proxy",
+        label: "proxy",
+        component: "proxy",
+        definition: "reverse-proxy",
+        portLabels: ["http"],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    await expect(
+      modal.getByTestId("new-connection-delegation"),
+    ).toBeInTheDocument();
+    await expect(
+      modal.queryByTestId("new-connection-from-role"),
+    ).toBeNull();
+    const external = modal.getByTestId("new-connection-from-external");
+    await expect(external).toBeChecked();
+    await expect(external).toBeDisabled();
+  },
+};

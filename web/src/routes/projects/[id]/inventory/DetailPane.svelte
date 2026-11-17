@@ -395,7 +395,18 @@
             <tbody>
               {#each definition.ports as port (port.label)}
                 <tr>
-                  <td class="font-medium">{port.label}</td>
+                  <td class="font-medium">
+                    {port.label}
+                    {#if port.inferred}
+                      <span
+                        class="badge badge-ghost badge-xs ml-1"
+                        title={port.inferredFrom !== undefined
+                          ? `Proxy port: inherits ${port.inferredFrom.owner}/${port.inferredFrom.port}.`
+                          : "Proxy port: inherits its type from the delegation target."}
+                        >proxy</span
+                      >
+                    {/if}
+                  </td>
                   <td>{port.protocol || "—"}</td>
                   <td>{port.role}</td>
                   <td>{port.external ? "yes" : "no"}</td>

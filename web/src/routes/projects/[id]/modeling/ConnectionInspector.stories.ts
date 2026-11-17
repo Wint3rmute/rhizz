@@ -234,3 +234,32 @@ export const AttributeScopes: Story = {
     ).toHaveAttribute("data-tip", expect.stringContaining("copies"));
   },
 };
+
+/**
+ * A delegation edge: badged as Delegation with no direction language, and the
+ * realization panel explains itself instead of offering an add-realization
+ * picker (delegation edges never take `realized_by`).
+ */
+export const Delegation: Story = {
+  tags: ["no-vrt"],
+  args: {
+    connection: {
+      ref: { scopePath: "app/weather-service", label: "api-delegation" },
+      full_name: "Boundary forwards to the reverse proxy",
+      tags: [],
+      level: 2,
+      from_port: "api",
+      to_port: "http",
+      protocol: "rest",
+      realized_by: [],
+      complete: true,
+      isDelegation: true,
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(canvas.getByText("Delegation")).toBeTruthy();
+    await expect(canvas.getByTestId("delegation-note")).toBeTruthy();
+    await expect(canvas.queryByLabelText(/add realization/i)).toBeNull();
+  },
+};

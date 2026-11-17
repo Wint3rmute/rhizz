@@ -2693,6 +2693,7 @@
   ): ConnectionEndInfo {
     const data = componentData.get(key);
     const label = key.split("/").filter(Boolean).pop() ?? key;
+    const existing = data?.ports.find((port) => port.label === existingPort);
     return {
       key,
       label,
@@ -2700,6 +2701,14 @@
       definition: data?.source ?? label,
       portLabels: data?.ports.map((port) => port.label) ?? [],
       existingPort: existingPort ?? undefined,
+      // Declared type of a dragged-from dot, so the dialog can tell an
+      // explicitly typed outer port (cannot delegate, E022) from an
+      // omitted one (inherits from the inner port).
+      existingPortProtocol:
+        existing?.protocol === "" ? undefined : existing?.protocol,
+      existingPortRole: existing?.role,
+      existingPortExternal: existing?.external,
+      existingPortExplicit: existing?.explicit,
     };
   }
 

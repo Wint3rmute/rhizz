@@ -14,8 +14,10 @@
     type NewConnectionRequest,
     buildConnectOp,
     connectionDirection,
+    delegationOuterSide,
     initialDraft,
     orderProtocols,
+    presetDelegationRoles,
     presetRoles,
     rememberProtocol,
     validateDraft,
@@ -61,6 +63,20 @@
     draft = untrack(() =>
       initialDraft(request, { takenConnectionLabels, protocols }),
     );
+    // Delegation with an existing inner port: the picker is locked to the
+    // inner port's protocol (it types nothing new), so seed the display.
+    const outer = untrack(() =>
+      request === null ? null : delegationOuterSide(request),
+    );
+    if (outer !== null && draft !== null) {
+      const inner = outer === "from" ? request.to : request.from;
+      if (
+        inner.existingPort !== undefined &&
+        inner.existingPortProtocol !== undefined
+      ) {
+        draft.protocol = inner.existingPortProtocol;
+      }
+    }
     listOpen = false;
     activeIndex = -1;
     presetKey = "";
@@ -120,6 +136,37 @@
   let fromEnd = $derived(request?.from);
   let toEnd = $derived(request?.to);
 
+  // Delegation variant: one end names the scope itself (empty component).
+  // The outer port inherits its type, so only the inner end is typed here.
+  let delegationSide = $derived(
+    request === null ? null : delegationOuterSide(request),
+  );
+  let isDelegation = $derived(delegationSide !== null);
+  let innerEnd = $derived(
+    delegationSide === "from"
+      ? toEnd
+      : delegationSide === "to"
+        ? fromEnd
+        : undefined,
+  );
+  let outerEnd = $derived(
+    delegationSide === "from"
+      ? fromEnd
+      : delegationSide === "to"
+        ? toEnd
+        : undefined,
+  );
+  // The protocol picker is locked to the inner port's protocol when the
+  // inner end already exists; it only types newly created inner ports.
+  let innerExistingProtocol = $derived(
+    innerEnd?.existingPort !== undefined
+      ? (innerEnd.existingPortProtocol ?? "")
+      : undefined,
+  );
+  let protocolLocked = $derived(
+    isDelegation && innerEnd?.existingPort !== undefined,
+  );
+
   function setProtocol(text: string) {
     if (draft === null) return;
     draft.protocol = text;
@@ -133,6 +180,15 @@
           : `existing:${resolved.label}`;
     if (key === presetKey) return;
     presetKey = key;
+    if (delegationSide !== null) {
+      const roles = presetDelegationRoles(resolved);
+      if (delegationSide === "from") {
+        draft.to.role = roles.inner;
+      } else {
+        draft.from.role = roles.inner;
+      }
+      return;
+    }
     const roles = presetRoles(resolved);
     draft.from.role = roles.from;
     draft.to.role = roles.to;
@@ -307,10 +363,10 @@
             stroke-dasharray="6 4"
             class="new-connection-flow"
             data-testid="new-connection-preview-line"
-            marker-end={direction === "backward"
+            marker-end={direction === "backward" || isDelegation
               ? undefined
               : "url(#new-conn-arrow)"}
-            marker-start={direction === "backward"
+            marker-start={direction === "backward" && !isDelegation
               ? "url(#new-conn-arrow)"
               : undefined}
           />
@@ -342,6 +398,33 @@
             >{shorten(connectionName, 30)}</text
           >
         </svg>
+
+        {#if isDelegation && outerEnd !== undefined && innerEnd !== undefined}
+          {@const outerPortName =
+            outerEnd.existingPort ??
+            (delegationSide === "from"
+              ? (draft?.from.name.trim() ?? "")
+              : (draft?.to.name.trim() ?? ""))}
+          {@const innerPortName =
+            innerEnd.existingPort ??
+            (delegationSide === "from"
+              ? (draft?.to.name.trim() ?? "")
+              : (draft?.from.name.trim() ?? ""))}
+          <div
+            class="alert alert-info py-2 text-xs"
+            data-testid="new-connection-delegation"
+          >
+            <span>
+              Delegates inward — <span class="font-mono"
+                >./{outerPortName}</span
+              >
+              forwards to <span class="font-mono"
+                >{innerEnd.label}/{innerPortName}</span
+              >. The outer port inherits its type; leave protocol and role
+              blank.
+            </span>
+          </div>
+        {/if}
 
         <div class="form-control">
           <label class="label py-1" for="new-conn-name">
@@ -389,10 +472,16 @@
               ? `new-conn-protocol-option-${String(activeIndex)}`
               : undefined}
             value={draft.protocol}
-            placeholder="No protocol (optional) — type to search or create"
+            placeholder={protocolLocked
+              ? "Follows the inner port — no protocol to pick"
+              : "No protocol (optional) — type to search or create"}
             class="input input-sm input-bordered w-full"
             data-testid="new-connection-protocol"
             autocomplete="off"
+            disabled={protocolLocked}
+            title={protocolLocked
+              ? "The inner port already exists: the protocol follows it."
+              : undefined}
             oninput={(e) => {
               setProtocol(e.currentTarget.value);
               listOpen = true;
@@ -462,7 +551,7 @@
         </div>
 
         <div class="grid grid-cols-2 gap-3">
-          {#each [{ side: "from", end: fromEnd, port: draft.from, nameProblem: validation?.problems.fromName, roleProblem: validation?.problems.fromRole }, { side: "to", end: toEnd, port: draft.to, nameProblem: validation?.problems.toName, roleProblem: validation?.problems.toRole }] as column (column.side)}
+          {#each [{ side: "from", end: fromEnd, port: draft.from, nameProblem: validation?.problems.fromName, roleProblem: validation?.problems.fromRole, isOuter: delegationSide === "from" }, { side: "to", end: toEnd, port: draft.to, nameProblem: validation?.problems.toName, roleProblem: validation?.problems.toRole, isOuter: delegationSide === "to" }] as column (column.side)}
             <fieldset
               class="flex flex-col gap-2"
               data-testid="new-connection-{column.side}-column"
@@ -479,6 +568,12 @@
                     >{column.end.existingPort}</span
                   >
                 </p>
+                {#if column.isOuter}
+                  <p class="text-xs text-base-content/60">
+                    Inherits its type from the inner port — leave protocol and
+                    role blank.
+                  </p>
+                {/if}
               {:else}
                 <div class="form-control">
                   <label class="label py-1" for="new-conn-{column.side}-name">
@@ -504,6 +599,11 @@
                   {/if}
                 </div>
 
+                {#if column.isOuter}
+                  <p class="text-xs text-base-content/60">
+                    Inherits its type from the inner port — no role to pick.
+                  </p>
+                {:else}
                 <div class="form-control">
                   <label class="label py-1" for="new-conn-{column.side}-role">
                     <span class="label-text text-xs text-base-content/70"
@@ -546,6 +646,7 @@
                     </p>
                   {/if}
                 </div>
+                {/if}
 
                 <div class="flex flex-col">
                   <label class="label cursor-pointer justify-start gap-2 py-1">
@@ -553,6 +654,10 @@
                       type="checkbox"
                       class="checkbox checkbox-sm"
                       bind:checked={column.port.external}
+                      disabled={column.isOuter}
+                      title={column.isOuter
+                        ? "The boundary port must stay external to delegate."
+                        : undefined}
                       data-testid="new-connection-{column.side}-external"
                     />
                     <span class="label-text text-sm">External port</span>
@@ -573,6 +678,14 @@
         </div>
       </div>
 
+      {#if validation?.problems.form !== undefined}
+        <p
+          class="text-xs text-error"
+          data-testid="new-connection-problem"
+        >
+          {validation.problems.form}
+        </p>
+      {/if}
       <div class="modal-action border-t border-base-300 pt-3 mt-0">
         <button onclick={onclose} class="btn btn-sm btn-ghost">Cancel</button>
         <button

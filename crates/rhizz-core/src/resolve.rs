@@ -1562,13 +1562,7 @@ fn infer_proxy_types(
 ) {
     const MAX_HOPS: usize = 1024;
     let mut memo: HashMap<PortId, (Option<PortId>, usize)> = HashMap::new();
-    let mut fills: Vec<(
-        PortId,
-        String,
-        Option<ProtocolId>,
-        Option<String>,
-        PortId,
-    )> = Vec::new();
+    let mut fills: Vec<InferredPort> = Vec::new();
     let mut inferred: Vec<PortId> = Vec::new();
     let mut depth_errors: Vec<(PortId, String)> = Vec::new();
     // Deterministic order so diagnostics read stable across runs.
@@ -1755,6 +1749,9 @@ fn check_delegation_shapes(
         r.push_error(DiagnosticCode::E022, msg);
     }
 }
+
+/// One inferred proxy port: its id, inherited type, and terminal port.
+type InferredPort = (PortId, String, Option<ProtocolId>, Option<String>, PortId);
 
 /// Follow a delegation chain from `start` through `single_edge` (outer ->
 /// target for outers with exactly one in-scope self edge). `candidates` holds

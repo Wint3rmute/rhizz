@@ -22,6 +22,10 @@ export interface PortInfo {
   external: boolean;
   required: boolean;
   full_name: string;
+  /** Proxy port: `protocol`/`role` are inherited, not declared. */
+  inferred?: boolean | undefined;
+  /** Where an inferred port inherits from: terminal port + owner label. */
+  inferredFrom?: { port: string; owner: string } | undefined;
 }
 
 /** A component definition flattened into plain display data. Instances are
