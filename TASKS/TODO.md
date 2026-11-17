@@ -18,6 +18,32 @@ How to work on this file:
 
 ---
 
+## Task <N> — Fix infinite update loop on side-handle drag onto a nested child
+
+Dragging a connection from a parent component's side handle and dropping it
+on a nested child component locks the canvas with Svelte's
+`effect_update_depth_exceeded` and no dialog ever opens. Reproduces on clean
+`main` (verified by stashing all 0006.x work during 0006.3 testing), so it
+predates delegation — but it blocks the most discoverable delegation gesture
+(drag parent → child to open the "delegates inward" dialog).
+
+- **Repro:** a component with a nested child instance, both placed; drag any
+  side handle of the parent onto the child; drop. Expected: the
+  New-connection dialog (delegation variant). Actual: `pageerror`
+  `effect_update_depth_exceeded`, no dialog, canvas left in a broken state.
+- **Workaround that works today:** alt-drag from the parent's port *dot*
+  instead of a side handle (covered by `e2e/delegation-edges.spec.ts`).
+- **Suspect:** a self-invalidating reactive statement on the drop path — the
+  same shape as the 0006.3 modal `$effect` bug (reading state it writes every
+  run). Check `handleCreateConnection` callers, the `newConnectionRequest`
+  effect chain, and anything the drop handler touches that re-triggers it.
+- **Definition of done:** the side-handle drop opens the delegation dialog;
+  no `pageerror` during the gesture; a regression e2e (nested drop opens the
+  dialog, no console errors) alongside the existing dot-drag coverage.
+- Red/green TDD where the logic is unit-testable (`newConnection.ts` is
+  already covered; the loop itself is likely in component wiring, so the e2e
+  is the primary guard); `just test`, `just lint`, `just build` green.
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
