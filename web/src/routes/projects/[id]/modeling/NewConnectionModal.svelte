@@ -62,20 +62,31 @@
     }
     // Build locally, then assign once: reading `draft` here would subscribe
     // this effect to every fresh object it writes (an infinite loop).
-    const fresh = untrack(() =>
-      initialDraft(request, { takenConnectionLabels, protocols }),
-    );
-    // Delegation with an existing inner port: the picker is locked to the
-    // inner port's protocol (it types nothing new), so seed the display.
-    const outer = untrack(() => delegationOuterSide(request));
-    if (outer !== null) {
-      const inner = outer === "from" ? request.to : request.from;
-      if (
-        inner.existingPort !== undefined &&
-        inner.existingPortProtocol !== undefined
-      ) {
-        fresh.protocol = inner.existingPortProtocol;
-      }
+    // Everything the draft derives from the request stays inside `untrack`
+    // — including the inner-end read below — so opening the dialog never
+    // subscribes this effect to the request it just built from.
+    const { fresh, innerProtocol } = untrack(() => {
+      const computed = initialDraft(request, {
+        takenConnectionLabels,
+        protocols,
+      });
+      // Delegation with an existing inner port: the picker is locked to the
+      // inner port's protocol (it types nothing new), so seed the display.
+      const outerSide = delegationOuterSide(request);
+      const inner =
+        outerSide === "from"
+          ? request.to
+          : outerSide === "to"
+            ? request.from
+            : undefined;
+      const protocol =
+        inner?.existingPort !== undefined
+          ? inner.existingPortProtocol
+          : undefined;
+      return { fresh: computed, innerProtocol: protocol };
+    });
+    if (innerProtocol !== undefined) {
+      fresh.protocol = innerProtocol;
     }
     draft = fresh;
     listOpen = false;
@@ -90,10 +101,17 @@
   // already moved into the dialog is left alone.
   $effect(() => {
     const input = nameInput;
-    if (input === undefined) return;
+    // `bind:this` yields `null` once the dialog unmounts (the declared type
+    // only names `undefined` for the pre-mount state) — guard both, or the
+    // close path throws `Cannot read properties of null (reading 'closest')`.
+    if (input == null) return;
     const frame = requestAnimationFrame(() => {
+      // The dialog may have closed before the frame ran (its `bind:this`
+      // is then already `null`, and the input is detached): never steal
+      // focus in that case.
       const dialog = input.closest('[role="dialog"]');
-      if (dialog?.contains(document.activeElement)) return;
+      if (dialog === null) return;
+      if (dialog.contains(document.activeElement)) return;
       input.focus();
     });
     return () => cancelAnimationFrame(frame);

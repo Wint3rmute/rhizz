@@ -248,3 +248,85 @@ test("the new-connection dialog offers a delegation variant for the scope itself
     .poll(() => modelText(page), { timeout: 10_000 })
     .toContain('"./api"');
 });
+
+// Side-handle drag from a parent onto its nested child opens the same
+// delegation dialog (regression: this gesture once locked the canvas with
+// `effect_update_depth_exceeded` and no dialog). The top handle is used on
+// purpose: the parent's existing boundary dot sits on another side and
+// would win the hit-test there (starting a port move, not a connection).
+test("a parent side-handle drop onto its nested child delegates inward", async ({
+  page,
+}) => {
+  const pageerrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (err) => pageerrors.push(String(err)));
+  page.on("console", (msg) => {
+    if (msg.type() === "error") consoleErrors.push(msg.text());
+  });
+  const id = await createNewProject(page, "E2E delegation side-handle drop");
+  await replaceModel(page, DIALOG_MODEL);
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+  const tree = page.getByTestId("modeling-pane-right");
+  const canvas = page.getByTestId("diagram-canvas");
+
+  async function place(name: string): Promise<void> {
+    const button = tree.getByRole("button", { name, exact: true });
+    await expect(button).toBeVisible();
+    const item = button.locator("xpath=parent::*");
+    await item.getByRole("checkbox").check();
+  }
+
+  await place("user");
+  await place("svc");
+  // Spread apart so the dragged handle starts clear of the other node.
+  await tree.getByRole("button", { name: "user", exact: true }).click();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowLeft");
+  await tree.getByRole("button", { name: "svc", exact: true }).click();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+  await tree.getByRole("button", { name: "Expand all" }).click();
+  await place("proxy");
+  // Select svc so its side handles render.
+  await tree.getByRole("button", { name: "svc", exact: true }).click();
+
+  // Top side handle: `computeDirectionalHandles` renders top first, and the
+  // existing `api` boundary dot sits on another side.
+  const handle = canvas.getByTestId("diagram-side-handle").nth(0);
+  await expect(handle).toBeVisible();
+  const handleBox = await handle.boundingBox();
+  if (!handleBox) throw new Error("no side-handle box");
+  const proxyBox = await canvas
+    .getByText("proxy", { exact: true })
+    .first()
+    .boundingBox();
+  if (!proxyBox) throw new Error("no box for proxy");
+  await page.mouse.move(
+    handleBox.x + handleBox.width / 2,
+    handleBox.y + handleBox.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    proxyBox.x + proxyBox.width / 2,
+    proxyBox.y + proxyBox.height / 2,
+    { steps: 12 },
+  );
+  await page.mouse.up();
+
+  const dialog = page.getByTestId("new-connection-modal");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("new-connection-delegation")).toContainText(
+    /delegates inward/i,
+  );
+  // The outer end is new (side-handle, not a port dot): it inherits.
+  await expect(dialog.getByTestId("new-connection-from-role")).toHaveCount(0);
+
+  // Closing the dialog must not throw either (the focus effect's
+  // `bind:this` is `null` once unmounted).
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  expect([...pageerrors, ...consoleErrors].join("\n")).not.toContain(
+    "effect_update_depth",
+  );
+  expect([...pageerrors, ...consoleErrors].join("\n")).not.toContain("closest");
+});
