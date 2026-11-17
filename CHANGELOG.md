@@ -10,6 +10,10 @@
 - **core**: delegation scoring, round-trip, weather-service example
 - **core**: delegation endpoints, proxy inference, E021/E022
 
+### Fix
+
+- **web**: side-handle nested drop opens delegation dialog without pageerror
+
 ## 0.12.0 (2026-11-16)
 
 ### Feat
