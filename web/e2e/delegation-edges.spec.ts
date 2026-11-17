@@ -143,3 +143,115 @@ test("a proxy boundary dot drags and persists like a real port", async ({
     .poll(() => viewText(page), { timeout: 10_000 })
     .toContain('port "api"');
 });
+
+// Alt-dragging from an existing boundary dot into a child opens the dialog
+// in delegation mode: the outer end is the scope itself, so it inherits.
+// The outside edge exists first (as in the real flow), so the api dot renders.
+const DIALOG_MODEL = `component "leaf" {
+  leaf = true
+  port "http" {
+    protocol = "sig"
+  }
+}
+component "svc" {
+  port "api" { external = true }
+  instance "proxy" { source = "leaf" }
+}
+component "user" {
+  leaf = true
+  port "out" { protocol = "sig" }
+}
+system "app" {
+  instance "user" { source = "user" }
+  instance "svc" { source = "svc" }
+  connection "forecast" {
+    from = "user/out"
+    to   = "svc/api"
+  }
+}
+`;
+
+test("the new-connection dialog offers a delegation variant for the scope itself", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E delegation dialog");
+  await replaceModel(page, DIALOG_MODEL);
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+  const tree = page.getByTestId("modeling-pane-right");
+  const canvas = page.getByTestId("diagram-canvas");
+
+  async function place(name: string): Promise<void> {
+    const button = tree.getByRole("button", { name, exact: true });
+    await expect(button).toBeVisible();
+    const item = button.locator("xpath=parent::*");
+    await item.getByRole("checkbox").check();
+  }
+
+  await place("user");
+  await place("svc");
+  await tree.getByRole("button", { name: "Expand all" }).click();
+  await place("proxy");
+  // Select svc so its boundary dot renders.
+  await tree.getByRole("button", { name: "svc", exact: true }).click();
+  // Alt-drag from the existing boundary dot into the child, exactly the
+  // gesture that discovers delegation: the outer end is the scope itself.
+  const dot = canvas.getByTestId("diagram-port").filter({ hasText: "api" });
+  await expect(dot).toBeVisible();
+  const start = await dot.locator("circle").first().boundingBox();
+  if (!start) throw new Error("no boundary port dot box");
+  const proxyBox = await canvas
+    .getByText("proxy", { exact: true })
+    .first()
+    .boundingBox();
+  if (!proxyBox) throw new Error("no box for proxy");
+  await page.mouse.move(
+    start.x + start.width / 2,
+    start.y + start.height / 2,
+  );
+  await page.keyboard.down("Alt");
+  await page.mouse.down();
+  await page.mouse.move(
+    proxyBox.x + proxyBox.width / 2,
+    proxyBox.y + proxyBox.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+
+  const dialog = page.getByTestId("new-connection-modal");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("new-connection-delegation")).toContainText(
+    /delegates inward/i,
+  );
+  // The outer end inherits: no role field, existing port named.
+  await expect(
+    dialog.getByTestId("new-connection-from-role")
+  ).toHaveCount(0);
+  await expect(
+    dialog.getByTestId("new-connection-existing-port")
+  ).toContainText("api");
+  // The inner end still takes a role.
+  await expect(
+    dialog.getByTestId("new-connection-to-role")
+  ).toBeVisible();
+
+  // Create with the defaults: blank protocol, blank role.
+  await page.keyboard.press("Enter");
+  await expect(dialog).toBeHidden();
+
+  // The delegation edge draws without an arrowhead; the outside edge keeps its.
+  await expect(canvas.getByTestId("diagram-edge")).toHaveCount(2);
+  await expect(
+    canvas.getByTestId("diagram-edge").locator("polygon"),
+  ).toHaveCount(1);
+
+  // The model names the scope's own port with `./` and leaves it untyped.
+  const modelText = async (): Promise<string> => {
+    const files = await storedFiles(page);
+    return files["system.hcl"] ?? files["main.hcl"] ?? "";
+  };
+  await expect
+    .poll(() => modelText(page), { timeout: 10_000 })
+    .toContain('"./api"');
+});
