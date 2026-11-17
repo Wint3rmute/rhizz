@@ -2,6 +2,10 @@
 
 ### Feat
 
+- **proxy**: inspector badges, delegation dialog variant, MCP docs
+- **proxy**: inspector badges, delegation dialog variant, omission-preserving updates
+- **web**: proxy inspector badges, delegation dialog variant, omission-preserving updates
+- **core**: track delegation terminal source; read model surfaces proxy/delegation
 - **web**: delegation direct-or-omitted resolution and arrowless edges
 - **core**: delegation scoring, round-trip, weather-service example
 - **core**: delegation endpoints, proxy inference, E021/E022

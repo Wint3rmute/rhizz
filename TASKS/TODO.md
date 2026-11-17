@@ -18,13 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — 0006.3 Inspector, MCP + inventory follow-through for proxy ports
-
-- Inspector/read model surfaces inherited `protocol`/`role` (and terminal source) for proxy ports; delegation edges labeled as delegation (no direction).
-- MCP `connect_components` + `add_connection` accept `./port`; `update_component` port patch documents omission-means-inferred when delegated.
-- Inventory/lint surfaces E021/E022 with the offending port/owner; no new warnings.
-- Red/green TDD (unit + e2e on inspector/MCP paths); `just test`, `just lint`, `just build` green.
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow

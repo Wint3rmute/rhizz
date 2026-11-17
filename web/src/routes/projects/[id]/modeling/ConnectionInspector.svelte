@@ -447,8 +447,8 @@
 
       {#if connection.isDelegation}
         <p class="text-xs text-base-content/60" data-testid="delegation-note">
-          A delegation edge relates a port to a port within one component, not
-          a connection to a connection — there is nothing to realize here.
+          A delegation edge relates a port to a port within one component, not a
+          connection to a connection — there is nothing to realize here.
         </p>
       {/if}
 
@@ -496,23 +496,23 @@
       {/if}
 
       {#if !connection.isDelegation}
-      <select
-        class="select select-xs w-full"
-        aria-label="Add realization"
-        disabled={readonly || realizationCandidates.length === 0}
-        onchange={(event) => {
-          const value = event.currentTarget.value;
-          event.currentTarget.value = "";
-          if (value !== "") addRealization(value);
-        }}
-      >
-        <option value="">Add realization…</option>
-        {#each realizationCandidates as candidate (connectionRefKey(candidate.ref))}
-          <option value={connectionRefKey(candidate.ref)}
-            >{refLabel(candidate.ref)}</option
-          >
-        {/each}
-      </select>
+        <select
+          class="select select-xs w-full"
+          aria-label="Add realization"
+          disabled={readonly || realizationCandidates.length === 0}
+          onchange={(event) => {
+            const value = event.currentTarget.value;
+            event.currentTarget.value = "";
+            if (value !== "") addRealization(value);
+          }}
+        >
+          <option value="">Add realization…</option>
+          {#each realizationCandidates as candidate (connectionRefKey(candidate.ref))}
+            <option value={connectionRefKey(candidate.ref)}
+              >{refLabel(candidate.ref)}</option
+            >
+          {/each}
+        </select>
       {/if}
     </div>
   </div>
