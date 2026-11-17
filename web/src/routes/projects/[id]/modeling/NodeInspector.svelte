@@ -330,10 +330,20 @@
                 onchange={(e) =>
                   handleUpdatePort(portIdx, {
                     label: (e.target as HTMLInputElement).value.trim(),
-                  })}
+                  })
+                }
                 class="input input-xs input-bordered font-semibold flex-1"
                 placeholder="Port name"
               />
+              {#if port.inferred}
+                <span
+                  class="badge badge-ghost badge-xs shrink-0"
+                  title={port.inferredFrom !== undefined
+                    ? `Proxy port: inherits ${port.inferredFrom.owner}/${port.inferredFrom.port}. Edit the terminal port or remove the delegation edge to change it.`
+                    : "Proxy port: inherits its type from the delegation target."}
+                  >proxy</span
+                >
+              {/if}
               <button
                 onclick={() => handleDeletePort(portIdx)}
                 class="btn btn-xs btn-ghost btn-square text-error"
@@ -342,6 +352,15 @@
                 ✕
               </button>
             </div>
+            {#if port.inferred}
+              <p class="text-xs text-base-content/60">
+                Inherits <span class="font-mono"
+                  >{port.inferredFrom !== undefined
+                    ? `${port.inferredFrom.owner}/${port.inferredFrom.port}`
+                    : "its delegation target"}</span
+                > — protocol and role are read-only here.
+              </p>
+            {/if}
 
             <div class="grid grid-cols-2 gap-2">
               <div class="form-control">
@@ -352,10 +371,15 @@
                 <input
                   type="text"
                   value={port.protocol || ""}
+                  disabled={port.inferred === true}
+                  title={port.inferred === true
+                    ? "Inherited from the delegation target — read-only here."
+                    : undefined}
                   onchange={(e) =>
                     handleUpdatePort(portIdx, {
                       protocol: (e.target as HTMLInputElement).value.trim(),
-                    })}
+                    })
+                  }
                   class="input input-xs input-bordered"
                   placeholder="e.g. spi, http"
                 />
@@ -367,11 +391,18 @@
                 >
                 <select
                   value={port.role || "peer"}
+                  disabled={port.inferred === true}
+                  title={port.inferred === true
+                    ? "Inherited from the delegation target — read-only here."
+                    : undefined}
                   onchange={(e) =>
                     handleUpdatePort(portIdx, {
                       role: (e.target as HTMLSelectElement).value as
-                        "provider" | "consumer" | "peer",
-                    })}
+                        | "provider"
+                        | "consumer"
+                        | "peer",
+                    })
+                  }
                   class="select select-xs select-bordered"
                 >
                   <option value="provider">Provider</option>

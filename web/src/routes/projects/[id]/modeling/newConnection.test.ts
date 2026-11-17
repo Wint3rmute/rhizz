@@ -7,9 +7,12 @@ import {
   connectionDirection,
   defaultConnectionLabel,
   defaultPortName,
+  delegationOuterSide,
   initialDraft,
+  isDelegationRequest,
   isExternalEnd,
   orderProtocols,
+  presetDelegationRoles,
   presetRoles,
   protocolUsage,
   recentProtocols,
@@ -466,5 +469,196 @@ describe("protocolUsage", () => {
     expect(usage.get("spi")).toBe(2);
     expect(usage.get("i2c")).toBe(1);
     expect(usage.has("")).toBe(false);
+  });
+});
+
+describe("delegation", () => {
+  const delegationRequest = (overrides: {
+    from?: Partial<ReturnType<typeof end>>;
+    to?: Partial<ReturnType<typeof end>>;
+  } = {}) =>
+    request({
+      scopePath: "demo/svc",
+      from: end("svc", { component: "", ...overrides.from }),
+      to: end("proxy", { component: "proxy", ...overrides.to }),
+    });
+
+  describe("delegationOuterSide", () => {
+    it("names the empty-component end as the outer", () => {
+      expect(delegationOuterSide(delegationRequest())).toBe("from");
+      expect(
+        delegationOuterSide(
+          request({
+            from: end("proxy", { component: "proxy" }),
+            to: end("svc", { component: "" }),
+          }),
+        ),
+      ).toBe("to");
+    });
+
+    it("is null without exactly one empty end", () => {
+      expect(delegationOuterSide(request())).toBeNull();
+      expect(
+        delegationOuterSide(
+          request({
+            from: end("a", { component: "" }),
+            to: end("b", { component: "" }),
+          }),
+        ),
+      ).toBeNull();
+    });
+  });
+
+  describe("isDelegationRequest", () => {
+    it("is true only for the delegation shape", () => {
+      expect(isDelegationRequest(delegationRequest())).toBe(true);
+      expect(isDelegationRequest(request())).toBe(false);
+    });
+  });
+
+  describe("presetDelegationRoles", () => {
+    it("gives the inner port the first role and leaves the outer blank", () => {
+      expect(
+        presetDelegationRoles(protocol("spi", { roles: ["provider", "consumer"] })),
+      ).toEqual({ inner: "provider" });
+      expect(presetDelegationRoles(protocol("bare"))).toEqual({ inner: "" });
+      expect(presetDelegationRoles(undefined)).toEqual({ inner: "" });
+    });
+  });
+
+  describe("validateDraft delegation", () => {
+    it("refuses two empty ends", () => {
+      const req = request({
+        from: end("a", { component: "" }),
+        to: end("b", { component: "" }),
+      });
+      const { valid, problems } = validateDraft(
+        req,
+        initialDraft(req, NO_CONTEXT),
+        NO_CONTEXT,
+      );
+      expect(valid).toBe(false);
+      expect(problems.form).toMatch(/child component/);
+    });
+
+    it("refuses an explicitly typed existing outer port", () => {
+      const req = delegationRequest({
+        from: {
+          existingPort: "api",
+          existingPortExplicit: true,
+          existingPortExternal: true,
+        },
+      });
+      const { valid, problems } = validateDraft(
+        req,
+        initialDraft(req, NO_CONTEXT),
+        NO_CONTEXT,
+      );
+      expect(valid).toBe(false);
+      expect(problems.form).toMatch(/already declares a type/);
+    });
+
+    it("refuses an internal existing outer port", () => {
+      const req = delegationRequest({
+        from: {
+          existingPort: "api",
+          existingPortExplicit: false,
+          existingPortExternal: false,
+        },
+      });
+      const { valid, problems } = validateDraft(
+        req,
+        initialDraft(req, NO_CONTEXT),
+        NO_CONTEXT,
+      );
+      expect(valid).toBe(false);
+      expect(problems.form).toMatch(/must be external/);
+    });
+
+    it("refuses a new outer port without external", () => {
+      const req = delegationRequest();
+      const draft = initialDraft(req, NO_CONTEXT);
+      const { valid, problems } = validateDraft(
+        req,
+        { ...draft, from: { ...draft.from, external: false } },
+        NO_CONTEXT,
+      );
+      expect(valid).toBe(false);
+      expect(problems.form).toMatch(/must stay external/);
+    });
+
+    it("accepts an omitted existing outer port and a new outer port", () => {
+      const existing = delegationRequest({
+        from: {
+          existingPort: "api",
+          existingPortExplicit: false,
+          existingPortExternal: true,
+        },
+      });
+      expect(
+        validateDraft(existing, initialDraft(existing, NO_CONTEXT), NO_CONTEXT)
+          .valid,
+      ).toBe(true);
+      const fresh = delegationRequest();
+      expect(
+        validateDraft(fresh, initialDraft(fresh, NO_CONTEXT), NO_CONTEXT).valid,
+      ).toBe(true);
+    });
+  });
+
+  describe("buildConnectOp delegation", () => {
+    it("creates a typeless outer port and types only the inner one", () => {
+      const spi = protocol("spi", { roles: ["provider", "consumer"] });
+      const req = delegationRequest();
+      const base = initialDraft(req, { ...NO_CONTEXT, protocols: [spi] });
+      const op = buildConnectOp(
+        req,
+        { ...base, protocol: "spi", to: { ...base.to, role: "provider" } },
+        [spi],
+      );
+      expect(op).toMatchObject({
+        kind: "connect_components",
+        scopePath: "demo/svc",
+        from: {
+          component: "",
+          port: { new: { label: "link-proxy", external: true } },
+        },
+        to: {
+          component: "proxy",
+          port: { new: { protocol: "spi", role: "provider" } },
+        },
+      });
+      expect(op).not.toHaveProperty("createProtocol");
+      const created = op as { from: { port: { new?: object } } };
+      expect(created.from.port.new).not.toHaveProperty("protocol");
+      expect(created.from.port.new).not.toHaveProperty("role");
+    });
+
+    it("uses an existing outer port as is and never creates its protocol", () => {
+      const req = delegationRequest({
+        from: {
+          existingPort: "api",
+          existingPortExplicit: false,
+          existingPortExternal: true,
+        },
+      });
+      const op = buildConnectOp(req, initialDraft(req, NO_CONTEXT), []);
+      expect(op).toMatchObject({
+        from: { component: "", port: { existing: "api" } },
+      });
+      expect(op).not.toHaveProperty("createProtocol");
+    });
+
+    it("does not create a protocol for an existing inner port", () => {
+      const req = delegationRequest({
+        to: { existingPort: "http" },
+      });
+      const base = initialDraft(req, NO_CONTEXT);
+      const op = buildConnectOp(req, { ...base, protocol: "fresh" }, []);
+      expect(op).toMatchObject({
+        to: { component: "proxy", port: { existing: "http" } },
+      });
+      expect(op).not.toHaveProperty("createProtocol");
+    });
   });
 });

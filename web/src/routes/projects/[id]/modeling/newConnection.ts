@@ -16,11 +16,14 @@ export interface ConnectionEndInfo {
   key: string;
   /** The component's own label (last path segment). */
   label: string;
-  /** Instance path relative to the connection's scope (`battery`, `fc/mcu`). */
+  /**
+   * Instance path relative to the connection's scope (`battery`, `fc/mcu`).
+   * Empty for the scope's own component — the delegation outer end.
+   */
   component: string;
   /**
-   * The component definition that owns the ports. Two ends on the same
-   * definition share one port namespace.
+   * The definition that owns the ports. Two ends on the same definition
+   * share one port namespace.
    */
   definition: string;
   /** Labels of the ports the component already has. */
@@ -30,6 +33,14 @@ export interface ConnectionEndInfo {
    * that port instead of creating a new one.
    */
   existingPort?: string | undefined;
+  /** Declared protocol of `existingPort`, if any (for delegation checks). */
+  existingPortProtocol?: string | undefined;
+  /** Declared role of `existingPort`, if any (for delegation checks). */
+  existingPortRole?: string | undefined;
+  /** Whether `existingPort` is an external boundary port. */
+  existingPortExternal?: boolean | undefined;
+  /** Whether `existingPort` declares `protocol` or `role` in HCL. */
+  existingPortExplicit?: boolean | undefined;
 }
 
 /** What the dialog is asked to create. */
@@ -76,6 +87,8 @@ export interface DraftProblems {
   toName?: string;
   fromRole?: string;
   toRole?: string;
+  /** Form-wide blocker (e.g. a delegation that cannot be built). */
+  form?: string;
 }
 
 export interface DraftValidation {
@@ -118,6 +131,39 @@ export function defaultPortName(
  */
 export function isExternalEnd(component: string): boolean {
   return component.split("/").filter(Boolean).length !== 1;
+}
+
+/** Which end (if any) is the scope's own component: the delegation outer. */
+export type DelegationSide = "from" | "to" | null;
+
+/**
+ * A delegation drag names the scope itself on exactly one end (empty
+ * component path): the boundary dot forwards inward to the other end.
+ */
+export function delegationOuterSide(
+  request: NewConnectionRequest,
+): DelegationSide {
+  const fromEmpty = request.from.component === "";
+  const toEmpty = request.to.component === "";
+  if (fromEmpty && !toEmpty) return "from";
+  if (toEmpty && !fromEmpty) return "to";
+  return null;
+}
+
+/** True when the dialog must offer the delegation variant. */
+export function isDelegationRequest(request: NewConnectionRequest): boolean {
+  return delegationOuterSide(request) !== null;
+}
+
+/**
+ * Roles for a delegation draft: the outer port always inherits (stays blank)
+ * while the inner port takes the protocol's first role, if any.
+ */
+export function presetDelegationRoles(
+  protocol: ProtocolData | undefined,
+): { inner: string } {
+  const [first] = protocol?.roles ?? [];
+  return { inner: first ?? "" };
 }
 
 /**
@@ -233,6 +279,30 @@ export function validateDraft(
     if (role !== undefined) problems.toRole = role;
   }
 
+  const delegation = delegationOuterSide(request);
+  if (
+    request.from.component === "" &&
+    request.to.component === ""
+  ) {
+    problems.form =
+      "A delegation needs a child component to forward to — pick two different components.";
+  } else if (delegation !== null) {
+    const outer = delegation === "from" ? request.from : request.to;
+    const outerDraft = delegation === "from" ? draft.from : draft.to;
+    if (outer.existingPort !== undefined) {
+      // An explicitly typed outer port can never delegate (E022): it must
+      // stay omitted so the type is inherited from the inner port.
+      if (outer.existingPortExplicit === true) {
+        problems.form = `Port “${outer.existingPort}” already declares a type — clear its protocol and role to delegate (a proxy port inherits its type).`;
+      } else if (outer.existingPortExternal === false) {
+        problems.form = `Port “${outer.existingPort}” must be external to delegate.`;
+      }
+    } else if (!outerDraft.external) {
+      problems.form =
+        "The boundary port must stay external to delegate.";
+    }
+  }
+
   return { valid: Object.keys(problems).length === 0, problems };
 }
 
@@ -258,12 +328,72 @@ function connectEnd(
   };
 }
 
+/**
+ * The op for a delegation drag: the outer end omits `protocol`/`role` so the
+ * type is inherited, while the inner end is built exactly like an assembly
+ * end. `createProtocol` fires only for a new inner port.
+ */
+function buildDelegationOp(
+  request: NewConnectionRequest,
+  draft: ConnectionDraft,
+  protocols: readonly ProtocolData[],
+  outerSide: "from" | "to",
+): ModelMutationOp {
+  const innerSide = outerSide === "from" ? "to" : "from";
+  const innerInfo = request[innerSide];
+  const innerDraft = draft[innerSide];
+  const protocol = draft.protocol.trim();
+  const innerIsNew = innerInfo.existingPort === undefined;
+  const creates =
+    innerIsNew &&
+    protocol !== "" &&
+    !protocols.some((p) => p.label === protocol);
+  const outerPort: ConnectEnd["port"] =
+    outerSide === "from"
+      ? request.from.existingPort !== undefined
+        ? { existing: request.from.existingPort }
+        : {
+            new: {
+              label: draft.from.name.trim(),
+              external: true,
+              required: draft.from.required,
+            },
+          }
+      : request.to.existingPort !== undefined
+        ? { existing: request.to.existingPort }
+        : {
+            new: {
+              label: draft.to.name.trim(),
+              external: true,
+              required: draft.to.required,
+            },
+          };
+  return {
+    kind: "connect_components",
+    scopePath: request.scopePath,
+    label: draft.label.trim(),
+    from:
+      outerSide === "from"
+        ? { component: request.from.component, port: outerPort }
+        : connectEnd(innerInfo, innerDraft, innerIsNew ? protocol : ""),
+    to:
+      outerSide === "to"
+        ? { component: request.to.component, port: outerPort }
+        : connectEnd(innerInfo, innerDraft, innerIsNew ? protocol : ""),
+    ...(creates ? { createProtocol: protocol } : {}),
+  };
+}
+
 /** The op that creates what the dialog describes. Assumes a valid draft. */
 export function buildConnectOp(
   request: NewConnectionRequest,
   draft: ConnectionDraft,
   protocols: readonly ProtocolData[],
 ): ModelMutationOp {
+  const outerSide = delegationOuterSide(request);
+  if (outerSide !== null) {
+    return buildDelegationOp(request, draft, protocols, outerSide);
+  }
   const protocol = draft.protocol.trim();
   const creates =
     protocol !== "" && !protocols.some((p) => p.label === protocol);

@@ -150,6 +150,14 @@
           children: (c.children ?? []).map((child: number) => build(child)),
           ports: (c.ports ?? []).map((pid: number) => {
             const p = rawPorts[pid];
+            const terminal =
+              typeof p?.inferred_from === "number"
+                ? rawPorts[p.inferred_from]
+                : undefined;
+            const terminalOwner =
+              typeof terminal?.owner === "number"
+                ? comps[terminal.owner]?.label
+                : undefined;
             return {
               label: p?.label ?? `#${pid}`,
               protocol: p?.protocol ?? "",
@@ -157,6 +165,15 @@
               external: p?.external ?? false,
               required: p?.required ?? true,
               full_name: p?.full_name ?? "",
+              ...(p?.inferred === true ? { inferred: true as const } : {}),
+              ...(terminal?.label !== undefined
+                ? {
+                    inferredFrom: {
+                      port: terminal.label,
+                      owner: terminalOwner ?? `#${terminal.owner ?? "?"}`,
+                    },
+                  }
+                : {}),
             };
           }),
         };

@@ -215,7 +215,20 @@
     </div>
     <h4 class="text-base font-bold text-base-content truncate">
       {connection.ref.label}
+      {#if connection.isDelegation}
+        <span
+          class="badge badge-ghost badge-sm ml-2 align-middle"
+          title="Delegation edge: forwards the boundary dot inward to a child port. Draws without an arrowhead and only when both ends are placed."
+          >Delegation</span
+        >
+      {/if}
     </h4>
+    {#if connection.isDelegation}
+      <p class="text-xs text-base-content/60 mt-1">
+        Forwards a boundary dot inward — identity, no direction. Delegation
+        edges never take <span class="font-mono">realized_by</span> (E019).
+      </p>
+    {/if}
   </div>
 
   <div class="space-y-2 text-xs font-mono">
@@ -432,6 +445,13 @@
         </p>
       {/if}
 
+      {#if connection.isDelegation}
+        <p class="text-xs text-base-content/60" data-testid="delegation-note">
+          A delegation edge relates a port to a port within one component, not
+          a connection to a connection — there is nothing to realize here.
+        </p>
+      {/if}
+
       {#if realizedRows.length > 0}
         <ul class="space-y-1" data-testid="realized-by-list">
           {#each realizedRows as row (connectionRefKey(row.ref))}
@@ -475,6 +495,7 @@
         </ul>
       {/if}
 
+      {#if !connection.isDelegation}
       <select
         class="select select-xs w-full"
         aria-label="Add realization"
@@ -492,6 +513,7 @@
           >
         {/each}
       </select>
+      {/if}
     </div>
   </div>
 

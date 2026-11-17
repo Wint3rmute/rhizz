@@ -1574,10 +1574,7 @@ fn apply_patch(body: &mut RawComponent, patch: &PatchJson) -> Result<(), Mutatio
             .ports
             .iter()
             .filter(|p| {
-                p.inner
-                    .protocol
-                    .as_deref()
-                    .map_or(true, str::is_empty)
+                p.inner.protocol.as_deref().is_none_or(str::is_empty)
                     && p.inner.role.is_none()
             })
             .map(|p| p.label.as_str())

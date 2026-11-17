@@ -35,6 +35,8 @@ export interface PortData {
   inferred?: boolean | undefined;
   /** Where an inferred port inherits from: terminal port + owner label. */
   inferredFrom?: { port: string; owner: string } | undefined;
+  /** Declares `protocol` or `role` in HCL (vs omitted). */
+  explicit?: boolean | undefined;
 }
 
 /** The component fields the inspector reads and the `update_component` op patches.
@@ -223,7 +225,7 @@ export interface ConnectionData {
   /** Root cause of an incomplete chain, when there is one. */
   blocking?: ConnectionRef | undefined;
   /** Delegation edge (SPEC.md §6.9): draws without an arrowhead. */
-  isDelegation: boolean;
+  isDelegation?: boolean | undefined;
 }
 
 function toRole(role: string | undefined): PortData["role"] {
@@ -277,28 +279,31 @@ export function componentDataByKey(
       leaf: component.leaf ?? false,
       ports: (component.ports ?? []).map((portIndex) => {
         const port = ports[portIndex];
+        const explicit =
+          (port?.protocol ?? "") !== "" || port?.role != null;
         const terminal =
           typeof port?.inferred_from === "number"
             ? ports[port.inferred_from]
             : undefined;
         const terminalOwner =
           typeof terminal?.owner === "number"
-            ? components[terminal.owner]?.label
+            ? (components[terminal.owner]?.label ?? String(terminal.owner))
             : undefined;
         return {
-          label: port?.label ?? `#${portIndex}`,
+          label: port?.label ?? `#${String(portIndex)}`,
           full_name: port?.full_name ?? "",
           protocol: port?.protocol ?? "",
           role: toRole(port?.role),
           external: port?.external,
           required: port?.required ?? true,
           tags: port?.tags ?? [],
+          explicit,
           ...(port?.inferred === true ? { inferred: true as const } : {}),
-          ...(terminal !== undefined && terminal.label !== undefined
+          ...(terminal !== undefined
             ? {
                 inferredFrom: {
                   port: terminal.label,
-                  owner: terminalOwner ?? `#${terminal.owner ?? "?"}`,
+                  owner: terminalOwner ?? "?",
                 },
               }
             : {}),
@@ -351,7 +356,7 @@ export function connectionDataList(
       level: connection.level,
       from_port: connection.from_port,
       to_port: connection.to_port,
-      isDelegation: connection.is_delegation === true,
+      isDelegation: connection.is_delegation,
       protocol: connection.protocol,
       realized_by: connection.realized_by.map((target) => ({
         scopePath: target.scope_path,
