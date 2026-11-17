@@ -371,6 +371,7 @@
                 <input
                   type="text"
                   value={port.protocol || ""}
+                  data-testid="node-inspector-port-protocol"
                   disabled={port.inferred === true}
                   title={port.inferred === true
                     ? "Inherited from the delegation target — read-only here."
@@ -391,6 +392,7 @@
                 >
                 <select
                   value={port.role || "peer"}
+                  data-testid="node-inspector-port-role"
                   disabled={port.inferred === true}
                   title={port.inferred === true
                     ? "Inherited from the delegation target — read-only here."

@@ -3140,6 +3140,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tools_call_add_connection_accepts_self_port_endpoints() {
+        // `./port` names the declaring scope's own port: exactly one such
+        // end makes a delegation edge.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"leaf\" {\n  leaf = true\n  port \"http\" {\n    protocol = \"rest\"\n    role = \"provider\"\n    external = true\n  }\n}\nprotocol \"rest\" { leaf = true }\ncomponent \"svc\" {\n  port \"api\" { external = true }\n  instance \"inner\" { source = \"leaf\" }\n}\nsystem \"demo\" {\n  instance \"svc\" { source = \"svc\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            98,
+            "add_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo/svc",
+                "label": "api-delegation",
+                "from": "./api",
+                "to": "inner/http"
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("\"./api\""), "{content}");
+    }
+
+    #[tokio::test]
     async fn tools_call_add_connection_with_unknown_endpoint_is_refused() {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());

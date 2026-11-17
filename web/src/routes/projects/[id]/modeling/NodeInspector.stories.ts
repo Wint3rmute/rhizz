@@ -217,3 +217,43 @@ export const Sourced: Story = {
     );
   },
 };
+
+export const ProxyPort: Story = {
+  args: {
+    component: {
+      label: "weather-service",
+      full_name: "Weather forecast service",
+      tags: [],
+      color: "default",
+      border: "solid",
+      font: "unstyled",
+      leaf: false,
+      ports: [
+        {
+          label: "api",
+          full_name: "Forecast REST API",
+          protocol: "rest",
+          role: "provider",
+          external: true,
+          required: true,
+          tags: [],
+          inferred: true,
+          inferredFrom: { port: "http", owner: "proxy" },
+        },
+      ],
+    },
+  },
+  globals: {
+    viewport: { value: "phone" },
+  },
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    // The proxy badge names the terminal source; protocol and role are
+    // read-only because the type is inherited, not declared.
+    await expect(modal.getByText("proxy")).toBeInTheDocument();
+    await expect(modal.getByText(/proxy\/http/)).toBeInTheDocument();
+    const protocol = modal.getByTestId("node-inspector-port-protocol");
+    await expect(protocol).toBeDisabled();
+    await expect(protocol).toHaveValue("rest");
+  },
+};

@@ -60,23 +60,24 @@
       draft = null;
       return;
     }
-    draft = untrack(() =>
+    // Build locally, then assign once: reading `draft` here would subscribe
+    // this effect to every fresh object it writes (an infinite loop).
+    const fresh = untrack(() =>
       initialDraft(request, { takenConnectionLabels, protocols }),
     );
     // Delegation with an existing inner port: the picker is locked to the
     // inner port's protocol (it types nothing new), so seed the display.
-    const outer = untrack(() =>
-      request === null ? null : delegationOuterSide(request),
-    );
-    if (outer !== null && draft !== null) {
+    const outer = untrack(() => delegationOuterSide(request));
+    if (outer !== null) {
       const inner = outer === "from" ? request.to : request.from;
       if (
         inner.existingPort !== undefined &&
         inner.existingPortProtocol !== undefined
       ) {
-        draft.protocol = inner.existingPortProtocol;
+        fresh.protocol = inner.existingPortProtocol;
       }
     }
+    draft = fresh;
     listOpen = false;
     activeIndex = -1;
     presetKey = "";
