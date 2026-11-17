@@ -983,7 +983,7 @@ impl RhizzMcp {
     /// Patches a definition's attributes. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "update_component",
-        description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
+        description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Ports are a full replacement: omit `protocol`/`role` to keep a proxy port inferred (writing them onto a delegated port is refused with E022; the omission is preserved, not cleared). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_component(
         &self,
@@ -1048,7 +1048,7 @@ impl RhizzMcp {
     /// Adds a connection inside a scope. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_connection",
-        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port` or relative paths ending in a port). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
+        description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port`, relative paths ending in a port, or `./port` for the declaring scope's own port — a delegation edge, exactly one end may be `./port`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
     )]
     async fn add_connection(
         &self,
@@ -1085,7 +1085,7 @@ impl RhizzMcp {
     /// separate port patches plus `add_connection`. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "connect_components",
-        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
+        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. An empty `component` (`\"\"`) addresses the scope's own component, emitting a `./port` self endpoint: with exactly one such end the connection is a delegation edge, and omitting `protocol`/`role` on the new outer port declares a proxy port that inherits its type (E022 if the outer port declares a type or lacks `external`). This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn connect_components(
         &self,
@@ -3231,6 +3231,68 @@ mod tests {
         assert!(content.contains("connection \"a-to-b\""), "{content}");
         assert!(content.contains("port \"out\""), "{content}");
         assert!(content.contains("port \"in\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_connect_components_builds_a_proxy_port() {
+        // An empty `component` addresses the scope's own component (a `./port`
+        // self endpoint); omitting `protocol`/`role` on the new outer port
+        // declares a proxy port that inherits its type from the inner port.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"leaf\" {\n  leaf = true\n  port \"http\" {\n    protocol = \"rest\"\n    role = \"provider\"\n    external = true\n  }\n}\nprotocol \"rest\" { leaf = true }\ncomponent \"svc\" {\n  instance \"proxy\" { source = \"leaf\" }\n}\nsystem \"demo\" {\n  instance \"svc\" { source = \"svc\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            112,
+            "connect_components",
+            json!({
+                "project": "demo",
+                "scopePath": "demo/svc",
+                "label": "api-delegation",
+                "from": { "component": "", "port": { "new": { "label": "api", "external": true } } },
+                "to": { "component": "proxy", "port": { "existing": "http" } }
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        // The self end round-trips as `./api`, and the outer port stays
+        // untyped (omitted `protocol`/`role` = inferred, not explicit).
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("\"./api\""), "{content}");
+        let api_block = content
+            .split("port \"api\"")
+            .nth(1)
+            .expect("api port block");
+        let api_block = api_block.split("port \"").next().unwrap_or("");
+        assert!(!api_block.contains("protocol"), "{api_block}");
+        assert!(!api_block.contains("role"), "{api_block}");
+
+        // The model resolves with no errors: the proxy inherits `rest`.
+        let payload = call_tool(
+            &app,
+            &session,
+            113,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        let diagnostics = result_value(&payload)["diagnostics"].as_array().unwrap().clone();
+        assert!(
+            diagnostics.iter().all(|d| d["severity"] != json!("error")),
+            "no errors expected, got: {diagnostics:?}"
+        );
     }
 
     #[tokio::test]
