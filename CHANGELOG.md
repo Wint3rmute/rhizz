@@ -13,6 +13,7 @@
 
 ### Fix
 
+- **mcp**: refuse empty edits, clarify view-on-broken-model refusal, file VFS-lock follow-up
 - **web**: side-handle nested drop opens delegation dialog without pageerror
 
 ## 0.12.0 (2026-11-16)
