@@ -27,14 +27,14 @@ const VIEW_FILE = "views/flight-controller.hcl";
 const VIEW_HCL = `view "flight-controller" {
   system = "quadcopter"
 
-  node "quadcopter/flight-controller" {
+  node "quadcopter/drone/flight-controller" {
     x      = 40
     y      = 40
     width  = 200
     height = 110
   }
 
-  node "quadcopter/flight-controller/mcu" {
+  node "quadcopter/drone/flight-controller/mcu" {
     x      = 40
     y      = 220
     width  = 140
@@ -108,7 +108,7 @@ async function projectWithAPreviewedView(page: Page): Promise<string> {
   // Asserted on the rendered lines, so a mangled edit fails on the edit rather
   // than later on a canvas that never got its nodes.
   await expect(editor(page).lines).toContainText(
-    "quadcopter/flight-controller/mcu",
+    "quadcopter/drone/flight-controller/mcu",
   );
   return id;
 }

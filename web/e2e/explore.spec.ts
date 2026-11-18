@@ -11,11 +11,11 @@ test("explore renders a drone diagram, toast, and embed modal", async ({
   );
   await page.goto(`/projects/${id}/explore`);
 
-  // Explore opens the first layout-bearing view (ground-station.hcl for drone).
-  const goggles = page.getByRole("link", {
-    name: /goggles, no detailed view/i,
+  // Explore opens the first layout-bearing view (drone-overview.hcl for drone).
+  const battery = page.getByRole("link", {
+    name: /battery, no detailed view/i,
   });
-  await expect(goggles).toBeVisible();
+  await expect(battery).toBeVisible();
 
   // No second navbar above the canvas: the diagrams sidebar carries the
   // whole chrome (file tree + the open diagram + the embed button).
@@ -27,11 +27,11 @@ test("explore renders a drone diagram, toast, and embed modal", async ({
   // is hidden on this viewport, hence the row-scoped lookup.
   const openRow = sidebar.locator("li button[aria-current='true']");
   await expect(openRow).toHaveCount(1);
-  await expect(openRow).toHaveText(/^ground-station\.hcl$/);
+  await expect(openRow).toHaveText(/^drone-overview\.hcl$/);
 
-  await goggles.click();
+  await battery.click();
   await expect(
-    page.getByText("No detailed view for goggles created"),
+    page.getByText("No detailed view for battery created"),
   ).toBeVisible();
 
   // The embed action lives at the bottom of that same sidebar.
@@ -62,7 +62,7 @@ test("explore hides the embed action on mobile", async ({ page }) => {
   ).toHaveCount(0);
   // The diagram is still reachable: chips pick it, the canvas renders it.
   await expect(
-    page.getByRole("link", { name: /goggles, no detailed view/i }),
+    page.getByRole("link", { name: /battery, no detailed view/i }),
   ).toBeVisible();
 });
 
