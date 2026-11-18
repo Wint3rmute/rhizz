@@ -4,6 +4,15 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Info-level audit log for every MCP tool call
+
+- **Core (`mcp.rs`):** single audit hook in `ServerHandler::call_tool` — every tool dispatch converges on the one `tool_router.call(call).await`, so logging there emits exactly one `tracing::info!` per call on success *and* refusal/error paths. Deviation from the scoped per-tool RAII shape: the single hook can't miss a return path or double-log.
+- **Fields:** `tool`, `project`, `target` (`path` → `scopePath` → `label`), `outcome` (`ok` | `refused` from `isError` | `error` for protocol `Err`), `elapsed_ms`, `codes` (comma-joined diagnostics from refused JSON payloads), `version` / `total_lines` size signals from file payloads. Never file contents.
+- **Tests dropped per request:** no capturing-subscriber test, no test gates run for the implementation; `cargo clippy -p rhizz-server` verified clean after fixing 2 lints (duplicate match arms, `u128 as u64` cast), `cz check` passes, `just changelog` regenerated.
+- Branch: `feat/mcp-audit-log` (PR #535).
+
+---
+
 ## Task <N> — Generic MCP file tools: `create_file` + `edit_file` (replacing `create_doc`/`edit_documentation`)
 
 - **Storage (`storage.rs`):** removed `create_doc`/`edit_documentation` + `EditDocError`/`DOC_EDIT_LOCK`; new `create_file`/`edit_file` with `FileWriteResult` (`version` + `totalLines` + `warnings`) and `FileWriteError::{Unknown,Locked,Io,Refused,Invalid}`. Any confined path writable (same `resolve_confined_path` as `read_file`), parents created, atomic writes, single `FILE_WRITE_LOCK` CAS. For model HCL the generic writes additionally take `MODEL_WRITE_LOCK` — `overwrite_model` already held it and `mutate_project` now holds it too, so all three model writers serialize. Empty `edits` refused without touching the file. Validation isolated per file: model HCL → model-only `compile`, zero errors; view HCL → `parse_views` + `validate_view` against current model (`E016`/`E006`/parse `E000` refuse, warnings pass through; a broken model refuses the view edit with the model's diagnostics prefixed `cannot validate view … while the model is broken`); other paths skip validation.
