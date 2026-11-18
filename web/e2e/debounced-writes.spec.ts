@@ -113,9 +113,13 @@ test("a burst of canvas nudges persists as a single layout write", async ({
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page.getByTestId("node-inspector")).toBeVisible();
 
-  // Creating the node scheduled a layout write of its own; wait for it, so
-  // the burst below is the only thing the measurement covers.
+  // Creating the node scheduled a layout write of its own; wait for it, then
+  // wait out the 500ms leading-edge cooldown so the burst below starts idle.
+  // A persisted leading write does not mean the cooldown has expired: if
+  // press #1 lands inside the creation window, the whole burst collapses
+  // into that window's single trailing write (count 1 instead of 2).
   await expect.poll(() => lastPersisted(page, VIEW)).toContain("e2e-debounce");
+  await page.waitForTimeout(600);
   const before = await persistedVersions(page, VIEW);
 
   const startX = xOf(before[before.length - 1] ?? "");
