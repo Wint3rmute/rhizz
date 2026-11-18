@@ -1268,7 +1268,7 @@ impl RhizzMcp {
     /// `read_file` returned. Shaped after Zed's `write_file`.
     #[tool(
         name = "create_file",
-        description = "Create a new file in a Rhizz project, or overwrite an existing one whole (any path: `system.hcl`, `views/*.hcl`, `docs/*.md`, `README.md`, …). Pass the project id, `path` (relative, confined like `read_file`: no absolute, no `..`, no hidden/symlink), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. `.hcl` writes are validated (model files: full compile, zero errors required like `overwrite_model`; `views/**.hcl`: `parse_views` + resolution, error `E016`/`E006`/parse errors refuse, warnings pass through and are returned); other paths skip validation. Returns the new `version`, `totalLines`, and `warnings` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched."
+        description = "Create a new file in a Rhizz project, or overwrite an existing one whole (any path: `system.hcl`, `views/*.hcl`, `docs/*.md`, `README.md`, …). Pass the project id, `path` (relative, confined like `read_file`: no absolute, no `..`, no hidden/symlink), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. `.hcl` writes are validated (model files: model-only compile, zero errors required, same gate as `overwrite_model`; `views/**.hcl`: `parse_views` + resolution against the current model, error `E016`/`E006`/parse errors refuse, warnings pass through and are returned; a view write while the model is broken is refused with the model's diagnostics); other paths skip validation. Returns the new `version`, `totalLines`, and `warnings` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched."
     )]
     async fn create_file(
         &self,
@@ -1337,7 +1337,7 @@ impl RhizzMcp {
     /// Shaped after Zed's `edit_file` (`edits` array).
     #[tool(
         name = "edit_file",
-        description = "Apply granular text replacements to an existing file in a Rhizz project (any path). Pass the project id, `path` (relative, confined like `read_file`), `edits` (array of `{old_text, new_text}` applied sequentially; each `old_text` must occur exactly once in the intermediate content, empty is refused), and the content-hash `version` `read_file` returned. Returns the new `version`, `totalLines`, and `warnings` so another edit can chain without re-reading. `.hcl` edits are validated (model files: full compile, zero errors required; `views/**.hcl`: `parse_views` + resolution, error `E016`/`E006`/parse errors refuse, warnings pass through); other paths skip validation. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched."
+        description = "Apply granular text replacements to an existing file in a Rhizz project (any path). Pass the project id, `path` (relative, confined like `read_file`), `edits` (non-empty array of `{old_text, new_text}` applied sequentially; each `old_text` must occur exactly once in the intermediate content, an empty `old_text` or an empty `edits` list is refused), and the content-hash `version` `read_file` returned. Returns the new `version`, `totalLines`, and `warnings` so another edit can chain without re-reading. `.hcl` edits are validated (model files: model-only compile, zero errors required; `views/**.hcl`: `parse_views` + resolution against the current model, error `E016`/`E006`/parse errors refuse, warnings pass through; a view edit while the model is broken is refused with the model's diagnostics); other paths skip validation. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder — a stale `version` is refused, so re-read with `read_file` and retry. Any refusal leaves the file untouched."
     )]
     async fn edit_file(
         &self,
@@ -3728,6 +3728,26 @@ mod tests {
                 "{old:?}: {payload}"
             );
         }
+
+        // An empty edit list is refused without touching the file.
+        let payload = call_tool(
+            &app,
+            &session,
+            306,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "edits": [],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_eq!(
+            payload["result"]["isError"],
+            json!(true),
+            "empty edits: {payload}"
+        );
 
         let after = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
         assert_eq!(before, after, "refused edits must not touch the file");
