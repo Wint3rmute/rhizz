@@ -18,37 +18,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — De-flake `debounced-writes` canvas-nudge e2e (sync on debounce idle)
-
-`e2e/debounced-writes.spec.ts:102` ("a burst of canvas nudges persists as a
-single layout write") fails intermittently with `Expected: 2, Received: 1`,
-both locally and in CI (it failed CI `e2e` twice, then passed on a clean
-retry with no code changes; it also flakes on the base commit, so it is
-pre-existing and unrelated to any example/model change).
-
-Root cause (test bug, not app bug): layout writes use
-`createDebounced(fn, 500, { leading: true })`
-(`ModelingPage.svelte`, `LAYOUT_WRITE_DEBOUNCE_MS = 500`). The test waits for
-the component-creation write to be *persisted* (leading edge) and then fires
-5 arrow presses — but a persisted leading write does not mean the 500ms
-cooldown has expired. If press #1 lands inside the creation write's window,
-the whole burst collapses into that window's single trailing write (final
-x+50, which is why the position poll passes while the count asserts 1).
-Fast environments fail more; slow ones pass — an inverted flake. The app
-behaves correctly per its contract (creation + burst within 500ms *is* one
-burst, trailing write carries the newest state); the test synchronized on
-the wrong signal.
-
-- Test-only fix, no app-code change: after the `before` snapshot, wait for
-  debounce idle before starting the burst — e.g. `waitForTimeout(600)` or
-  poll until `persistedVersions` is stable for >500ms. Keep the exact-2 and
-  leading-x+10 assertions, which are valid once the burst starts idle.
-- Prove it red→green: the test must pass consistently (e.g.
-  `--repeat-each 5` locally) instead of intermittently.
-- `just test`, `just lint` green; no UI change, no new stories/e2e.
-
----
-
 - `just test`, `just lint`, `just build` green; no UI change, no new
   stories/e2e.
 

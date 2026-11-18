@@ -4,6 +4,14 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — De-flake `debounced-writes` canvas-nudge e2e (sync on debounce idle)
+
+- **Test-only fix (`web/e2e/debounced-writes.spec.ts`):** after the creation-write `expect.poll`, `await page.waitForTimeout(600)` waits out the 500ms leading-edge cooldown (`LAYOUT_WRITE_DEBOUNCE_MS`, `createDebounced(..., { leading: true })`) so the 5-press burst starts idle; the `before` snapshot is taken after the wait. Keeps the exact-2 and leading-x+10 assertions. No app-code change, no new stories/e2e.
+- **Red→green:** `debounced-writes.spec.ts --repeat-each 5` → 20 passed (was intermittently `Expected: 2, Received: 1`); full `just test` green (cargo + vitest + 174 e2e), `just lint` green, `just build` green, `just format` clean.
+- Branch: `fix/debounced-writes-deflake` (PR #536).
+
+---
+
 ## Task <N> — Info-level audit log for every MCP tool call
 
 - **Core (`mcp.rs`):** single audit hook in `ServerHandler::call_tool` — every tool dispatch converges on the one `tool_router.call(call).await`, so logging there emits exactly one `tracing::info!` per call on success *and* refusal/error paths. Deviation from the scoped per-tool RAII shape: the single hook can't miss a return path or double-log.
