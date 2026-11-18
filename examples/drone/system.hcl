@@ -6,14 +6,14 @@ project {
 
 protocol "analog-video" {
   full_name = "Analog composite video"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 }
 
 protocol "crsf" {
   full_name = "CRSF serial protocol for RC input"
-  leaf = true
   roles       = ["provider", "consumer", "peer"]
+  leaf        = true
 
   message "rc-channels" {
     full_name = "16 RC channel values"
@@ -28,8 +28,8 @@ protocol "crsf" {
 
 protocol "dshot600" {
   full_name = "DShot600 digital motor control"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 
   message "throttle" {
     full_name = "Per-motor throttle command"
@@ -49,26 +49,26 @@ protocol "dshot600" {
 
 protocol "i2c" {
   full_name = "I2C serial sensor bus"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 }
 
 protocol "power-dc" {
   full_name = "DC power delivery rail"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 }
 
 protocol "spi" {
   full_name = "Serial peripheral interface"
-  leaf = true
   roles       = ["provider", "consumer"]
+  leaf        = true
 }
 
 protocol "uart" {
   full_name = "UART serial bus"
-  leaf = true
   roles       = ["peer"]
+  leaf        = true
 
   message "nav-pvt" {
     full_name = "Navigation position/velocity/time solution"
@@ -101,6 +101,8 @@ protocol "uart" {
 
 component "barometer" {
   full_name = "BMP390 barometric pressure sensor"
+  icon        = "gauge"
+  color       = "success"
   tags        = ["electronics", "sensor"]
   leaf        = true
 
@@ -114,6 +116,8 @@ component "barometer" {
 
 component "battery" {
   full_name = "4S 1300mAh LiPo"
+  icon        = "battery-full"
+  color       = "warning"
   tags        = ["power"]
   leaf        = true
 
@@ -127,6 +131,8 @@ component "battery" {
 
 component "camera" {
   full_name = "FPV camera (analog)"
+  icon        = "video"
+  color       = "accent"
   tags        = ["electronics", "video"]
   leaf        = true
 
@@ -138,8 +144,72 @@ component "camera" {
   }
 }
 
+component "drone" {
+  full_name = "Quadcopter drone airframe assembly"
+  icon        = "helicopter"
+  tags        = ["hardware", "drone"]
+
+  instance "battery" { source = "battery" }
+
+  instance "camera" { source = "camera" }
+
+  instance "esc" { source = "esc" }
+
+  instance "flight-controller" { source = "flight-controller" }
+
+  instance "gps" { source = "gps" }
+
+  instance "radio-rx" { source = "radio-rx" }
+
+  instance "vtx" { source = "vtx" }
+
+  connection "gps-serial" {
+    full_name  = "UART link: FC ↔ GPS"
+    tags         = ["data", "navigation"]
+    from         = "flight-controller/gps-serial"
+    to           = "gps/serial"
+  }
+
+  connection "motor-control" {
+    full_name  = "DShot600 motor signals"
+    tags         = ["motor", "data"]
+    from         = "flight-controller/motor-out"
+    to           = "esc/motor-in"
+  }
+
+  connection "power-bec" {
+    full_name  = "ESC 5V BEC → flight controller"
+    tags         = ["power"]
+    from         = "esc/bec-out"
+    to           = "flight-controller/power-in"
+  }
+
+  connection "power-main" {
+    full_name  = "Battery → ESC main power"
+    tags         = ["power"]
+    from         = "battery/power-out"
+    to           = "esc/power-in"
+  }
+
+  connection "rc-link" {
+    full_name  = "CRSF serial: receiver → FC"
+    tags         = ["rf", "control"]
+    from         = "radio-rx/crsf"
+    to           = "flight-controller/rc-in"
+  }
+
+  connection "video-feed" {
+    full_name  = "Analog video: camera → VTX"
+    tags         = ["video"]
+    from         = "camera/video-out"
+    to           = "vtx/video-in"
+  }
+}
+
 component "esc" {
   full_name = "4-in-1 ESC board"
+  icon        = "bolt"
+  color       = "warning"
   tags        = ["electronics", "power", "motor"]
   leaf        = true
 
@@ -167,6 +237,8 @@ component "esc" {
 
 component "flight-controller" {
   full_name = "Main flight computer"
+  icon        = "computer"
+  color       = "primary"
   tags        = ["electronics", "compute"]
 
   port "gps-serial" {
@@ -185,19 +257,19 @@ component "flight-controller" {
     external    = true
   }
 
-  port "rc-in" {
-    full_name = "CRSF serial: receiver → FC"
-    protocol    = "crsf"
-    role        = "consumer"
-    tags        = ["rf", "control"]
-    external    = true
-  }
-
   port "power-in" {
     full_name = "5V BEC power input"
     protocol    = "power-dc"
     role        = "consumer"
     tags        = ["power"]
+    external    = true
+  }
+
+  port "rc-in" {
+    full_name = "CRSF serial: receiver → FC"
+    protocol    = "crsf"
+    role        = "consumer"
+    tags        = ["rf", "control"]
     external    = true
   }
 
@@ -224,6 +296,8 @@ component "flight-controller" {
 
 component "goggles" {
   full_name = "FPV goggles with DVR"
+  icon        = "vr-cardboard"
+  color       = "accent"
   tags        = ["electronics", "video"]
   leaf        = true
 
@@ -237,6 +311,7 @@ component "goggles" {
 
 component "gps" {
   full_name = "u-blox M10 GNSS receiver"
+  icon        = "satellite"
   color       = "success"
   border      = "dashed"
   font        = "italic"
@@ -252,6 +327,8 @@ component "gps" {
 }
 
 component "ground-station-pc" {
+  icon        = "laptop"
+  color       = "primary"
   tags        = ["compute"]
 
   port "control-in" {
@@ -271,6 +348,8 @@ component "ground-station-pc" {
 
 component "imu" {
   full_name = "BMI270 6-axis IMU"
+  icon        = "compass"
+  color       = "success"
   tags        = ["electronics", "sensor"]
   leaf        = true
 
@@ -284,15 +363,10 @@ component "imu" {
 
 component "mcu" {
   full_name = "STM32H7 ARM Cortex-M7"
+  icon        = "microchip"
+  color       = "primary"
   tags        = ["electronics", "compute"]
   leaf        = true
-
-  port "spi" {
-    full_name = "SPI master bus"
-    protocol    = "spi"
-    role        = "provider"
-    tags        = ["data"]
-  }
 
   port "i2c" {
     full_name = "I2C master bus"
@@ -300,10 +374,19 @@ component "mcu" {
     role        = "provider"
     tags        = ["data"]
   }
+
+  port "spi" {
+    full_name = "SPI master bus"
+    protocol    = "spi"
+    role        = "provider"
+    tags        = ["data"]
+  }
 }
 
 component "radio-rx" {
   full_name = "ELRS 868MHz receiver"
+  icon        = "radio"
+  color       = "secondary"
   tags        = ["electronics", "rf"]
   leaf        = true
 
@@ -317,6 +400,8 @@ component "radio-rx" {
 
 component "transmitter" {
   full_name = "ELRS radio transmitter"
+  icon        = "walkie-talkie"
+  color       = "secondary"
   tags        = ["electronics", "rf"]
   leaf        = true
 
@@ -330,6 +415,8 @@ component "transmitter" {
 
 component "vtx" {
   full_name = "5.8GHz video transmitter"
+  icon        = "tower-broadcast"
+  color       = "accent"
   tags        = ["electronics", "rf", "video"]
   leaf        = true
 
@@ -371,59 +458,5 @@ system "quadcopter" {
   full_name = "Consumer quadcopter drone"
   tags        = ["hardware", "drone"]
 
-  instance "battery" { source = "battery" }
-
-  instance "camera" { source = "camera" }
-
-  instance "esc" { source = "esc" }
-
-  instance "flight-controller" { source = "flight-controller" }
-
-  instance "gps" { source = "gps" }
-
-  instance "radio-rx" { source = "radio-rx" }
-
-  instance "vtx" { source = "vtx" }
-
-  connection "gps-serial" {
-    full_name  = "UART link: FC ↔ GPS"
-    tags         = ["data", "navigation"]
-    from         = "/quadcopter/flight-controller/gps-serial"
-    to           = "/quadcopter/gps/serial"
-  }
-
-  connection "motor-control" {
-    full_name  = "DShot600 motor signals"
-    tags         = ["motor", "data"]
-    from         = "/quadcopter/flight-controller/motor-out"
-    to           = "/quadcopter/esc/motor-in"
-  }
-
-  connection "power-bec" {
-    full_name  = "ESC 5V BEC → flight controller"
-    tags         = ["power"]
-    from         = "/quadcopter/esc/bec-out"
-    to           = "/quadcopter/flight-controller/power-in"
-  }
-
-  connection "power-main" {
-    full_name  = "Battery → ESC main power"
-    tags         = ["power"]
-    from         = "/quadcopter/battery/power-out"
-    to           = "/quadcopter/esc/power-in"
-  }
-
-  connection "rc-link" {
-    full_name  = "CRSF serial: receiver → FC"
-    tags         = ["rf", "control"]
-    from         = "/quadcopter/radio-rx/crsf"
-    to           = "/quadcopter/flight-controller/rc-in"
-  }
-
-  connection "video-feed" {
-    full_name  = "Analog video: camera → VTX"
-    tags         = ["video"]
-    from         = "/quadcopter/camera/video-out"
-    to           = "/quadcopter/vtx/video-in"
-  }
+  instance "drone" { source = "drone" }
 }

@@ -1,7 +1,7 @@
 view "main" {
   system      = "quadcopter"
 
-  node "quadcopter/battery" {
+  node "quadcopter/drone/battery" {
     x          = 397.5886850211688
     y          = 1581.2642298997941
     width      = 100
@@ -9,7 +9,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/camera" {
+  node "quadcopter/drone/camera" {
     x          = 619.9859400106056
     y          = 1258.5786443151217
     width      = 100
@@ -17,7 +17,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/esc" {
+  node "quadcopter/drone/esc" {
     x          = 397.71855206835744
     y          = 1399.8429204804868
     width      = 100
@@ -25,7 +25,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/flight-controller" {
+  node "quadcopter/drone/flight-controller" {
     x          = 148.23905854287835
     y          = 810.8032335276948
     width      = 599.0845184326172
@@ -33,7 +33,7 @@ view "main" {
     text_align = "top-center"
   }
 
-  node "quadcopter/flight-controller/barometer" {
+  node "quadcopter/drone/flight-controller/barometer" {
     x          = 427.9488330060247
     y          = 1057.4383389761429
     width      = 186.22536630050203
@@ -41,7 +41,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/flight-controller/imu" {
+  node "quadcopter/drone/flight-controller/imu" {
     x          = 426.49380493555094
     y          = 838.8032335276948
     width      = 186.22536630050203
@@ -49,7 +49,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/flight-controller/mcu" {
+  node "quadcopter/drone/flight-controller/mcu" {
     x          = 201.18830745393797
     y          = 938.429447512161
     width      = 186.22536630050203
@@ -57,7 +57,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/gps" {
+  node "quadcopter/drone/gps" {
     x          = -60.738178048735534
     y          = 907.431951986069
     width      = 100
@@ -65,7 +65,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/radio-rx" {
+  node "quadcopter/drone/radio-rx" {
     x          = 856.2831615881456
     y          = 907.1756565957492
     width      = 100
@@ -73,7 +73,7 @@ view "main" {
     text_align = "center"
   }
 
-  node "quadcopter/vtx" {
+  node "quadcopter/drone/vtx" {
     x          = 620
     y          = 1440
     width      = 100
