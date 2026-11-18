@@ -1706,12 +1706,15 @@ fn log_tool_call(
         _ => None,
     };
     let outcome = match result {
-        Err(_) => "error",
-        Ok(CallToolResponse::Complete(completed)) if completed.is_error.is_some_and(|e| e) => {
+        Ok(CallToolResponse::Complete(completed))
+            if completed.is_error.is_some_and(|is_err| is_err) =>
+        {
             "refused"
         }
         Ok(CallToolResponse::Complete(_)) => "ok",
-        Ok(_) => "error",
+        // Protocol failures are `Err`; `InputRequired`/`Task` (which no
+        // Rhizz tool produces) did not succeed either.
+        _ => "error",
     };
     let codes = payload
         .as_ref()
@@ -1742,7 +1745,7 @@ fn log_tool_call(
         project = %project,
         target = %target,
         outcome = %outcome,
-        elapsed_ms = elapsed.as_millis() as u64,
+        elapsed_ms = u64::try_from(elapsed.as_millis()).unwrap_or(u64::MAX),
         codes = %codes,
         version = %version,
         total_lines = total_lines,
