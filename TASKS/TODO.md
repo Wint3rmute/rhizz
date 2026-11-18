@@ -18,6 +18,41 @@ How to work on this file:
 
 ---
 
+## Task <N> — Info-level audit log for every MCP tool call
+
+Observed live: with `RUST_LOG=info`, MCP traffic is invisible — the only
+per-request lines are rmcp framework `DEBUG` (`serve_inner`, session
+pooling). Tool calls (`fetch_projects`, `create_file`, mutations, …)
+emit nothing unless they fail (`tracing::error!`). An operator watching
+the server cannot see who did what.
+
+- Emit exactly one `tracing::info!` event per tool call in
+  `crates/rhizz-server/src/mcp.rs`, on success *and* on refusal/error
+  paths. Structured fields: `tool`, `project` (when the tool takes one),
+  `target` (path / label / scopePath, whichever the tool acts on),
+  `outcome` (`ok` | `refused` | `error`, plus diagnostic codes for
+  `Invalid`/refused model writes), `elapsed_ms`.
+- Never log file contents — log sizes/versions instead (`totalLines`,
+  new `version`). Keep the message one line, greppable
+  (e.g. `mcp tool=create_file project=drone target=views/main.hcl
+  outcome=ok …`).
+- Shape: a tiny helper/RAII guard so each of the 23 tools needs ~2 lines
+  (start timer + fields at fn top, single `finish(outcome)` at the
+  returns) instead of hand-rolled `info!` at every return site. Must
+  satisfy the crate's `missing_docs` + clippy lints.
+- Red/green TDD without new dependencies (`tracing-subscriber` is
+  already a main dep): format the event via a pure, unit-tested
+  function, plus one test-only capturing `tracing::Subscriber` proving
+  every tool emits exactly one info event per call across
+  success/refusal/error paths (drive via the existing `/mcp` RPC test
+harness, assert tool/outcome fields, assert no content leakage).
+- Verify by hand: `RUST_LOG=info` run shows one line per `tools/call`
+  (and none for `tools/list` noise beyond the framework's debug).
+- `just test`, `just lint`, `just build` green; no UI change, no new
+  stories/e2e.
+
+---
+
 ## Task <N> — Serialize VFS file writes with MCP file tools (`FILE_WRITE_LOCK`)
 
 Follow-up to the generic MCP file tools task (review finding, pre-existing gap
