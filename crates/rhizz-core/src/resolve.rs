@@ -2057,20 +2057,41 @@ mod tests {
             .map(SystemId)
             .expect("ground-control system");
 
-        // quadcopter has direct children
+        // quadcopter groups everything under a single `drone` assembly
+        // for readability: one direct child carrying the former 7 children.
         let quad = &model.systems[quad_sid.0];
+        assert_eq!(
+            quad.components.len(),
+            1,
+            "quadcopter should have exactly the drone assembly, got: {:?}",
+            quad.components
+                .iter()
+                .map(|cid| model.components[cid.0].label.as_str())
+                .collect::<Vec<_>>()
+        );
         assert!(
-            quad.components.len() >= 7,
-            "quadcopter should have >=7 direct components"
+            quad.connections.is_empty(),
+            "quadcopter should have no direct connections (moved into drone)"
+        );
+
+        let drone_cid = quad.components[0];
+        let drone = &model.components[drone_cid.0];
+        assert_eq!(drone.label, "drone");
+        assert!(!drone.leaf, "drone assembly should not be a leaf");
+        assert!(
+            drone.children.len() >= 7,
+            "drone should have >=7 children, got {}",
+            drone.children.len()
         );
 
         // flight-controller should be a non-leaf with children (mcu, imu, barometer)
-        let fc_cid = quad
-            .components
+        // nested inside the drone assembly (not a direct system child).
+        let fc_cid = drone
+            .children
             .iter()
             .copied()
             .find(|cid| model.components[cid.0].label == "flight-controller")
-            .expect("flight-controller component");
+            .expect("flight-controller component inside drone");
         let fc = &model.components[fc_cid.0];
         assert!(!fc.leaf, "flight-controller should not be a leaf");
         assert!(
@@ -2108,16 +2129,23 @@ mod tests {
         assert!(spi.from.port.is_some(), "spi-imu from should have port");
         assert!(spi.to.port.is_some(), "spi-imu to should have port");
 
-        // motor-control connection at system level: has no messages (messages are on ports now)
-        let mc_conn_id = quad
+        // motor-control connection inside drone assembly: has no messages (messages are on ports now)
+        let mc_conn_id = drone
             .connections
             .iter()
             .copied()
             .find(|cid| model.connections[cid.0].label == "motor-control")
-            .expect("motor-control");
+            .expect("motor-control inside drone");
         let mc = &model.connections[mc_conn_id.0];
         // from=flight-controller/motor-out, to=esc/motor-in
+        let esc_cid = drone
+            .children
+            .iter()
+            .copied()
+            .find(|cid| model.components[cid.0].label == "esc")
+            .expect("esc component inside drone");
         assert_eq!(mc.from.component, fc_cid);
+        assert_eq!(mc.to.component, esc_cid);
         assert!(
             mc.from.port.is_some(),
             "motor-control from should have port"

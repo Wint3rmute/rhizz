@@ -771,29 +771,65 @@ mod tests {
             .unwrap();
         assert!(quad.inner.full_name.is_some());
 
-        // The quadcopter system references reusable definitions via `instance`.
+        // The quadcopter system now groups everything under a single
+        // `drone` airframe assembly for readability: one instance sourcing
+        // the `drone` definition, with all former direct children and
+        // connections moved inside that definition.
         let comp_labels: Vec<&str> = quad
             .inner
             .instances
             .iter()
             .map(|i| i.label.as_str())
             .collect();
-        assert!(comp_labels.contains(&"flight-controller"));
-        assert!(comp_labels.contains(&"esc"));
-        assert!(comp_labels.contains(&"battery"));
+        assert_eq!(
+            comp_labels,
+            vec!["drone"],
+            "quadcopter should contain only the drone assembly, got: {comp_labels:?}"
+        );
 
-        // flight-controller is now a reusable top-level definition referenced
-        // from the system via an `instance` block (single-file model).
-        let fc_inst = quad
+        // drone instance sources the drone definition.
+        let drone_inst = quad
             .inner
             .instances
             .iter()
-            .find(|i| i.label == "flight-controller")
+            .find(|i| i.label == "drone")
             .unwrap();
         assert_eq!(
-            fc_inst.inner.source.as_deref(),
-            Some("flight-controller"),
-            "flight-controller instance should source the definition"
+            drone_inst.inner.source.as_deref(),
+            Some("drone"),
+            "drone instance should source the definition"
+        );
+
+        // The `drone` *definition* carries the former system children.
+        let drone_def = raw
+            .components
+            .iter()
+            .find(|c| c.label == "drone")
+            .expect("drone definition");
+        let drone_child_labels: Vec<&str> = drone_def
+            .inner
+            .instances
+            .iter()
+            .map(|i| i.label.as_str())
+            .collect();
+        assert!(drone_child_labels.contains(&"flight-controller"));
+        assert!(drone_child_labels.contains(&"esc"));
+        assert!(drone_child_labels.contains(&"battery"));
+        assert_eq!(
+            drone_child_labels.len(),
+            7,
+            "drone should have 7 children, got: {drone_child_labels:?}"
+        );
+
+        // Connections moved from system level into the drone definition.
+        assert!(
+            quad.inner.connections.is_empty(),
+            "quadcopter system should have no direct connections, got: {:?}",
+            quad.inner
+                .connections
+                .iter()
+                .map(|c| c.label.as_str())
+                .collect::<Vec<_>>()
         );
 
         // The flight-controller *definition* carries its children and ports directly.
@@ -827,8 +863,8 @@ mod tests {
         assert!(fc_port_labels.contains(&"gps-serial"));
         assert!(fc_port_labels.contains(&"rc-in"));
 
-        // Connections at system level
-        let conn_labels: Vec<&str> = quad
+        // Connections live inside the drone definition now (not system level)
+        let conn_labels: Vec<&str> = drone_def
             .inner
             .connections
             .iter()
