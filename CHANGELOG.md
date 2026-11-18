@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **mcp**: generic create_file + edit_file replacing create_doc/edit_documentation
 - **proxy**: inspector badges, delegation dialog variant, MCP docs
 - **proxy**: inspector badges, delegation dialog variant, omission-preserving updates
 - **web**: proxy inspector badges, delegation dialog variant, omission-preserving updates
