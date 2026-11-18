@@ -1809,6 +1809,10 @@ fn validate_proposed_model(
 }
 
 /// Validates a proposed view HCL file against the current model.
+///
+/// When the model itself is broken the view cannot be validated: the model's
+/// diagnostics are returned (codes preserved) with a prefix naming the view,
+/// so an AI client sees that the refusal is about the model, not its edit.
 fn validate_proposed_view(
     sources: &[rhizz_core::Source],
     relative: &str,
@@ -1825,7 +1829,17 @@ fn validate_proposed_view(
         .iter()
         .any(rhizz_core::Diagnostic::is_error)
     {
-        return Err(model_result.diagnostics);
+        return Err(model_result
+            .diagnostics
+            .into_iter()
+            .map(|mut diagnostic| {
+                diagnostic.message = format!(
+                    "cannot validate view `{relative}` while the model is broken: {}",
+                    diagnostic.message
+                );
+                diagnostic
+            })
+            .collect());
     }
     let Some(model) = model_result.model else {
         return Err(model_result.diagnostics);
@@ -2001,11 +2015,11 @@ pub fn create_file(
 /// under one held lock, so two edits sent with the same version cannot both
 /// apply: the loser sees the winner's version and is refused.
 ///
-/// `edits` apply sequentially in order: each `old_text` must occur exactly
-/// once in the intermediate content (zero matches, several matches, and an
-/// empty `old_text` are all refused with the file untouched). The version
-/// must equal [`file_version`] of the file on disk, or the edit is refused
-/// with a message telling the client to re-read.
+/// `edits` apply sequentially in order: the list must not be empty, and each
+/// `old_text` must occur exactly once in the intermediate content (zero
+/// matches, several matches, and an empty `old_text` are all refused with the
+/// file untouched). The version must equal [`file_version`] of the file on
+/// disk, or the edit is refused with a message telling the client to re-read.
 ///
 /// Confinement and validation mirror [`create_file`]: any confined path may
 /// be edited, `.hcl` goes through a full compile (zero errors required),
@@ -2072,6 +2086,11 @@ pub fn edit_file(
     }
 
     let content = fs::read_to_string(&absolute)?;
+    if edits.is_empty() {
+        return Err(FileWriteError::Refused(
+            "`edits` must contain at least one edit".to_owned(),
+        ));
+    }
     if file_version(&content) != version {
         return Err(FileWriteError::Refused(format!(
             "version mismatch: `{file_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
@@ -3761,6 +3780,20 @@ mod tests {
                 "{old:?} must be refused: {refused:?}"
             );
         }
+        // An empty edit list is refused without touching the file.
+        let refused = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/note.md",
+            &[],
+            &version,
+        );
+        assert!(
+            matches!(refused, Err(FileWriteError::Refused(_))),
+            "empty edits must be refused: {refused:?}"
+        );
         assert_eq!(
             std::fs::read_to_string(dir.path().join("drone/docs/note.md")).unwrap(),
             before,
