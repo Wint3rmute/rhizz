@@ -1657,6 +1657,99 @@ fn tool_error(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
 
+/// Emit exactly one info-level audit event per MCP tool call, on success
+/// *and* on refusal/error paths, so an operator watching with `RUST_LOG=info`
+/// sees who did what. One line per call, greppable as e.g.
+/// `mcp tool=create_file project=drone target=views/main.hcl outcome=ok …`.
+///
+/// Structured fields: `tool` (tool name), `project` (the `project` argument,
+/// "" when the tool takes none), `target` (the acted-on `path` / `scopePath`
+/// / `label` argument, "" when none), `outcome` (`ok` | `refused` | `error`),
+/// `elapsed_ms`, `codes` (comma-joined diagnostic codes from a refused
+/// payload, "" otherwise), `version` / `total_lines` (file-write size
+/// signals from a successful file payload, "" / 0 when absent — never file
+/// contents).
+fn log_tool_call(
+    tool: &str,
+    arguments: Option<&serde_json::Map<String, serde_json::Value>>,
+    result: &Result<CallToolResponse, ErrorData>,
+    elapsed: std::time::Duration,
+) {
+    let project = arguments
+        .and_then(|args| args.get("project"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let mut target = "";
+    for key in ["path", "scopePath", "label"] {
+        if let Some(value) = arguments
+            .and_then(|args| args.get(key))
+            .and_then(serde_json::Value::as_str)
+            && !value.is_empty()
+        {
+            target = value;
+            break;
+        }
+    }
+
+    // Refusals are tool errors (`isError`); protocol failures are `Err`.
+    // Anything else that completed (including `InputRequired`/`Task`, which
+    // no Rhizz tool produces) did not succeed, so it audits as an error.
+    let payload: Option<serde_json::Value> = match result {
+        Ok(CallToolResponse::Complete(completed)) => completed
+            .content
+            .iter()
+            .find_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .and_then(|text| serde_json::from_str(text).ok()),
+        _ => None,
+    };
+    let outcome = match result {
+        Err(_) => "error",
+        Ok(CallToolResponse::Complete(completed)) if completed.is_error.is_some_and(|e| e) => {
+            "refused"
+        }
+        Ok(CallToolResponse::Complete(_)) => "ok",
+        Ok(_) => "error",
+    };
+    let codes = payload
+        .as_ref()
+        .and_then(|json| json.get("diagnostics"))
+        .and_then(serde_json::Value::as_array)
+        .map(|diagnostics| {
+            diagnostics
+                .iter()
+                .filter_map(|diagnostic| diagnostic.get("code"))
+                .filter_map(serde_json::Value::as_str)
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default();
+    let version = payload
+        .as_ref()
+        .and_then(|json| json.get("version"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("");
+    let total_lines = payload
+        .as_ref()
+        .and_then(|json| json.get("totalLines"))
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+
+    tracing::info!(
+        tool = %tool,
+        project = %project,
+        target = %target,
+        outcome = %outcome,
+        elapsed_ms = elapsed.as_millis() as u64,
+        codes = %codes,
+        version = %version,
+        total_lines = total_lines,
+        "mcp tool call",
+    );
+}
+
 /// The lock/version tail appended to read-tool payloads so an AI loop sees
 /// staleness without another call: the content-hash `version` plus who holds
 /// the lock (`lockedBy`, and `lockExpiresAt` when held).
@@ -1746,8 +1839,18 @@ impl ServerHandler for RhizzMcp {
         request: CallToolRequestParams,
         context: RequestContext<RoleServer>,
     ) -> impl Future<Output = Result<CallToolResponse, ErrorData>> + MaybeSendFuture + '_ {
+        // Clone the audit fields before `request` moves into the call context:
+        // every tool dispatch converges on the single await below, so logging
+        // there emits exactly one info event per tool call.
+        let tool = request.name.to_string();
+        let arguments = request.arguments.clone();
+        let started = std::time::Instant::now();
         let call = ToolCallContext::new(self, request, context);
-        async move { self.tool_router.call(call).await }
+        async move {
+            let result = self.tool_router.call(call).await;
+            log_tool_call(&tool, arguments.as_ref(), &result, started.elapsed());
+            result
+        }
     }
 
     fn list_tools(
