@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **mcp**: info-level audit log for every tool call
 - **mcp**: generic create_file + edit_file replacing create_doc/edit_documentation
 - **proxy**: inspector badges, delegation dialog variant, MCP docs
 - **proxy**: inspector badges, delegation dialog variant, omission-preserving updates
@@ -13,6 +14,7 @@
 
 ### Fix
 
+- **mcp**: silence clippy on audit log helper
 - **mcp**: refuse empty edits, clarify view-on-broken-model refusal, file VFS-lock follow-up
 - **web**: side-handle nested drop opens delegation dialog without pageerror
 
