@@ -1124,6 +1124,15 @@ fn apply_plan(root: &Path, plan: &ProjectPlan) -> Result<(), SaveVfsError> {
 /// Writes go through a temp file + rename so a crash cannot leave a
 /// half-written file.
 ///
+/// Serializes with the generic MCP file tools (`create_file`/`edit_file`)
+/// and the model writers (`overwrite_model`/`mutate_project`): takes
+/// `PROJECT_WRITE_LOCK`, then `FILE_WRITE_LOCK`, then `MODEL_WRITE_LOCK`
+/// when the payload touches model HCL — the same file-first-then-model
+/// order the MCP tools use, so no deadlock. Without the file/model locks a
+/// whole-VFS save could interleave with a generic file write's
+/// read-check-write (both pass their version checks, last writer wins
+/// silently, and sharing the same temp file can even fail with `NotFound`).
+///
 /// # Errors
 ///
 /// Returns [`SaveVfsError::Malformed`] for payloads that do not describe a
@@ -1131,6 +1140,24 @@ fn apply_plan(root: &Path, plan: &ProjectPlan) -> Result<(), SaveVfsError> {
 /// filesystem refuses (maps to 500).
 pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
     let plans = plan(payload)?;
+    let needs_model = plans.iter().any(|(_, project_plan)| {
+        project_plan.iter().any(|(relative, wanted)| {
+            matches!(wanted, Wanted::File(_))
+                && is_hcl_path(relative)
+                && !is_view_path(relative)
+        })
+    });
+    let _project_guard = PROJECT_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _model_guard = needs_model.then(|| {
+        MODEL_WRITE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
     let ids: HashSet<&str> = plans.iter().map(|(id, _)| id.as_str()).collect();
 
     fs::create_dir_all(data_dir)?;
@@ -1332,13 +1359,21 @@ static PROJECT_WRITE_LOCK: Mutex<()> = Mutex::new(());
 ///
 /// The project lock is taken first (free projects are auto-acquired by the
 /// writer; held-by-other is refused with [`WriteProjectError::Locked`]).
-/// Then, under one process-local lock, the on-disk version is compared
+/// Then, under `PROJECT_WRITE_LOCK` + `FILE_WRITE_LOCK` (+ `MODEL_WRITE_LOCK`
+/// when the payload touches model HCL), the on-disk version is compared
 /// against `base_version` (a mismatch is refused with
 /// [`WriteProjectError::StaleVersion` carrying the current version; `None`
 /// skips the check), the payload is validated, and the directory is brought
 /// to exactly the described state through `write_atomic` — entries absent
 /// from the payload are deleted. A successful write resets the lock's idle
 /// timer and the new version is returned for chaining.
+///
+/// The extra file/model locks serialize with the generic MCP file tools
+/// (`create_file`/`edit_file`) and the model writers
+/// (`overwrite_model`/`mutate_project`): without them a browser save could
+/// interleave with a generic file write's read-check-write (both pass their
+/// version checks, last writer wins silently). File-then-model is the same
+/// acquisition order the MCP tools use, so no deadlock.
 ///
 /// Only this project's directory is ever touched: sibling projects (and
 /// non-project directories, hidden entries, and symlinks) are never listed,
@@ -1365,7 +1400,7 @@ pub fn write_project(
     if !is_address(project_id) {
         return Err(WriteProjectError::Unknown(project_id.to_owned()));
     }
-    let _guard = PROJECT_WRITE_LOCK
+    let _project_guard = PROJECT_WRITE_LOCK
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
@@ -1378,6 +1413,18 @@ pub fn write_project(
             });
         }
     }
+
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let needs_model = files
+        .iter()
+        .any(|file| file.content.is_some() && is_model_hcl_filename(&file.path));
+    let _model_guard = needs_model.then(|| {
+        MODEL_WRITE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
 
     let root = data_dir.join(project_id);
     match fs::symlink_metadata(&root) {
@@ -3968,5 +4015,193 @@ mod tests {
             overwrite_model(dir.path(), &locks, "ghost", "alice", fixed, None),
             Err(OverwriteModelError::Unknown(_))
         ));
+    }
+
+    #[test]
+    fn write_project_races_with_create_file_on_same_path_cannot_both_apply() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/race.md"), "v1\n");
+        let locks = crate::locks::LockManager::new();
+        let base_project = project_version(dir.path(), "drone").unwrap();
+        let base_file = file_version("v1\n");
+
+        // `write_project` carries the whole tree (as the browser does),
+        // with `docs/race.md` changed to winner-a.
+        let system_before =
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let view_before =
+            std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+        let vfs_files = vec![
+            project_file("system.hcl", Some(&system_before)),
+            project_file("views", None),
+            project_file("views/main.hcl", Some(&view_before)),
+            project_file("docs", None),
+            project_file("docs/race.md", Some("winner-a\n")),
+        ];
+
+        let barrier = Arc::new(Barrier::new(2));
+        let data_dir = dir.path().to_path_buf();
+        std::thread::scope(|s| {
+            let barrier_a = Arc::clone(&barrier);
+            let locks_a = locks.clone();
+            let data_a = data_dir.clone();
+            let files_a = vfs_files.clone();
+            let base_a = base_project.clone();
+            let save = s.spawn(move || {
+                barrier_a.wait();
+                write_project(&data_a, &locks_a, "drone", "alice", Some(&base_a), &files_a)
+            });
+
+            let barrier_b = Arc::clone(&barrier);
+            let locks_b = locks.clone();
+            let data_b = data_dir.clone();
+            let base_b = base_file.clone();
+            let generic = s.spawn(move || {
+                barrier_b.wait();
+                create_file(
+                    &data_b,
+                    &locks_b,
+                    "drone",
+                    "alice",
+                    "docs/race.md",
+                    "winner-b\n",
+                    Some(&base_b),
+                )
+            });
+
+            let save_result = save.join().expect("save thread panicked");
+            let generic_result = generic.join().expect("generic thread panicked");
+
+            let save_ok = save_result.is_ok();
+            let generic_ok = generic_result.is_ok();
+            assert!(
+                save_ok ^ generic_ok,
+                "exactly one same-path write must apply: save={save_result:?} generic={generic_result:?}"
+            );
+
+            // The loser must be a version/stale refusal, not a lock or crash.
+            if save_ok {
+                assert!(
+                    matches!(generic_result, Err(FileWriteError::Refused(_))),
+                    "generic loser must be a version refusal: {generic_result:?}"
+                );
+            } else {
+                assert!(
+                    matches!(
+                        save_result,
+                        Err(WriteProjectError::StaleVersion { .. })
+                    ),
+                    "VFS loser must be a stale refusal: {save_result:?}"
+                );
+            }
+
+            let stored =
+                std::fs::read_to_string(data_dir.join("drone/docs/race.md")).unwrap();
+            assert!(
+                stored == "winner-a\n" || stored == "winner-b\n",
+                "loser must leave the winner byte-identical, got: {stored:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn write_project_touching_model_races_with_overwrite_model_cannot_both_apply() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let base_project = project_version(dir.path(), "drone").unwrap();
+        let system_before =
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let base_file = file_version(&system_before);
+        let view_before =
+            std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+
+        let winner_a = "system \"quadcopter\" {\n  full_name = \"Winner A\"\n}\n";
+        let winner_b = "system \"quadcopter\" {\n  full_name = \"Winner B\"\n}\n";
+
+        let vfs_files = vec![
+            project_file("system.hcl", Some(winner_a)),
+            project_file("views", None),
+            project_file("views/main.hcl", Some(&view_before)),
+        ];
+
+        let barrier = Arc::new(Barrier::new(2));
+        let data_dir = dir.path().to_path_buf();
+        std::thread::scope(|s| {
+            let barrier_a = Arc::clone(&barrier);
+            let locks_a = locks.clone();
+            let data_a = data_dir.clone();
+            let files_a = vfs_files.clone();
+            let base_a = base_project.clone();
+            let save = s.spawn(move || {
+                barrier_a.wait();
+                write_project(&data_a, &locks_a, "drone", "alice", Some(&base_a), &files_a)
+            });
+
+            let barrier_b = Arc::clone(&barrier);
+            let locks_b = locks.clone();
+            let data_b = data_dir.clone();
+            let base_b = base_file.clone();
+            let generic = s.spawn(move || {
+                barrier_b.wait();
+                overwrite_model(&data_b, &locks_b, "drone", "alice", winner_b, Some(&base_b))
+            });
+
+            let save_result = save.join().expect("save thread panicked");
+            let generic_result = generic.join().expect("generic thread panicked");
+
+            let save_ok = save_result.is_ok();
+            let generic_ok = generic_result.is_ok();
+            assert!(
+                save_ok ^ generic_ok,
+                "exactly one model write must apply: save={save_result:?} generic={generic_result:?}"
+            );
+
+            let stored =
+                std::fs::read_to_string(data_dir.join("drone/system.hcl")).unwrap();
+            // Both winners canonicalize through the same serializer; compare
+            // against what each path actually persists single-threaded.
+            let canonical_a = {
+                let tmp = data_dir_with_drone();
+                let tmp_locks = crate::locks::LockManager::new();
+                let tmp_before =
+                    std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap();
+                let tmp_base = file_version(&tmp_before);
+                overwrite_model(
+                    tmp.path(),
+                    &tmp_locks,
+                    "drone",
+                    "alice",
+                    winner_a,
+                    Some(&tmp_base),
+                )
+                .unwrap();
+                std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap()
+            };
+            let canonical_b = {
+                let tmp = data_dir_with_drone();
+                let tmp_locks = crate::locks::LockManager::new();
+                let tmp_before =
+                    std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap();
+                let tmp_base = file_version(&tmp_before);
+                overwrite_model(
+                    tmp.path(),
+                    &tmp_locks,
+                    "drone",
+                    "alice",
+                    winner_b,
+                    Some(&tmp_base),
+                )
+                .unwrap();
+                std::fs::read_to_string(tmp.path().join("drone/system.hcl")).unwrap()
+            };
+            assert!(
+                stored == canonical_a || stored == canonical_b,
+                "loser must leave the winner byte-identical, got: {stored:?}"
+            );
+        });
     }
 }
