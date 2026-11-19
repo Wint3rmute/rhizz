@@ -319,10 +319,6 @@ system "demo" {
     expect(apollo).toBeDefined();
     expect(apollo?.name).toBe("Apollo 11 Mission Stack");
     expect(apollo?.files.length).toBeGreaterThanOrEqual(1);
-
-    const singleFile = examples.find((e) => e.id === "single-file");
-    expect(singleFile).toBeDefined();
-    expect(singleFile?.files.some((f) => f.path === "system.hcl")).toBe(true);
   });
 
   describe("warning levels", () => {

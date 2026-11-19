@@ -1714,7 +1714,6 @@ system "apollo" {
             "drone",
             "social-media",
             "software-house",
-            "single-file",
             "web-app",
             "apollo-11",
             "weather-service",

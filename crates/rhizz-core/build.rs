@@ -273,10 +273,6 @@ fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
                 "Quadcopter drone with ground station and flight controller decomposition"
                     .to_string(),
             ),
-            "single-file" => (
-                "Home Monitor (Single File)".to_string(),
-                "Smart home environmental monitoring node in a single HCL file".to_string(),
-            ),
             "social-media" => (
                 "Social Media Platform".to_string(),
                 "Short-video platform backend services and event streaming pipelines".to_string(),

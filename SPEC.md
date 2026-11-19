@@ -1274,11 +1274,8 @@ $ rhizz build ./drone-project/   # after fix
 ## 8. Full Example
 
 The preceding sections describe each block in isolation; here is how they fit
-together. The canonical small example is
-[`examples/single-file/system.hcl`](./examples/single-file/system.hcl)
-(home-monitor — 2 protocols, 3 leaf components, 1 system with 3 instances and
-2 connections), whose system block is reproduced below as it shows the
-instance pattern in one place:
+together. Below is a small system that shows the instance pattern in one
+place:
 
 ```hcl
 system "home-monitor" {
