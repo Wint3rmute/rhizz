@@ -4,6 +4,16 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Serialize VFS file writes with MCP file tools (`FILE_WRITE_LOCK`)
+
+- **Locks (`storage.rs`):** `write_project` now takes `FILE_WRITE_LOCK` always and `MODEL_WRITE_LOCK` when the payload touches model HCL; `save_vfs` takes `PROJECT_WRITE_LOCK` + `FILE_WRITE_LOCK` (+ `MODEL_WRITE_LOCK` when any plan touches model HCL). Acquisition order is file-first-then-model, matching `create_file`/`edit_file`, so no deadlock (`MODEL`-only holders never wait for `FILE`).
+- **Why:** `write_project`/`save_vfs` shared no inner lock with the MCP tools, so a browser save could interleave with a generic file write (or `overwrite_model`/`mutate_project`) read-check-write: both pass version checks, last writer wins silently — and sharing the same `.tmp` temp file could even fail with `NotFound`.
+- **TDD (red→green):** new `write_project_races_with_create_file_on_same_path_cannot_both_apply` (was `Io(NotFound)` temp collision) and `write_project_touching_model_races_with_overwrite_model_cannot_both_apply` (was both-`Ok` last-wins) — both assert exactly one winner, loser gets `StaleVersion`/`Refused`, winner byte-identical. `cargo test -p rhizz-server` 191 passed.
+- `just test` green (cargo + vitest + 174 e2e), `just lint` green, `just build` green; `just format` clean; no UI change so no new stories/e2e.
+- Branch: `feat/vfs-file-write-lock`.
+
+---
+
 ## Task <N> — De-flake `debounced-writes` canvas-nudge e2e (sync on debounce idle)
 
 - **Test-only fix (`web/e2e/debounced-writes.spec.ts`):** after the creation-write `expect.poll`, `await page.waitForTimeout(600)` waits out the 500ms leading-edge cooldown (`LAYOUT_WRITE_DEBOUNCE_MS`, `createDebounced(..., { leading: true })`) so the 5-press burst starts idle; the `before` snapshot is taken after the wait. Keeps the exact-2 and leading-x+10 assertions. No app-code change, no new stories/e2e.
