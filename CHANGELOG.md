@@ -14,6 +14,7 @@
 
 ### Fix
 
+- **server**: serialize VFS file writes with MCP file tools
 - **mcp**: silence clippy on audit log helper
 - **mcp**: refuse empty edits, clarify view-on-broken-model refusal, file VFS-lock follow-up
 - **web**: side-handle nested drop opens delegation dialog without pageerror
