@@ -1142,9 +1142,7 @@ pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
     let plans = plan(payload)?;
     let needs_model = plans.iter().any(|(_, project_plan)| {
         project_plan.iter().any(|(relative, wanted)| {
-            matches!(wanted, Wanted::File(_))
-                && is_hcl_path(relative)
-                && !is_view_path(relative)
+            matches!(wanted, Wanted::File(_)) && is_hcl_path(relative) && !is_view_path(relative)
         })
     });
     let _project_guard = PROJECT_WRITE_LOCK
@@ -4029,10 +4027,8 @@ mod tests {
 
         // `write_project` carries the whole tree (as the browser does),
         // with `docs/race.md` changed to winner-a.
-        let system_before =
-            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
-        let view_before =
-            std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+        let system_before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let view_before = std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
         let vfs_files = vec![
             project_file("system.hcl", Some(&system_before)),
             project_file("views", None),
@@ -4089,16 +4085,12 @@ mod tests {
                 );
             } else {
                 assert!(
-                    matches!(
-                        save_result,
-                        Err(WriteProjectError::StaleVersion { .. })
-                    ),
+                    matches!(save_result, Err(WriteProjectError::StaleVersion { .. })),
                     "VFS loser must be a stale refusal: {save_result:?}"
                 );
             }
 
-            let stored =
-                std::fs::read_to_string(data_dir.join("drone/docs/race.md")).unwrap();
+            let stored = std::fs::read_to_string(data_dir.join("drone/docs/race.md")).unwrap();
             assert!(
                 stored == "winner-a\n" || stored == "winner-b\n",
                 "loser must leave the winner byte-identical, got: {stored:?}"
@@ -4113,11 +4105,9 @@ mod tests {
         let dir = data_dir_with_drone();
         let locks = crate::locks::LockManager::new();
         let base_project = project_version(dir.path(), "drone").unwrap();
-        let system_before =
-            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let system_before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
         let base_file = file_version(&system_before);
-        let view_before =
-            std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+        let view_before = std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
 
         let winner_a = "system \"quadcopter\" {\n  full_name = \"Winner A\"\n}\n";
         let winner_b = "system \"quadcopter\" {\n  full_name = \"Winner B\"\n}\n";
@@ -4160,8 +4150,7 @@ mod tests {
                 "exactly one model write must apply: save={save_result:?} generic={generic_result:?}"
             );
 
-            let stored =
-                std::fs::read_to_string(data_dir.join("drone/system.hcl")).unwrap();
+            let stored = std::fs::read_to_string(data_dir.join("drone/system.hcl")).unwrap();
             // Both winners canonicalize through the same serializer; compare
             // against what each path actually persists single-threaded.
             let canonical_a = {
