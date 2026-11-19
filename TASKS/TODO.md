@@ -23,28 +23,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Serialize VFS file writes with MCP file tools (`FILE_WRITE_LOCK`)
-
-Follow-up to the generic MCP file tools task (review finding, pre-existing gap
-now wider since `create_file`/`edit_file` cover every file).
-
-- `PUT /api/projects/{id}/files` (`write_project`, and whole-VFS `save_vfs`)
-  take `PROJECT_WRITE_LOCK` but neither `FILE_WRITE_LOCK` nor
-  `MODEL_WRITE_LOCK`, so a browser save can interleave with a generic MCP file
-  write (or `overwrite_model`/`mutate_project`) read-check-write sequence:
-  both pass their version checks, last writer wins silently. True before (vs
-  `overwrite_model`) too — not a regression.
-- Decide the lock discipline: e.g. `write_project`/`save_vfs` take
-  `FILE_WRITE_LOCK` (and `MODEL_WRITE_LOCK` when the payload touches model
-  HCL), in the same acquisition order as the MCP tools (file lock first,
-  then model lock) to avoid deadlock.
-- Red/green TDD: racing VFS save vs `create_file`/`edit_file` on the same
-  path cannot both apply (loser gets a version/stale refusal or equivalent);
-  byte-identical files on refusal.
-- `just test`, `just lint`, `just build` green.
-
----
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
