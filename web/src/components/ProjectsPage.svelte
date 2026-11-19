@@ -10,7 +10,6 @@
     projectStore,
   } from "../ProjectState.svelte";
   import { EMPTY_PROJECT_HCL } from "../emptyProject";
-  import { seedExampleProjectDiagrams } from "../example_system";
   import { pendTourStart } from "../tour/tourRequest.svelte";
   import { toastState } from "../ToastState.svelte";
   import {
@@ -116,9 +115,6 @@
     );
     if (!project) return;
     if (firstEver) pendTourStart();
-    if (example.id === "single-file") {
-      await seedExampleProjectDiagrams(project.id);
-    }
     await refresh();
     await openProject(project);
   }

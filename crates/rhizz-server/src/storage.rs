@@ -2558,7 +2558,6 @@ mod tests {
             vec![
                 "apollo-11",
                 "drone",
-                "single-file",
                 "social-media",
                 "software-house",
                 "weather-service",
