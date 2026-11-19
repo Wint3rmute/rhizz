@@ -20,9 +20,10 @@ run := if has_nix == "true" { "nix develop --command" } else { "" }
 
 # Versions come from git tags (version_provider = "scm").
 # Bumps from commits since the last tag, updates CHANGELOG.md, creates the tag.
-# Preview first with `just bump --dry-run`.
-bump *args:
-    {{run}} cz bump {{args}}
+# HEADLINE becomes the annotated tag subject, used as the GitHub Release title.
+# Preview first with `just bump "My headline" --dry-run`.
+bump headline *args:
+    {{run}} cz bump --annotated-tag-message "{{headline}}" {{args}}
 
 # Regenerates CHANGELOG.md.
 changelog *args:
