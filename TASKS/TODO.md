@@ -16,13 +16,6 @@ How to work on this file:
 
 ---
 
----
-
-- `just test`, `just lint`, `just build` green; no UI change, no new
-  stories/e2e.
-
----
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
