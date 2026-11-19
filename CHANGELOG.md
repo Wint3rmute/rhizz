@@ -2,6 +2,7 @@
 
 ### Feat
 
+- require release headline in just bump
 - **mcp**: info-level audit log for every tool call
 - **mcp**: generic create_file + edit_file replacing create_doc/edit_documentation
 - **proxy**: inspector badges, delegation dialog variant, MCP docs
