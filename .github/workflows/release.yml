@@ -1,0 +1,93 @@
+name: release
+
+# Creates a GitHub Release on every version tag push (bare semver per
+# cz.toml, e.g. `0.13.0`), mirroring the docker workflow's tag trigger.
+# The tag itself is created by `just bump "<headline>"`, which stores the
+# headline as the annotated tag subject.
+#
+# - Release title: `<tag> - <headline>` (falls back to just `<tag>` when the
+#   tag carries no headline, e.g. tags predating the headline requirement).
+# - Release notes: the `## <tag>` section of CHANGELOG.md (written by
+#   `cz bump` at tag time).
+# - Tags containing `-` (e.g. `0.6-rc.1`) are marked as prereleases.
+# - Re-pushing a tag updates the existing release instead of failing.
+on:
+  push:
+    tags: ['*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re-)release, e.g. 0.13.0'
+        required: true
+      headline:
+        description: 'Override for the release headline (defaults to the tag message)'
+        required: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Create or update the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+
+          # Headline is the annotated tag subject, set by
+          # `just bump "<headline>"` (--annotated-tag-message). Tags predating
+          # the headline requirement carry the version itself as subject.
+          # A manual dispatch may override it (e.g. backfilling old tags).
+          HEADLINE="${{ inputs.headline }}"
+          if [ -z "$HEADLINE" ]; then
+            HEADLINE="$(git tag -l --format='%(contents:subject)' "$TAG" | head -n 1)"
+          fi
+          if [ -n "$HEADLINE" ] && [ "$HEADLINE" != "$TAG" ]; then
+            TITLE="$TAG - $HEADLINE"
+          else
+            TITLE="$TAG"
+          fi
+
+          # Notes are the CHANGELOG.md section for this version. Match on the
+          # second field so tag dots need no regex escaping and dateless
+          # headers (e.g. `## 0.6 (2026-10-19)`) still match. The `##` header
+          # line itself is dropped so the body starts at the first `###`
+          # section, like the hand-made releases.
+          awk -v tag="$TAG" '
+            /^## / {
+              if ($2 == tag) { flag=1; next }
+              else if (flag) { exit }
+              else { next }
+            }
+            flag
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::No \`## $TAG\` section in CHANGELOG.md."
+            exit 1
+          fi
+
+          echo "Title: $TITLE"
+          head -n 5 notes.md
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists, updating title and notes."
+            gh release edit "$TAG" --title "$TITLE" --notes-file notes.md
+          else
+            echo "Creating release $TAG."
+            FLAGS=""
+            case "$TAG" in
+              *-* ) FLAGS="--prerelease" ;;
+            esac
+            # shellcheck disable=SC2086
+            gh release create "$TAG" --title "$TITLE" --notes-file notes.md $FLAGS
+          fi
