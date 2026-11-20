@@ -23,18 +23,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Unlike the jobs in `rust.yml`, this one does not use flake.nix: the action
-  # ships its own pinned cargo-audit and queries the advisory DB directly, so
-  # there is no devshell to enter and nothing for the Nix cache to warm.
+  # Runs cargo-audit from the flake devshell (pinned via flake.lock):
+  # no per-tool setup action, no 3-minute `cargo install` from source,
+  # and no Checks-API reporting — `cargo audit` exits non-zero on real
+  # vulnerabilities but allows informational warnings (unmaintained/
+  # unsound/notice), which is the intended gate.
   cargo-audit:
     runs-on: ubuntu-latest
-    permissions:
-      checks: write
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
+      - uses: DeterminateSystems/nix-installer-action@main
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Upstream Nix: skips the FlakeHub login (private flakes / binary
+          # caches), which this repo never uses — the login's transient
+          # failures were stalling every job for 10-15s before continuing
+          # anyway. The /nix/store caching (magic-nix-cache-action) is
+          # unaffected.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix develop --command cargo audit
 
 permissions:
   contents: read
