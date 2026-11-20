@@ -18,6 +18,7 @@
     initialDraft,
     needsOuterConversion,
     orderProtocols,
+    outerConversionSetsExternal,
     outerConversionSource,
     presetDelegationRoles,
     presetRoles,
@@ -217,6 +218,10 @@
   );
   let conversionSource = $derived(
     request === null ? null : outerConversionSource(request),
+  );
+  // Conversion also flips a private outer to a boundary dot.
+  let conversionExternalPort = $derived(
+    request === null ? null : outerConversionSetsExternal(request),
   );
 
   function setProtocol(text: string) {
@@ -471,12 +476,18 @@
               >
               forwards to
               <span class="font-mono">{innerEnd.label}/{innerPortName}</span>.
-              {#if convertsOuter && conversionSource}
+              {#if convertsOuter && conversionSource && conversionSource.protocol !== ""}
                 Moves <span class="font-mono">{conversionSource.protocol}</span>
                 inward —
                 <span class="font-mono">./{outerPortName}</span> becomes a proxy.
+              {:else if convertsOuter}
+                <span class="font-mono">./{outerPortName}</span> becomes a proxy.
               {:else}
                 The outer port inherits its type; leave protocol and role blank.
+              {/if}
+              {#if conversionExternalPort}
+                This will set <span class="font-mono">external = true</span> on
+                port <span class="font-mono">{conversionExternalPort}</span>.
               {/if}
             </span>
           </div>

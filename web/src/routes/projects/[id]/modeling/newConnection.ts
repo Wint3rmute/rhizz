@@ -287,11 +287,8 @@ export function validateDraft(
     const outer = delegation === "from" ? request.from : request.to;
     const outerDraft = delegation === "from" ? draft.from : draft.to;
     if (outer.existingPort !== undefined) {
-      if (outer.existingPortExternal === false) {
-        problems.form = `Port “${outer.existingPort}” must be external to delegate.`;
-      }
-      // An explicitly typed outer no longer blocks: the op converts it
-      // into a proxy in the same atomic step (moves its type inward).
+      // An existing outer never blocks: the op converts it into a proxy in
+      // the same atomic step (moves its type inward, sets `external`).
       // See `needsOuterConversion` / `convertOuterToProxy`.
     } else if (!outerDraft.external) {
       problems.form = "The boundary port must stay external to delegate.";
@@ -301,15 +298,30 @@ export function validateDraft(
   return { valid: Object.keys(problems).length === 0, problems };
 }
 
-/** Whether creating this delegation must convert an existing typed outer
- *  into a proxy (the `convertOuterToProxy` op flag). */
+/** Whether creating this delegation must convert an existing outer into a
+ *  proxy (the `convertOuterToProxy` op flag): a declared type moves inward,
+ *  and a missing `external` is set — all in the same atomic step. */
 export function needsOuterConversion(request: NewConnectionRequest): boolean {
   const outerSide = delegationOuterSide(request);
   if (outerSide === null) return false;
   const outer = request[outerSide];
   return (
-    outer.existingPort !== undefined && outer.existingPortExplicit === true
+    outer.existingPort !== undefined &&
+    (outer.existingPortExplicit === true ||
+      outer.existingPortExternal === false)
   );
+}
+
+/** Whether the conversion will set `external = true` on the outer port. */
+export function outerConversionSetsExternal(
+  request: NewConnectionRequest,
+): string | null {
+  const outerSide = delegationOuterSide(request);
+  if (outerSide === null) return null;
+  const outer = request[outerSide];
+  if (outer.existingPort !== undefined && outer.existingPortExternal === false)
+    return outer.existingPort;
+  return null;
 }
 
 /** The type the conversion moves inward (outer's declared protocol/role). */
@@ -369,7 +381,8 @@ function buildDelegationOp(
   const outerInfo = request[outerSide];
   const converts =
     outerInfo.existingPort !== undefined &&
-    outerInfo.existingPortExplicit === true;
+    (outerInfo.existingPortExplicit === true ||
+      outerInfo.existingPortExternal === false);
   // Conversion: a new inner left empty inherits the outer's old type.
   // Prefill here so the op is explicit even if the dialog left it blank;
   // Rust fills any remaining gap the same way.

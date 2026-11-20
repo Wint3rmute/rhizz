@@ -139,11 +139,11 @@ pub enum ModelOp {
         to: ConnectEnd,
         #[serde(default)]
         create_protocol: Option<String>,
-        /// When true and the delegation outer end names an existing typed
-        /// port, clear the outer port and move its type inward: an inner
-        /// `New` port with empty protocol/role inherits the outer's old
-        /// values. Lets the New-connection dialog convert `OVH VM/https`
-        /// into a proxy in one atomic step instead of refusing with E022.
+        /// When true and the delegation outer end names an existing port,
+        /// convert it into a proxy in one atomic step: clear its type (a new
+        /// inner left empty inherits the old values) and set `external = true`.
+        /// Lets the New-connection dialog convert `OVH VM/https` into a proxy
+        /// instead of refusing with E022, with no inspector round-trip.
         #[serde(default)]
         convert_outer_to_proxy: bool,
     },
