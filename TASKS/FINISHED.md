@@ -4,6 +4,16 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [P0] Trim MCP write-tool descriptions (drop `proposal 0004`, bare codes, steering)
+
+- **MCP (`mcp.rs` descriptions only):** replaced 19x lock boilerplate with shared `Writes take the project lock as AI; held-by-human is a refusal naming the holder.`, dropped all `proposal 0004` refs, glossed E022 (delegation shape) / E017 (unresolved realized_by) / E018 (realization cycle) / E019 (leaf with realized_by) / E016 (view/file mismatch) / E006 (unknown system), deleted the documented-connection-path steering line, added sibling disambiguation (`add_connection` <-> `connect_components`, `overwrite_model` <-> `create_file`, ModelOp <-> file tools).
+- **Chars:** 12525 -> 8436 (-32.6%, >=30% required).
+- **TDD (red->green):** new `tools_list_descriptions_are_trimmed` failed on `proposal`/`auto-acquires`/bare codes/total, passes after trim.
+- `just test` green (cargo + vitest + 175 e2e), `just lint` green, `just build` green; `just format` clean.
+- Branch: `docs/mcp-description-trim`.
+
+---
+
 ## Task <N> — [P0] MCP tool annotations: `title` + `readOnlyHint`/`destructiveHint` on all 23 tools
 
 - **MCP (`mcp.rs`, `#[tool_router]` only):** all 23 tools now carry `title` + `annotations`: 4 reads (`fetch_projects`, `list_files`, `read_file`, `check_project`) with `read_only_hint = true`; 19 writes (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`, `update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`, `connect_components`, `update_connection`, `add_protocol`, `update_protocol`, `delete_protocol`, `overwrite_model`, `create_file`, `edit_file`) with `destructive_hint` (`false` for purely additive creates, `true` for mutating/deleting/overwriting) + `idempotent_hint = true` (retry with same args is a no-op — refusals leave the file untouched).

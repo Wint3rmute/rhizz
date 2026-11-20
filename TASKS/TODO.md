@@ -16,38 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [P0] Trim MCP write-tool descriptions (drop `proposal 0004`, bare codes, steering)
-
-Write-tool descriptions (`crates/rhizz-server/src/mcp.rs`) repeat ~40–60
-tokens of lock boilerplate ×19 (`Takes the project lock as the AI user
-(proposal 0004)…`, ~1k tokens/turn total), cite internal `proposal 0004` and
-bare diagnostic codes (`E022`, `E017/E018/E019` with no expansion), and
-`connect_components` steers the model ("This is the documented connection path
-for AI clients" — belongs in user docs/skills, not the tool contract; flagged
-in the audit as behavioral steering).
-
-Scope (descriptions only, no behavior):
-- Replace the per-tool lock paragraph with one short shared sentence, e.g.
-  "Writes take the project lock as `AI`; held-by-human is a refusal naming the
-  holder." Keep the CAS `version` + "re-read and retry" guidance where it
-  applies (it is actionable, keep it).
-- Delete `proposal 0004` mentions; expand or drop bare codes (keep the code,
-  add 3–5 words of meaning, e.g. `E022 (delegation shape)`).
-- Delete the "documented connection path for AI clients" sentence from
-  `connect_components`.
-- Add sibling disambiguation lines (one clause each): `add_connection` ↔
-  `connect_components`; `overwrite_model` ↔ `create_file`; ModelOp tools ↔
-  file tools ("use X when…, Y when…").
-
-Definition of done:
-- No description mentions `proposal`; no bare code without a gloss; no
-  behavioral steering; total description chars down ≥30% (was ~12.3k).
-- `tools/list` snapshot test pins the new descriptions (red first).
-- `just test`, `just lint`, `just build` green; `just format` clean.
-- Suggested branch: `docs/mcp-description-trim`.
-
----
-
 ## Task <N> — [Spike] Shorten MCP `version` hashes to 8 chars (like short git hashes)
 
 `file_version`/`project_version`/`hash_found_entries`
