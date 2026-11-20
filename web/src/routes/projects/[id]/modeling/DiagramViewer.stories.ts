@@ -7,9 +7,9 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import {
-  EXAMPLE_SYSTEM_DIAGRAMS,
-  EXAMPLE_SYSTEM_HCL,
-} from "../../../../example_system";
+  CROSS_LEVEL_SYSTEM_DIAGRAMS,
+  CROSS_LEVEL_SYSTEM_HCL,
+} from "../../../../testing/cross_level_fixture";
 import { openProjectFs } from "../../../../vfs/fs";
 import DiagramViewer from "./DiagramViewer.svelte";
 import { VIEW_LAYOUT_DIR, writeDiagramLayoutFile } from "./persistence";
@@ -43,9 +43,9 @@ export const SeededOverview: Story = {
       const existing = await projectStore.listProjects();
       const project =
         existing.find((item) => item.id === PROJECT_ID) ??
-        (await createProjectWithMainFile(PROJECT_NAME, EXAMPLE_SYSTEM_HCL));
+        (await createProjectWithMainFile(PROJECT_NAME, CROSS_LEVEL_SYSTEM_HCL));
       const fs = openProjectFs(projectStore, project.id);
-      const layout = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
+      const layout = CROSS_LEVEL_SYSTEM_DIAGRAMS["overview.hcl"];
       if (!layout) throw new Error("example overview layout missing");
       await writeDiagramLayoutFile(
         fs,
@@ -58,6 +58,6 @@ export const SeededOverview: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(await canvas.findByText("sensor")).toBeTruthy();
-    await expect(canvas.getByText("broker")).toBeTruthy();
+    await expect(canvas.getByText("battery")).toBeTruthy();
   },
 };
