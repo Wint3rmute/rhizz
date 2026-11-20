@@ -138,6 +138,7 @@ export type ModelAction =
       from: ConnectEnd;
       to: ConnectEnd;
       createProtocol?: string | undefined;
+      convertOuterToProxy?: boolean | undefined;
     }
   | {
       op: "delete_connection";

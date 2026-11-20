@@ -88,6 +88,9 @@ export type ModelMutationOp =
       from: ConnectEnd;
       to: ConnectEnd;
       createProtocol?: string | undefined;
+      /** Move an existing typed delegation outer inward: clear the outer
+          port and give a new inner port its old type (one atomic step). */
+      convertOuterToProxy?: boolean | undefined;
     }
   | { kind: "delete_connection"; scopePath: string; label: string }
   | {
