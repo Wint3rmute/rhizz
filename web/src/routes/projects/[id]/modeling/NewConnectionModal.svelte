@@ -488,13 +488,21 @@
               {:else}
                 The outer port inherits its type; leave protocol and role blank.
               {/if}
-              {#if conversionExternalPort}
-                This will set <code class="inline-code">external = true</code>
-                on port
-                <code class="inline-code">{conversionExternalPort}</code>.
-              {/if}
             </span>
           </div>
+          {#if conversionExternalPort}
+            <div
+              class="alert alert-warning py-2 text-xs"
+              data-testid="new-connection-external-note"
+            >
+              <span>
+                This will set <code class="inline-code">external = true</code>
+                on port
+                <code class="inline-code">{conversionExternalPort}</code> — only external
+                ports can be delegated inwards.
+              </span>
+            </div>
+          {/if}
         {/if}
 
         <div class="form-control">
