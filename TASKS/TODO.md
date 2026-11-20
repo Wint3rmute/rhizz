@@ -16,6 +16,207 @@ How to work on this file:
 
 ---
 
+## Task <N> — [P0] MCP tool annotations: `title` + `readOnlyHint`/`destructiveHint` on all 23 tools
+
+Blocks directory submission (Anthropic pre-submission checklist: every tool
+must include `title` and the applicable hint). Live `tools/list` on
+`https://rhizz.fly.dev/mcp` shows `title=None, ann=None` on all 23 tools.
+`rmcp-macros 3.9` supports it: `#[tool(name = …, description = …,
+title = "…", annotations(title = "…", read_only_hint = true))]` (see
+`rmcp-macros-3.9.0/src/tool.rs`, `ToolAnnotations` in `rmcp-3.9.0/src/model/tool.rs`).
+
+Scope (`crates/rhizz-server/src/mcp.rs`, `#[tool_router]` impl only):
+- 4 reads (`fetch_projects`, `list_files`, `read_file`, `check_project`):
+  `title` + `read_only_hint = true`.
+- 15 `ModelOp` writes + `overwrite_model`/`create_file`/`edit_file`:
+  `title` + `destructive_hint` (`true` for deletes/overwrites,
+  `false` for purely additive creates), plus `idempotent_hint` where a retry
+  with the same args is a no-op (reads of the CAS `version` make most writes
+  safely retryable — decide per tool).
+- No description changes here (next task owns those).
+
+Definition of done:
+- Live `tools/list` returns a `title` and correct hints on all 23 tools.
+- Extend the in-process `/mcp` RPC tests (`mcp.rs` `mod tests`) to assert
+  hints per tool (red first: currently `None`).
+- `just test`, `just lint`, `just build` green; `just format` clean.
+- Suggested branch: `feat/mcp-tool-annotations`.
+
+---
+
+## Task <N> — [P0] Trim MCP write-tool descriptions (drop `proposal 0004`, bare codes, steering)
+
+Write-tool descriptions (`crates/rhizz-server/src/mcp.rs`) repeat ~40–60
+tokens of lock boilerplate ×19 (`Takes the project lock as the AI user
+(proposal 0004)…`, ~1k tokens/turn total), cite internal `proposal 0004` and
+bare diagnostic codes (`E022`, `E017/E018/E019` with no expansion), and
+`connect_components` steers the model ("This is the documented connection path
+for AI clients" — belongs in user docs/skills, not the tool contract; flagged
+in the audit as behavioral steering).
+
+Scope (descriptions only, no behavior):
+- Replace the per-tool lock paragraph with one short shared sentence, e.g.
+  "Writes take the project lock as `AI`; held-by-human is a refusal naming the
+  holder." Keep the CAS `version` + "re-read and retry" guidance where it
+  applies (it is actionable, keep it).
+- Delete `proposal 0004` mentions; expand or drop bare codes (keep the code,
+  add 3–5 words of meaning, e.g. `E022 (delegation shape)`).
+- Delete the "documented connection path for AI clients" sentence from
+  `connect_components`.
+- Add sibling disambiguation lines (one clause each): `add_connection` ↔
+  `connect_components`; `overwrite_model` ↔ `create_file`; ModelOp tools ↔
+  file tools ("use X when…, Y when…").
+
+Definition of done:
+- No description mentions `proposal`; no bare code without a gloss; no
+  behavioral steering; total description chars down ≥30% (was ~12.3k).
+- `tools/list` snapshot test pins the new descriptions (red first).
+- `just test`, `just lint`, `just build` green; `just format` clean.
+- Suggested branch: `docs/mcp-description-trim`.
+
+---
+
+## Task <N> — [Spike] Shorten MCP `version` hashes to 8 chars (like short git hashes)
+
+`file_version`/`project_version`/`hash_found_entries`
+(`crates/rhizz-server/src/storage.rs:636-708`) are hex SHA-256 (64 chars),
+asserted as `len() == 64` in several tests. Full hashes bloat every tool
+payload and are painful to quote. Question: can the *wire* `version` become
+an 8-char prefix while comparison stays collision-safe?
+
+Scope (spike first, implement only if safe):
+- Decide semantics: truncate-and-compare (8-hex prefix equality, 32-bit —
+  collision-prone at scale, state why acceptable or not) vs display-shortening
+  (compare full 64, transmit 8, re-expand server-side — needs a lookup, state
+  cost) vs longer prefix (12–16 chars). Count projects/files per server to
+  size the birthday risk.
+- If adopted: change `file_version`/`project_version` output or add a
+  `short_version` used only in MCP payloads; keep CAS correctness (a short
+  collision must never cause last-writer-wins); update the `len() == 64`
+  assertions and MCP tests; update tool descriptions that say "content-hash
+  `version`".
+
+Definition of done:
+- Spike note in the task PR (options, collision math, recommendation).
+- If adopted: red/green tests (stale/prefix-collision refusal, chaining
+  without re-read), `just test`/`lint`/`build` green.
+- Suggested branch: `spike/mcp-short-versions`.
+
+---
+
+## Task <N> — [Spike] `add_connection` vs `connect_components`: keep only one
+
+Audit finding (`tool-design.md` 15–30 band): two ways to create a connection.
+`add_connection` (bare `from`/`to` strings, ports must pre-exist) vs
+`connect_components` (structured ends, creates ports + stub protocol
+atomically). Keeping both doubles the schema tokens and forces the model to
+choose with no guidance.
+
+Scope (spike first):
+- Compare callers: web frontend, e2e, MCP tests — does anything need the bare
+  path that the atomic op cannot cover (e.g. wiring pre-existing ports without
+  touching them is already `{existing: label}` — confirm no gap)?
+- Recommendation: keep `connect_components` (+ optional convenience?) and
+  remove `add_connection`, or vice versa with a migration note. Deleting a
+  tool is breaking for MCP clients — check the MCP tests + book/proposals for
+  references first.
+
+Definition of done:
+- Spike note (caller matrix, recommendation, breaking-change surface).
+- If consolidated: remove the tool, its params struct, and tests; update
+  descriptions that reference it; red/green RPC tests proving the kept path
+  covers the removed one's cases.
+- `just test`, `just lint`, `just build` green.
+- Suggested branch: `spike/mcp-single-connection-tool`.
+
+---
+
+## Task <N> — [Spike] `overwrite_model` vs `create_file` on `system.hcl`: keep or split
+
+Audit finding: two whole-file write paths to the same primary file with
+near-identical CAS semantics (`overwrite_model`: model-only, `create_file`:
+any path incl. `system.hcl` with the same model gate). Models must read two
+~1k-char descriptions to choose.
+
+Scope (spike first):
+- Compare gates side by side (model-only compile vs per-path validation,
+  version-required-when-exists in both, warnings shape) — is `overwrite_model`
+  fully subsumed by `create_file(path="system.hcl")`, including the
+  "no primary file yet → version ignored" edge and repair-hatch use (broken
+  model refuses `ModelOp`s)?
+- Recommendation: remove `overwrite_model` (breaking — survey callers/tests),
+  or keep it as the documented repair hatch and say so in both descriptions
+  ("use `create_file` for normal writes; `overwrite_model` only to …").
+
+Definition of done:
+- Spike note (gate matrix, caller survey, recommendation).
+- If consolidated/disambiguated: code + description updates + red/green tests.
+- `just test`, `just lint`, `just build` green.
+- Suggested branch: `spike/mcp-single-model-write`.
+
+---
+
+## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
+
+Schemas (`crates/rhizz-server/src/mcp.rs:74-560`, via `schemars::JsonSchema`)
+under-constrain what the code enforces, so bad calls fail at runtime instead
+of at schema time (`tool-design.md`: "every constraint in the schema is one
+fewer thing that can go wrong"):
+- `fetch_projects.page` (`i64`, optional): add `minimum: 1` (code already
+  refuses `<1` — schema/code mismatch today).
+- `read_file.limit`/`offset`: add `maximum: 500` (code clamps silently —
+  either schema-gate it or document the clamp; pick one), keep `minimum: 0`.
+- `label`/`path`/`component`/`scope_path` strings: `minLength: 1` (empty is
+  refused at runtime).
+- Closed vocabularies as enums where the compiler treats them as closed
+  (`border`, `font`, port `role` when the protocol declares `roles` — check
+  each; leave genuinely free-form strings alone).
+- `ConnectPortJson.existing`/`new`: document "exactly one must be set" in
+  descriptions at minimum; enforce via `deny_unknown_fields`-style shape or a
+  custom schema if cheap.
+- `edits` (`edit_file`): `minLength`-style non-empty (`minItems: 1` — empty
+  list is refused at runtime today).
+
+Definition of done:
+- Live `tools/list` schemas carry the new constraints; runtime clamps that
+  remain are documented in the description.
+- Red/green tests: schema snapshot + refusal tests for each new constraint
+  (page 0, limit >500, empty label, both/neither `existing`/`new`, empty
+  `edits`).
+- `just test`, `just lint`, `just build` green.
+- Suggested branch: `feat/mcp-tight-schemas`.
+
+---
+
+## Task <N> — [Spike] Serve file reads as `file:///{path}` resource templates
+
+Audit finding (`resources-and-prompts.md`): `fetch_projects`/`list_files`/
+`read_file`/`check_project` are read-only context — textbook resource
+candidates — but the CAS-chaining design (`version` round-trips through tool
+calls) argues for tools. Capabilities today are tools-only
+(`mcp.rs:1836`).
+
+Scope (spike first, tools keep working regardless):
+- Prototype `resources/list` + `resources/templates/list` + `resources/read`
+  for `file:///{path}` (and `project://{id}/version` if cheap): URI scheme,
+  MIME types, `ttlMs`/`cacheScope`, confinement (same
+  `resolve_confined_path`/hidden/symlink rules as `read_file`), 4MB cap
+  behavior, and how `version` chaining works when the read is a resource
+  (does the model still get a quotable `version` for the next tool write?).
+- Measure: does it actually save context vs tools (schemas stay listed
+  regardless), and does our client surface (OpenCode) render resources usefully?
+- Recommendation: resources for reads + tools for writes, or documented
+  tools-only with reasons.
+
+Definition of done:
+- Spike note (prototype or throwaway branch, context-cost comparison,
+  recommendation). No capability change without a follow-up implement task.
+- If adopted: implement behind the same storage paths, red/green
+  `resources/read` tests mirroring `read_file` (confinement, caps, versions).
+- Suggested branch: `spike/mcp-file-resources`.
+
+---
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
