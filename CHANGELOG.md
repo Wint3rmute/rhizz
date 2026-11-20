@@ -5,6 +5,10 @@
 - set external on delegation conversion in the same dialog
 - convert typed delegation outer into proxy in one step
 
+### Fix
+
+- keep connection label weight stable when selected
+
 ### Refactor
 
 - **web**: seed stories from shared cross-level fixture
