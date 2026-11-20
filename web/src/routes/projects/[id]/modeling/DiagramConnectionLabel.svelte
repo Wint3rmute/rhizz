@@ -59,7 +59,6 @@
   {y}
   text-anchor="middle"
   font-size="10"
-  font-weight={selected ? "bold" : undefined}
   fill="var(--color-base-200)"
   style="pointer-events: none; user-select: none"
 >
