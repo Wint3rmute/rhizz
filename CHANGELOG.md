@@ -2,6 +2,7 @@
 
 ### Feat
 
+- set external on delegation conversion in the same dialog
 - convert typed delegation outer into proxy in one step
 
 ### Refactor
