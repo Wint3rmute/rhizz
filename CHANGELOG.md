@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Feat
+
+- convert typed delegation outer into proxy in one step
+
 ### Refactor
 
 - **web**: seed stories from shared cross-level fixture
