@@ -129,7 +129,6 @@ export default ts.config(
       "**/modeling/DetailedViewMenu.stories.ts",
       "**/modeling/ModelingPanes.stories.ts",
       "**/tour/TourWalk.stories.ts",
-      "src/example_system.ts",
     ],
     rules: {
       "@typescript-eslint/no-unsafe-assignment": "off",

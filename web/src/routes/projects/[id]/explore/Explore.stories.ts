@@ -8,9 +8,9 @@ import {
   projectStore,
 } from "../../../../ProjectState.svelte";
 import {
-  EXAMPLE_SYSTEM_DIAGRAMS,
-  EXAMPLE_SYSTEM_HCL,
-} from "../../../../example_system";
+  CROSS_LEVEL_SYSTEM_DIAGRAMS,
+  CROSS_LEVEL_SYSTEM_HCL,
+} from "../../../../testing/cross_level_fixture";
 import { openProjectFs } from "../../../../vfs/fs";
 import {
   type DiagramLayout,
@@ -32,157 +32,31 @@ const SEEDED_PROJECT_ID = projectSlug(SEEDED_PROJECT_NAME);
 const MANY_DIAGRAMS_PROJECT_ID = projectSlug(MANY_DIAGRAMS_PROJECT_NAME);
 const CROSS_LEVEL_PROJECT_ID = projectSlug(CROSS_LEVEL_PROJECT_NAME);
 
-const sampleOverview = EXAMPLE_SYSTEM_DIAGRAMS["overview.hcl"];
-const sampleCloud = EXAMPLE_SYSTEM_DIAGRAMS["cloud-path.hcl"];
+const sampleOverview = CROSS_LEVEL_SYSTEM_DIAGRAMS["overview.hcl"];
+const sampleController = CROSS_LEVEL_SYSTEM_DIAGRAMS["controller.hcl"];
 
 const EMPTY_LAYOUT: DiagramLayout = {
   checked: {},
   connections: {},
 };
 
-const manyDiagramsMap: Record<string, DiagramLayout> = {
+const seededDiagramsMap: Record<string, DiagramLayout> = {
   "overview.hcl": sampleOverview ?? EMPTY_LAYOUT,
-  "cloud-path.hcl": sampleCloud ?? EMPTY_LAYOUT,
-  "sensor-network.hcl": sampleOverview ?? EMPTY_LAYOUT,
-  "power-distribution.hcl": sampleCloud ?? EMPTY_LAYOUT,
-  "data-pipeline.hcl": sampleOverview ?? EMPTY_LAYOUT,
+  "controller.hcl": sampleController ?? EMPTY_LAYOUT,
 };
 
-const CROSS_LEVEL_SYSTEM_HCL = `project {
-  name    = "cross-level-demo"
-  version = "0.1.0"
-}
-
-protocol "power" {
-  full_name = "DC power delivery"
-  roles       = ["provider", "consumer"]
-}
-
-protocol "spi" {
-  full_name = "Serial peripheral interface"
-  roles       = ["provider", "consumer"]
-}
-
-component "battery" {
-  full_name = "Main power source"
-  leaf        = true
-
-  port "power-out" {
-    protocol = "power"
-    role     = "provider"
-    external = true
-  }
-}
-
-component "controller" {
-  full_name = "Processing hub with internal MCU"
-  leaf        = false
-
-  port "power-in" {
-    protocol = "power"
-    role     = "consumer"
-    external = true
-  }
-
-  instance "mcu" {
-    source = "mcu"
-  }
-}
-
-component "mcu" {
-  full_name = "Microcontroller unit"
-  leaf        = true
-
-  port "spi" {
-    protocol = "spi"
-    role     = "provider"
-    external = true
-  }
-}
-
-component "sensor" {
-  full_name = "External IMU sensor"
-  leaf        = true
-
-  port "spi" {
-    protocol = "spi"
-    role     = "consumer"
-    external = true
-  }
-}
-
-system "demo-system" {
-  full_name = "System with sibling and non-sibling cross-level connections"
-
-  instance "battery" {
-    source = "battery"
-  }
-
-  instance "controller" {
-    source = "controller"
-  }
-
-  instance "sensor" {
-    source = "sensor"
-  }
-
-  connection "power-link" {
-    full_name = "Power delivery"
-    from        = "battery/power-out"
-    to          = "controller/power-in"
-  }
-
-  connection "sensor-bus" {
-    full_name = "Cross-level SPI bus"
-    from        = "controller/mcu/spi"
-    to          = "sensor/spi"
-  }
-}
-`;
-
-const CROSS_LEVEL_SYSTEM_DIAGRAMS: Record<string, DiagramLayout> = {
-  "overview.hcl": {
-    checked: {
-      "demo-system/battery": { x: 40, y: 80, width: 150, height: 90 },
-      "demo-system/controller": {
-        x: 250,
-        y: 40,
-        width: 230,
-        height: 190,
-        textAlign: "top-left",
-      },
-      "demo-system/controller/mcu": {
-        x: 280,
-        y: 100,
-        width: 170,
-        height: 90,
-      },
-      "demo-system/sensor": { x: 550, y: 90, width: 160, height: 90 },
-    },
-  },
-  "controller.hcl": {
-    checked: {
-      "demo-system/controller": {
-        x: 40,
-        y: 40,
-        width: 230,
-        height: 190,
-        textAlign: "top-left",
-      },
-      "demo-system/controller/mcu": {
-        x: 70,
-        y: 100,
-        width: 170,
-        height: 90,
-      },
-    },
-  },
+const manyDiagramsMap: Record<string, DiagramLayout> = {
+  "overview.hcl": sampleOverview ?? EMPTY_LAYOUT,
+  "controller.hcl": sampleController ?? EMPTY_LAYOUT,
+  "sensor-network.hcl": sampleOverview ?? EMPTY_LAYOUT,
+  "power-distribution.hcl": sampleController ?? EMPTY_LAYOUT,
+  "data-pipeline.hcl": sampleOverview ?? EMPTY_LAYOUT,
 };
 
 async function ensureProjectWithDiagrams(
   name: string,
   diagrams: Record<string, DiagramLayout>,
-  hclContent: string = EXAMPLE_SYSTEM_HCL,
+  hclContent: string = CROSS_LEVEL_SYSTEM_HCL,
 ): Promise<Project> {
   await init();
   // The id follows from the name (vfs/slug) — the store derives it, so this
@@ -200,10 +74,7 @@ async function ensureProjectWithDiagrams(
 }
 
 async function ensureSeededProject(): Promise<Project> {
-  return ensureProjectWithDiagrams(
-    SEEDED_PROJECT_NAME,
-    EXAMPLE_SYSTEM_DIAGRAMS,
-  );
+  return ensureProjectWithDiagrams(SEEDED_PROJECT_NAME, seededDiagramsMap);
 }
 
 async function ensureManyDiagramsProject(): Promise<Project> {
