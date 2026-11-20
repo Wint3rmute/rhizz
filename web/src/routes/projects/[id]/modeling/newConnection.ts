@@ -287,19 +287,45 @@ export function validateDraft(
     const outer = delegation === "from" ? request.from : request.to;
     const outerDraft = delegation === "from" ? draft.from : draft.to;
     if (outer.existingPort !== undefined) {
-      // An explicitly typed outer port can never delegate (E022): it must
-      // stay omitted so the type is inherited from the inner port.
-      if (outer.existingPortExplicit === true) {
-        problems.form = `Port “${outer.existingPort}” already declares a type — clear its protocol and role to delegate (a proxy port inherits its type).`;
-      } else if (outer.existingPortExternal === false) {
+      if (outer.existingPortExternal === false) {
         problems.form = `Port “${outer.existingPort}” must be external to delegate.`;
       }
+      // An explicitly typed outer no longer blocks: the op converts it
+      // into a proxy in the same atomic step (moves its type inward).
+      // See `needsOuterConversion` / `convertOuterToProxy`.
     } else if (!outerDraft.external) {
       problems.form = "The boundary port must stay external to delegate.";
     }
   }
 
   return { valid: Object.keys(problems).length === 0, problems };
+}
+
+/** Whether creating this delegation must convert an existing typed outer
+ *  into a proxy (the `convertOuterToProxy` op flag). */
+export function needsOuterConversion(request: NewConnectionRequest): boolean {
+  const outerSide = delegationOuterSide(request);
+  if (outerSide === null) return false;
+  const outer = request[outerSide];
+  return (
+    outer.existingPort !== undefined && outer.existingPortExplicit === true
+  );
+}
+
+/** The type the conversion moves inward (outer's declared protocol/role). */
+export function outerConversionSource(request: NewConnectionRequest): {
+  protocol: string;
+  role: string;
+} | null {
+  const outerSide = delegationOuterSide(request);
+  if (outerSide === null) return null;
+  const outer = request[outerSide];
+  if (outer.existingPort === undefined || outer.existingPortExplicit !== true)
+    return null;
+  return {
+    protocol: outer.existingPortProtocol ?? "",
+    role: outer.existingPortRole ?? "",
+  };
 }
 
 function connectEnd(
@@ -327,7 +353,9 @@ function connectEnd(
 /**
  * The op for a delegation drag: the outer end omits `protocol`/`role` so the
  * type is inherited, while the inner end is built exactly like an assembly
- * end. `createProtocol` fires only for a new inner port.
+ * end. `createProtocol` fires only for a new inner port. When the outer is
+ * an existing typed port, `convertOuterToProxy` moves its type inward in the
+ * same atomic op (the dialog pre-fills the inner with it).
  */
 function buildDelegationOp(
   request: NewConnectionRequest,
@@ -338,7 +366,27 @@ function buildDelegationOp(
   const innerSide = outerSide === "from" ? "to" : "from";
   const innerInfo = request[innerSide];
   const innerDraft = draft[innerSide];
-  const protocol = draft.protocol.trim();
+  const outerInfo = request[outerSide];
+  const converts =
+    outerInfo.existingPort !== undefined &&
+    outerInfo.existingPortExplicit === true;
+  // Conversion: a new inner left empty inherits the outer's old type.
+  // Prefill here so the op is explicit even if the dialog left it blank;
+  // Rust fills any remaining gap the same way.
+  let protocol = draft.protocol.trim();
+  let innerRole = innerDraft.role;
+  if (converts && innerInfo.existingPort === undefined) {
+    if (protocol === "" && outerInfo.existingPortProtocol) {
+      protocol = outerInfo.existingPortProtocol;
+    }
+    if (
+      innerRole.trim() === "" &&
+      outerInfo.existingPortRole !== undefined &&
+      outerInfo.existingPortRole !== ""
+    ) {
+      innerRole = outerInfo.existingPortRole;
+    }
+  }
   const innerIsNew = innerInfo.existingPort === undefined;
   const creates =
     innerIsNew &&
@@ -364,6 +412,7 @@ function buildDelegationOp(
               required: draft.to.required,
             },
           };
+  const innerWithRole: PortDraft = { ...innerDraft, role: innerRole };
   return {
     kind: "connect_components",
     scopePath: request.scopePath,
@@ -371,12 +420,13 @@ function buildDelegationOp(
     from:
       outerSide === "from"
         ? { component: request.from.component, port: outerPort }
-        : connectEnd(innerInfo, innerDraft, innerIsNew ? protocol : ""),
+        : connectEnd(innerInfo, innerWithRole, innerIsNew ? protocol : ""),
     to:
       outerSide === "to"
         ? { component: request.to.component, port: outerPort }
-        : connectEnd(innerInfo, innerDraft, innerIsNew ? protocol : ""),
+        : connectEnd(innerInfo, innerWithRole, innerIsNew ? protocol : ""),
     ...(creates ? { createProtocol: protocol } : {}),
+    ...(converts ? { convertOuterToProxy: true } : {}),
   };
 }
 

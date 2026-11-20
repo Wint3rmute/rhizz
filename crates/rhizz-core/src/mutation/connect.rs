@@ -74,6 +74,7 @@ pub fn connect_components(
     from: &ConnectEnd,
     to: &ConnectEnd,
     create_protocol: Option<&str>,
+    convert_outer_to_proxy: bool,
 ) -> Result<ApplyOutcome, MutationError> {
     let Some(scope) = super::resolve_scope_or_idle(raw, scope_path) else {
         return Ok(super::idle());
@@ -85,17 +86,35 @@ pub fn connect_components(
     let from_definition = end_definition(raw, scope, &from.component)?;
     let to_definition = end_definition(raw, scope, &to.component)?;
 
+    // Conversion for the delegation dialog ("move type inward"): when the
+    // outer self-end names an existing typed port, clear it so it can
+    // delegate, moving its type to a new inner port that left it empty.
+    // Without the flag the resolver still reports E022 for explicit outers.
+    let mut from_eff = from.clone();
+    let mut to_eff = to.clone();
+    if convert_outer_to_proxy {
+        apply_outer_conversion(
+            raw,
+            from,
+            to,
+            from_definition,
+            to_definition,
+            &mut from_eff,
+            &mut to_eff,
+        );
+    }
+
     if let Some(protocol) = create_protocol {
         super::add_protocol(raw, protocol, &ProtocolPatch::default())?;
     }
-    attach_port(raw, from_definition, &from.port)?;
-    attach_port(raw, to_definition, &to.port)?;
+    attach_port(raw, from_definition, &from_eff.port)?;
+    attach_port(raw, to_definition, &to_eff.port)?;
 
     super::scope_connections_mut(raw, scope)?.push(Labeled {
         label: label.to_owned(),
         inner: RawConnection {
-            from: Some(endpoint(from)),
-            to: Some(endpoint(to)),
+            from: Some(endpoint(&from_eff)),
+            to: Some(endpoint(&to_eff)),
             ..Default::default()
         },
     });
@@ -106,15 +125,96 @@ pub fn connect_components(
         actions: vec![LoggedAction::ConnectComponents {
             scope_path: scope_path.to_owned(),
             label: label.to_owned(),
-            from: from.clone(),
-            to: to.clone(),
+            from: from_eff,
+            to: to_eff,
             create_protocol: create_protocol.map(str::to_owned),
+            convert_outer_to_proxy,
         }],
     })
 }
 
 const fn invalid(message: String) -> MutationError {
     MutationError::InvalidInput(message)
+}
+
+/// Clear an existing typed outer port and, when the inner end is new and left
+/// empty, move the outer's old type onto it. Returns the moved type when the
+/// outer was explicit (for the caller's bookkeeping); `None` is a no-op.
+fn take_outer_type(
+    raw: &mut RawFile,
+    definition: usize,
+    label: &str,
+) -> Option<(Option<String>, Option<String>)> {
+    let owner = raw.components.get_mut(definition)?;
+    let port = owner.inner.ports.iter_mut().find(|p| p.label == label)?;
+    let saved = (port.inner.protocol.clone(), port.inner.role.clone());
+    if saved.0.is_none() && saved.1.is_none() {
+        return None;
+    }
+    port.inner.protocol = None;
+    port.inner.role = None;
+    Some(saved)
+}
+
+/// Implements `convert_outer_to_proxy`: exactly one empty-component end is
+/// the delegation outer. An `Existing` outer is cleared; a `New` inner left
+/// empty inherits the cleared type. An `Existing` inner just inherits by
+/// clearing the outer.
+fn apply_outer_conversion(
+    raw: &mut RawFile,
+    from: &ConnectEnd,
+    to: &ConnectEnd,
+    from_definition: usize,
+    to_definition: usize,
+    from_eff: &mut ConnectEnd,
+    to_eff: &mut ConnectEnd,
+) {
+    let from_empty = from.component.trim_matches('/').is_empty();
+    let to_empty = to.component.trim_matches('/').is_empty();
+    if from_empty == to_empty {
+        return;
+    }
+    let (outer_def, outer_label, inner_is_new) = if from_empty {
+        let outer = match &from.port {
+            PortSpec::Existing(label) => Some(label.clone()),
+            PortSpec::New(_) => None,
+        };
+        let inner_new = matches!(&to_eff.port, PortSpec::New(_));
+        (from_definition, outer, inner_new)
+    } else {
+        let outer = match &to.port {
+            PortSpec::Existing(label) => Some(label.clone()),
+            PortSpec::New(_) => None,
+        };
+        let inner_new = matches!(&from_eff.port, PortSpec::New(_));
+        (to_definition, outer, inner_new)
+    };
+    let Some(outer_label) = outer_label else {
+        return;
+    };
+    let Some((saved_protocol, saved_role)) = take_outer_type(raw, outer_def, &outer_label) else {
+        return;
+    };
+    if !inner_is_new {
+        return;
+    }
+    let inner = if from_empty {
+        match &mut to_eff.port {
+            PortSpec::New(inner) => inner,
+            PortSpec::Existing(_) => return,
+        }
+    } else {
+        match &mut from_eff.port {
+            PortSpec::New(inner) => inner,
+            PortSpec::Existing(_) => return,
+        }
+    };
+    if inner.protocol.as_deref().is_none_or(str::is_empty) {
+        inner.protocol = saved_protocol;
+    }
+    if inner.role.as_deref().is_none_or(str::is_empty) {
+        inner.role = saved_role;
+    }
 }
 
 /// A connection label must be usable in paths and unique in its scope. Unlike
@@ -690,5 +790,82 @@ system "demo" {
             result.actions.first(),
             Some(LoggedAction::ConnectComponents { .. })
         ));
+    }
+
+    /// Conversion ("move type inward"): an existing typed outer becomes a
+    /// proxy in the same atomic op, the new inner inherits its type.
+    #[test]
+    fn convert_outer_to_proxy_moves_type_to_new_inner() {
+        let baseline = r#"
+protocol "https" { leaf = true }
+component "caddy" { leaf = true }
+component "ovh" {
+  port "https" {
+    protocol = "https"
+    external = true
+  }
+  instance "Caddy" { source = "caddy" }
+}
+system "demo" {
+  instance "ovh" { source = "ovh" }
+}
+"#;
+        let result = connect(
+            baseline,
+            r#"{"kind":"connect_components","scopePath":"demo/ovh","label":"https-delegation",
+                "convertOuterToProxy":true,
+                "from":{"component":"","port":{"existing":"https"}},
+                "to":{"component":"Caddy","port":{"new":{"label":"link-ovh"}}}}"#,
+        )
+        .expect("applies");
+        let hcl = result.hcl.expect("hcl");
+        // Outer cleared, inner got https.
+        assert!(
+            hcl.contains("port \"https\""),
+            "outer port must remain: {hcl}"
+        );
+        let model = compiled(&hcl);
+        let ovh = model
+            .components
+            .iter()
+            .find(|c| c.label == "ovh")
+            .expect("ovh");
+        let outer = ovh
+            .ports
+            .iter()
+            .map(|id| model.port(*id).expect("port"))
+            .find(|p| p.label == "https")
+            .expect("outer https");
+        assert!(outer.inferred, "outer must be a proxy after conversion");
+        assert_eq!(outer.protocol, "https");
+        // Logged action replays with the flag.
+        let json = serde_json::to_value(&result.actions).expect("serializes");
+        assert_eq!(json[0]["convertOuterToProxy"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn convert_outer_to_proxy_without_flag_still_refuses_explicit_outer() {
+        let baseline = r#"
+protocol "https" { leaf = true }
+component "caddy" { leaf = true }
+component "ovh" {
+  port "https" {
+    protocol = "https"
+    external = true
+  }
+  instance "Caddy" { source = "caddy" }
+}
+system "demo" {
+  instance "ovh" { source = "ovh" }
+}
+"#;
+        let err = connect(
+            baseline,
+            r#"{"kind":"connect_components","scopePath":"demo/ovh","label":"https-delegation",
+                "from":{"component":"","port":{"existing":"https"}},
+                "to":{"component":"Caddy","port":{"new":{"label":"link-ovh"}}}}"#,
+        )
+        .expect_err("must refuse without the flag");
+        assert_eq!(codes(&err), vec![DiagnosticCode::E022]);
     }
 }

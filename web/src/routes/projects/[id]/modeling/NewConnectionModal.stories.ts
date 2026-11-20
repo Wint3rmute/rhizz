@@ -282,3 +282,38 @@ export const DelegationNewOuter: Story = {
     await expect(external).toBeDisabled();
   },
 };
+
+// Conversion: the outer already declares a type, so creating the delegation
+// moves it inward — the banner names the moved protocol and Create stays enabled.
+export const DelegationConvertOuter: Story = {
+  args: {
+    request: {
+      scopePath: "demo/ovh",
+      from: {
+        key: "demo/ovh",
+        label: "ovh",
+        component: "",
+        definition: "ovh",
+        portLabels: ["https"],
+        existingPort: "https",
+        existingPortProtocol: "https",
+        existingPortExternal: true,
+        existingPortExplicit: true,
+      },
+      to: {
+        key: "demo/ovh/Caddy",
+        label: "Caddy",
+        component: "Caddy",
+        definition: "caddy",
+        portLabels: [],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    await expect(
+      modal.getByTestId("new-connection-delegation"),
+    ).toHaveTextContent(/moves.*https.*inward/i);
+    await expect(modal.getByTestId("new-connection-create")).toBeEnabled();
+  },
+};

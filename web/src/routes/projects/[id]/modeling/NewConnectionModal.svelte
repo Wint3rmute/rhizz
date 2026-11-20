@@ -16,7 +16,9 @@
     connectionDirection,
     delegationOuterSide,
     initialDraft,
+    needsOuterConversion,
     orderProtocols,
+    outerConversionSource,
     presetDelegationRoles,
     presetRoles,
     rememberProtocol,
@@ -65,28 +67,52 @@
     // Everything the draft derives from the request stays inside `untrack`
     // — including the inner-end read below — so opening the dialog never
     // subscribes this effect to the request it just built from.
-    const { fresh, innerProtocol } = untrack(() => {
-      const computed = initialDraft(request, {
-        takenConnectionLabels,
-        protocols,
-      });
-      // Delegation with an existing inner port: the picker is locked to the
-      // inner port's protocol (it types nothing new), so seed the display.
-      const outerSide = delegationOuterSide(request);
-      const inner =
-        outerSide === "from"
-          ? request.to
-          : outerSide === "to"
-            ? request.from
+    const { fresh, innerProtocol, conversionProtocol, conversionRole } =
+      untrack(() => {
+        const computed = initialDraft(request, {
+          takenConnectionLabels,
+          protocols,
+        });
+        // Delegation with an existing inner port: the picker is locked to the
+        // inner port's protocol (it types nothing new), so seed the display.
+        const outerSide = delegationOuterSide(request);
+        const inner =
+          outerSide === "from"
+            ? request.to
+            : outerSide === "to"
+              ? request.from
+              : undefined;
+        const protocol =
+          inner?.existingPort !== undefined
+            ? inner.existingPortProtocol
             : undefined;
-      const protocol =
-        inner?.existingPort !== undefined
-          ? inner.existingPortProtocol
-          : undefined;
-      return { fresh: computed, innerProtocol: protocol };
-    });
+        // Conversion (existing typed outer → new inner): prefill the inner
+        // with the outer's old type so wan-https-style edges stay valid.
+        const converts = needsOuterConversion(request);
+        const source = converts ? outerConversionSource(request) : null;
+        const innerIsNew =
+          inner !== undefined && inner.existingPort === undefined;
+        return {
+          fresh: computed,
+          innerProtocol: protocol,
+          conversionProtocol:
+            converts && innerIsNew ? (source?.protocol ?? "") : "",
+          conversionRole: converts && innerIsNew ? (source?.role ?? "") : "",
+        };
+      });
     if (innerProtocol !== undefined) {
       fresh.protocol = innerProtocol;
+    } else if (conversionProtocol !== "") {
+      fresh.protocol = conversionProtocol;
+      const resolved = protocols.find((p) => p.label === conversionProtocol);
+      const roles = presetDelegationRoles(resolved);
+      // Prefer the outer's old role when it names one; else the protocol default.
+      const role = conversionRole !== "" ? conversionRole : roles.inner;
+      if (delegationOuterSide(request) === "from") {
+        fresh.to.role = role;
+      } else {
+        fresh.from.role = role;
+      }
     }
     draft = fresh;
     listOpen = false;
@@ -184,6 +210,13 @@
   );
   let protocolLocked = $derived(
     isDelegation && innerEnd?.existingPort !== undefined,
+  );
+  // Conversion: the outer already declares a type that moves inward.
+  let convertsOuter = $derived(
+    request !== null && needsOuterConversion(request),
+  );
+  let conversionSource = $derived(
+    request === null ? null : outerConversionSource(request),
   );
 
   function setProtocol(text: string) {
@@ -438,7 +471,13 @@
               >
               forwards to
               <span class="font-mono">{innerEnd.label}/{innerPortName}</span>.
-              The outer port inherits its type; leave protocol and role blank.
+              {#if convertsOuter && conversionSource}
+                Moves <span class="font-mono">{conversionSource.protocol}</span>
+                inward —
+                <span class="font-mono">./{outerPortName}</span> becomes a proxy.
+              {:else}
+                The outer port inherits its type; leave protocol and role blank.
+              {/if}
             </span>
           </div>
         {/if}

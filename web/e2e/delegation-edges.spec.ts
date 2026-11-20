@@ -330,3 +330,91 @@ test("a parent side-handle drop onto its nested child delegates inward", async (
   );
   expect([...pageerrors, ...consoleErrors].join("\n")).not.toContain("closest");
 });
+
+// Conversion ("move type inward"): the outer already declares a type, so
+// alt-dragging it into a child converts it into a proxy in one atomic step.
+// The dialog names the moved protocol and Create stays enabled.
+const CONVERSION_MODEL = `protocol "https" { leaf = true }
+component "caddy" { leaf = true }
+component "ovh" {
+  port "https" {
+    protocol = "https"
+    external = true
+  }
+  instance "Caddy" { source = "caddy" }
+}
+component "user" {
+  leaf = true
+  port "out" { protocol = "https" }
+}
+system "app" {
+  instance "user" { source = "user" }
+  instance "ovh" { source = "ovh" }
+  connection "wan" {
+    from = "user/out"
+    to   = "ovh/https"
+  }
+}
+`;
+
+test("converting a typed outer into a proxy moves its type inward", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E delegation conversion");
+  await replaceModel(page, CONVERSION_MODEL);
+  await page.goto(`/projects/${id}/modeling`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+  const tree = page.getByTestId("modeling-pane-right");
+  const canvas = page.getByTestId("diagram-canvas");
+
+  async function place(name: string): Promise<void> {
+    const button = tree.getByRole("button", { name, exact: true });
+    await expect(button).toBeVisible();
+    const item = button.locator("xpath=parent::*");
+    await item.getByRole("checkbox").check();
+  }
+
+  await place("user");
+  await place("ovh");
+  await tree.getByRole("button", { name: "Expand all" }).click();
+  await place("Caddy");
+  await tree.getByRole("button", { name: "ovh", exact: true }).click();
+
+  const dot = canvas.getByTestId("diagram-port").filter({ hasText: "https" });
+  await expect(dot).toBeVisible();
+  const start = await dot.locator("circle").first().boundingBox();
+  if (!start) throw new Error("no boundary port dot box");
+  const caddyBox = await canvas
+    .getByText("Caddy", { exact: true })
+    .first()
+    .boundingBox();
+  if (!caddyBox) throw new Error("no box for Caddy");
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+  await page.keyboard.down("Alt");
+  await page.mouse.down();
+  await page.mouse.move(
+    caddyBox.x + caddyBox.width / 2,
+    caddyBox.y + caddyBox.height / 2,
+    { steps: 8 },
+  );
+  await page.mouse.up();
+  await page.keyboard.up("Alt");
+
+  const dialog = page.getByTestId("new-connection-modal");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("new-connection-delegation")).toContainText(
+    /moves.*https.*inward/i,
+  );
+  await expect(dialog.getByTestId("new-connection-create")).toBeEnabled();
+
+  await dialog.getByTestId("new-connection-create").click();
+  await expect(dialog).toBeHidden();
+
+  const modelText = async (): Promise<string> => {
+    const files = await storedFiles(page);
+    return files["system.hcl"] ?? files["main.hcl"] ?? "";
+  };
+  await expect
+    .poll(() => modelText(page), { timeout: 10_000 })
+    .toContain('"./https"');
+});

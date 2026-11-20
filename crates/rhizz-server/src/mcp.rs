@@ -403,6 +403,10 @@ struct ConnectComponentsParams {
     /// Optional protocol stub to create for the new ports.
     #[serde(default)]
     create_protocol: Option<String>,
+    /// Move an existing typed delegation outer inward: clear the outer port
+    /// and give a new inner port its old type in the same atomic op.
+    #[serde(default)]
+    convert_outer_to_proxy: bool,
 }
 
 /// A connection reference inside an `update_connection` patch, mirroring
@@ -1093,7 +1097,7 @@ impl RhizzMcp {
     /// separate port patches plus `add_connection`. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "connect_components",
-        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), and optional `createProtocol`. An empty `component` (`\"\"`) addresses the scope's own component, emitting a `./port` self endpoint: with exactly one such end the connection is a delegation edge, and omitting `protocol`/`role` on the new outer port declares a proxy port that inherits its type (E022 if the outer port declares a type or lacks `external`). This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
+        description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), optional `createProtocol`, and optional `convertOuterToProxy` (when the delegation outer names an existing typed port, clear it and move its type to a new inner port in the same step). An empty `component` (`\"\"`) addresses the scope's own component, emitting a `./port` self endpoint: with exactly one such end the connection is a delegation edge, and omitting `protocol`/`role` on the new outer port declares a proxy port that inherits its type (E022 if the outer port declares a type without `convertOuterToProxy`, or lacks `external`). This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn connect_components(
         &self,
@@ -1113,6 +1117,7 @@ impl RhizzMcp {
             from,
             to,
             create_protocol: params.0.create_protocol.clone(),
+            convert_outer_to_proxy: params.0.convert_outer_to_proxy,
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
@@ -3465,6 +3470,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tools_call_connect_components_converts_typed_outer_to_proxy() {
+        // `convertOuterToProxy` clears an existing typed outer and moves its
+        // type to a new inner port in the same atomic op (the dialog's
+        // "move type inward" flow).
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "protocol \"https\" { leaf = true }\ncomponent \"caddy\" { leaf = true }\ncomponent \"ovh\" {\n  port \"https\" {\n    protocol = \"https\"\n    external = true\n  }\n  instance \"Caddy\" { source = \"caddy\" }\n}\nsystem \"demo\" {\n  instance \"ovh\" { source = \"ovh\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            114,
+            "connect_components",
+            json!({
+                "project": "demo",
+                "scopePath": "demo/ovh",
+                "label": "https-delegation",
+                "from": { "component": "", "port": { "existing": "https" } },
+                "to": { "component": "Caddy", "port": { "new": { "label": "link-ovh" } } },
+                "convertOuterToProxy": true
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("\"./https\""), "{content}");
+        // Inner inherited the moved type (canonical HCL aligns `=`).
+        let inner = content
+            .split("port \"link-ovh\"")
+            .nth(1)
+            .expect("inner port block");
+        let inner = inner.split("port \"").next().unwrap_or("");
+        assert!(inner.contains("protocol"), "{inner}");
+        assert!(inner.contains("\"https\""), "{inner}");
+    }
+
+    #[tokio::test]
     async fn tools_call_delete_referenced_protocol_is_refused_byte_identical() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("demo");
@@ -3645,6 +3696,7 @@ mod tests {
                     port: PortSpec::Existing("q".to_owned()),
                 },
                 create_protocol: None,
+                convert_outer_to_proxy: false,
             },
             ModelOp::DeleteConnectionByLabel {
                 label: "l".to_owned(),

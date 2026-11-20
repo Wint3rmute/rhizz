@@ -11,7 +11,9 @@ import {
   initialDraft,
   isDelegationRequest,
   isExternalEnd,
+  needsOuterConversion,
   orderProtocols,
+  outerConversionSource,
   presetDelegationRoles,
   presetRoles,
   protocolUsage,
@@ -545,12 +547,14 @@ describe("delegation", () => {
       expect(problems.form).toMatch(/child component/);
     });
 
-    it("refuses an explicitly typed existing outer port", () => {
+    it("converts an explicitly typed existing outer port instead of refusing", () => {
       const req = delegationRequest({
         from: {
           existingPort: "api",
           existingPortExplicit: true,
           existingPortExternal: true,
+          existingPortProtocol: "https",
+          existingPortRole: "provider",
         },
       });
       const { valid, problems } = validateDraft(
@@ -558,8 +562,13 @@ describe("delegation", () => {
         initialDraft(req, NO_CONTEXT),
         NO_CONTEXT,
       );
-      expect(valid).toBe(false);
-      expect(problems.form).toMatch(/already declares a type/);
+      expect(valid).toBe(true);
+      expect(problems.form).toBeUndefined();
+      expect(needsOuterConversion(req)).toBe(true);
+      expect(outerConversionSource(req)).toEqual({
+        protocol: "https",
+        role: "provider",
+      });
     });
 
     it("refuses an internal existing outer port", () => {
@@ -663,6 +672,28 @@ describe("delegation", () => {
         to: { component: "proxy", port: { existing: "http" } },
       });
       expect(op).not.toHaveProperty("createProtocol");
+    });
+
+    it("moves an explicit outer type to a new inner port", () => {
+      const req = delegationRequest({
+        from: {
+          existingPort: "https",
+          existingPortExplicit: true,
+          existingPortExternal: true,
+          existingPortProtocol: "https",
+        },
+      });
+      const base = initialDraft(req, NO_CONTEXT);
+      const op = buildConnectOp(req, base, []);
+      expect(op).toMatchObject({
+        kind: "connect_components",
+        from: { component: "", port: { existing: "https" } },
+        to: {
+          component: "proxy",
+          port: { new: { protocol: "https" } },
+        },
+        convertOuterToProxy: true,
+      });
     });
   });
 });

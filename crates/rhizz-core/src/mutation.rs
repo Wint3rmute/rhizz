@@ -139,6 +139,13 @@ pub enum ModelOp {
         to: ConnectEnd,
         #[serde(default)]
         create_protocol: Option<String>,
+        /// When true and the delegation outer end names an existing typed
+        /// port, clear the outer port and move its type inward: an inner
+        /// `New` port with empty protocol/role inherits the outer's old
+        /// values. Lets the New-connection dialog convert `OVH VM/https`
+        /// into a proxy in one atomic step instead of refusing with E022.
+        #[serde(default)]
+        convert_outer_to_proxy: bool,
     },
     /// Delete a connection by label, searching systems then definitions.
     ///
@@ -338,6 +345,13 @@ pub struct SystemPatchJson {
 
 // ── Logged actions (mirrors the TypeScript `ModelAction` JSON) ───────────────
 
+/// `skip_serializing_if` helper: omit `convert_outer_to_proxy` when false so
+/// pre-conversion action logs keep their exact shape.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+const fn is_false(b: &bool) -> bool {
+    !*b
+}
+
 /// Actions an applied op reports, in the exact JSON shape the web action log
 /// records. The TypeScript dispatcher forwards these to its mutation
 /// observers untouched.
@@ -421,6 +435,8 @@ pub enum LoggedAction {
         to: ConnectEnd,
         #[serde(skip_serializing_if = "Option::is_none")]
         create_protocol: Option<String>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        convert_outer_to_proxy: bool,
     },
     /// A connection was deleted, optionally together with its endpoint ports
     /// (one gesture, one action). `ports` (as `definition/port`) records a
@@ -795,6 +811,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             from,
             to,
             create_protocol,
+            convert_outer_to_proxy,
         } => connect::connect_components(
             raw,
             scope_path,
@@ -802,6 +819,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             from,
             to,
             create_protocol.as_deref(),
+            *convert_outer_to_proxy,
         ),
         ModelOp::DeleteConnectionByLabel {
             label,
