@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Refactor
+
+- **web**: seed stories from shared cross-level fixture
+
 ## 0.13.0 (2026-11-19)
 
 ### Feat
