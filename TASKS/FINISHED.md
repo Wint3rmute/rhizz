@@ -4,6 +4,15 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [P0] MCP tool annotations: `title` + `readOnlyHint`/`destructiveHint` on all 23 tools
+
+- **MCP (`mcp.rs`, `#[tool_router]` only):** all 23 tools now carry `title` + `annotations`: 4 reads (`fetch_projects`, `list_files`, `read_file`, `check_project`) with `read_only_hint = true`; 19 writes (`add_system`, `add_component_definition`, `add_instance`, `rename_component`, `reparent_component`, `update_component`, `update_system`, `delete_component`, `delete_system`, `add_connection`, `delete_connection_by_label`, `connect_components`, `update_connection`, `add_protocol`, `update_protocol`, `delete_protocol`, `overwrite_model`, `create_file`, `edit_file`) with `destructive_hint` (`false` for purely additive creates, `true` for mutating/deleting/overwriting) + `idempotent_hint = true` (retry with same args is a no-op — refusals leave the file untouched).
+- **TDD (red→green):** new `tools_list_carries_title_and_safety_hints` asserts `tools/list` returns 23 tools, non-empty `title` per tool, exact `readOnlyHint`/`destructiveHint` per tool, and `idempotentHint = true` on all writes (was `None` before annotations).
+- `just test` green (cargo + vitest + 174 e2e), `just lint` green, `just build` green; `just format` clean; no description changes, no UI change so no new stories/e2e.
+- Branch: `feat/mcp-tool-annotations`.
+
+---
+
 ## Task <N> — Serialize VFS file writes with MCP file tools (`FILE_WRITE_LOCK`)
 
 - **Locks (`storage.rs`):** `write_project` now takes `FILE_WRITE_LOCK` always and `MODEL_WRITE_LOCK` when the payload touches model HCL; `save_vfs` takes `PROJECT_WRITE_LOCK` + `FILE_WRITE_LOCK` (+ `MODEL_WRITE_LOCK` when any plan touches model HCL). Acquisition order is file-first-then-model, matching `create_file`/`edit_file`, so no deadlock (`MODEL`-only holders never wait for `FILE`).

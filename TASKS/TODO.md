@@ -16,34 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [P0] MCP tool annotations: `title` + `readOnlyHint`/`destructiveHint` on all 23 tools
-
-Blocks directory submission (Anthropic pre-submission checklist: every tool
-must include `title` and the applicable hint). Live `tools/list` on
-`https://rhizz.fly.dev/mcp` shows `title=None, ann=None` on all 23 tools.
-`rmcp-macros 3.9` supports it: `#[tool(name = …, description = …,
-title = "…", annotations(title = "…", read_only_hint = true))]` (see
-`rmcp-macros-3.9.0/src/tool.rs`, `ToolAnnotations` in `rmcp-3.9.0/src/model/tool.rs`).
-
-Scope (`crates/rhizz-server/src/mcp.rs`, `#[tool_router]` impl only):
-- 4 reads (`fetch_projects`, `list_files`, `read_file`, `check_project`):
-  `title` + `read_only_hint = true`.
-- 15 `ModelOp` writes + `overwrite_model`/`create_file`/`edit_file`:
-  `title` + `destructive_hint` (`true` for deletes/overwrites,
-  `false` for purely additive creates), plus `idempotent_hint` where a retry
-  with the same args is a no-op (reads of the CAS `version` make most writes
-  safely retryable — decide per tool).
-- No description changes here (next task owns those).
-
-Definition of done:
-- Live `tools/list` returns a `title` and correct hints on all 23 tools.
-- Extend the in-process `/mcp` RPC tests (`mcp.rs` `mod tests`) to assert
-  hints per tool (red first: currently `None`).
-- `just test`, `just lint`, `just build` green; `just format` clean.
-- Suggested branch: `feat/mcp-tool-annotations`.
-
----
-
 ## Task <N> — [P0] Trim MCP write-tool descriptions (drop `proposal 0004`, bare codes, steering)
 
 Write-tool descriptions (`crates/rhizz-server/src/mcp.rs`) repeat ~40–60
