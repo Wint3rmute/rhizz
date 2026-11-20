@@ -287,6 +287,10 @@ export const DelegationNewOuter: Story = {
 // moves it inward — the banner names the moved protocol and Create stays enabled.
 export const DelegationConvertOuter: Story = {
   args: {
+    protocols: [
+      ...protocols,
+      protocol("https", [], "HTTPS"),
+    ],
     request: {
       scopePath: "demo/ovh",
       from: {
