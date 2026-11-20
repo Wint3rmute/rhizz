@@ -934,7 +934,11 @@ impl RhizzMcp {
     #[tool(
         name = "add_component_definition",
         title = "Add component definition",
-        annotations(title = "Add component definition", destructive_hint = false, idempotent_hint = true),
+        annotations(
+            title = "Add component definition",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
         description = "Add a top-level component definition to a Rhizz project (`ModelOp add_component_definition`). Pass the project id, the new `label`, and optional `options` (leaf, full_name, tags, icon, color, border, font, ports). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn add_component_definition(
@@ -959,7 +963,11 @@ impl RhizzMcp {
     #[tool(
         name = "add_instance",
         title = "Add component instance",
-        annotations(title = "Add component instance", destructive_hint = false, idempotent_hint = true),
+        annotations(
+            title = "Add component instance",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
         description = "Add an instance of a top-level component inside a system or definition (`ModelOp add_instance`). Pass the project id, `parentPath` (a bare system/definition label or a nested instance path), `label`, and `source` (a top-level component label). Returns `applied`, the created `path`, and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn add_instance(
@@ -978,7 +986,11 @@ impl RhizzMcp {
     #[tool(
         name = "rename_component",
         title = "Rename component",
-        annotations(title = "Rename component", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Rename component",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Rename a placed instance (`ModelOp rename_component`). Pass the project id, the instance `path` (e.g. `demo/motor`), and `newLabel`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
     )]
     async fn rename_component(
@@ -996,7 +1008,11 @@ impl RhizzMcp {
     #[tool(
         name = "reparent_component",
         title = "Move component",
-        annotations(title = "Move component", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Move component",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Move a placed instance between containers (`ModelOp reparent_component`). Pass the project id, `sourcePath` (e.g. `demo/motor`), and `targetParentPath`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown path is refused as a tool error with the core diagnostic code and leaves system.hcl untouched."
     )]
     async fn reparent_component(
@@ -1014,7 +1030,11 @@ impl RhizzMcp {
     #[tool(
         name = "update_component",
         title = "Update component",
-        annotations(title = "Update component", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Update component",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Patch a component definition's attributes (`ModelOp update_component`; instance paths redirect to their definition). Pass the project id, `path`, and `patch` (full_name, icon, color, border, font, tags, leaf, ports). Ports are a full replacement: omit `protocol`/`role` to keep a proxy port inferred (writing them onto a delegated port is refused with E022; the omission is preserved, not cleared). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_component(
@@ -1032,7 +1052,11 @@ impl RhizzMcp {
     #[tool(
         name = "update_system",
         title = "Update system",
-        annotations(title = "Update system", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Update system",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Patch a system's attributes (`ModelOp update_system`; only `full_name` and `icon` are honored). Pass the project id, bare system `path`, and `patch`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_system(
@@ -1053,7 +1077,11 @@ impl RhizzMcp {
     #[tool(
         name = "delete_component",
         title = "Delete component",
-        annotations(title = "Delete component", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Delete component",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Delete a component definition (bare label) or a placed instance (e.g. `demo/motor`) (`ModelOp delete_component`). A definition still in use is refused by the resolver. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_component(
@@ -1070,7 +1098,11 @@ impl RhizzMcp {
     #[tool(
         name = "delete_system",
         title = "Delete system",
-        annotations(title = "Delete system", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Delete system",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Delete a system by bare label (`ModelOp delete_system`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_system(
@@ -1087,7 +1119,11 @@ impl RhizzMcp {
     #[tool(
         name = "add_connection",
         title = "Add connection",
-        annotations(title = "Add connection", destructive_hint = false, idempotent_hint = true),
+        annotations(
+            title = "Add connection",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
         description = "Add a connection inside a scope (`ModelOp add_connection`). Pass the project id, `scopePath`, `label`, `from`, and `to` (`comp/port`, relative paths ending in a port, or `./port` for the declaring scope's own port — a delegation edge, exactly one end may be `./port`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. An unknown endpoint is refused with its diagnostic code and leaves system.hcl untouched."
     )]
     async fn add_connection(
@@ -1107,7 +1143,11 @@ impl RhizzMcp {
     #[tool(
         name = "delete_connection_by_label",
         title = "Delete connection",
-        annotations(title = "Delete connection", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Delete connection",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Delete a connection by label, searching systems then definitions (`ModelOp delete_connection_by_label`). Pass the project id, `label`, optional `removePorts` to also delete endpoint ports no other connection uses (ports still used elsewhere are kept while the unshared ones are removed), and optional `ports` (`definition/port` entries) to delete only a subset of the unshared endpoint ports. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_connection_by_label(
@@ -1128,7 +1168,11 @@ impl RhizzMcp {
     #[tool(
         name = "connect_components",
         title = "Connect components",
-        annotations(title = "Connect components", destructive_hint = false, idempotent_hint = true),
+        annotations(
+            title = "Connect components",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
         description = "Create a connection together with the ports it ends on, and optionally a stub protocol for them, as one atomic op (`ModelOp connect_components`). Pass the project id, `scopePath`, `label`, `from`/`to` ends (`{component, port: {existing: label} or {new: {label, protocol, role, external, required}}}`), optional `createProtocol`, and optional `convertOuterToProxy` (when the delegation outer names an existing port, clear its type and move it to a new inner port and set `external = true` in the same step). An empty `component` (`\"\"`) addresses the scope's own component, emitting a `./port` self endpoint: with exactly one such end the connection is a delegation edge, and omitting `protocol`/`role` on the new outer port declares a proxy port that inherits its type (E022 if the outer port declares a type or lacks `external` without `convertOuterToProxy`). This is the documented connection path for AI clients. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn connect_components(
@@ -1158,7 +1202,11 @@ impl RhizzMcp {
     #[tool(
         name = "update_connection",
         title = "Update connection",
-        annotations(title = "Update connection", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Update connection",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Patch a connection's attributes (`ModelOp update_connection`). Pass the project id, `scopePath`, `label`, and `patch` (`full_name`, `tags`, `level`, `realized_by` as `{scopePath, label}` refs). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op (E017/E018/E019) is a tool error and leaves system.hcl untouched."
     )]
     async fn update_connection(
@@ -1177,7 +1225,11 @@ impl RhizzMcp {
     #[tool(
         name = "add_protocol",
         title = "Add protocol",
-        annotations(title = "Add protocol", destructive_hint = false, idempotent_hint = true),
+        annotations(
+            title = "Add protocol",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
         description = "Add a top-level protocol (`ModelOp add_protocol`). Pass the project id, `label`, and optional `options` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op (blank/`/`-containing/existing label) is a tool error and leaves system.hcl untouched."
     )]
     async fn add_protocol(
@@ -1200,7 +1252,11 @@ impl RhizzMcp {
     #[tool(
         name = "update_protocol",
         title = "Update protocol",
-        annotations(title = "Update protocol", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Update protocol",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Patch a protocol's attributes (`ModelOp update_protocol`; labels never change). Pass the project id, `path` (the protocol label), and `patch` (`full_name`, `tags`, `roles`, `leaf`, `encapsulates` as full replacements). Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn update_protocol(
@@ -1218,7 +1274,11 @@ impl RhizzMcp {
     #[tool(
         name = "delete_protocol",
         title = "Delete protocol",
-        annotations(title = "Delete protocol", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Delete protocol",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Delete a top-level protocol (`ModelOp delete_protocol`). Refused while a port names it or another protocol lists it in `encapsulates`. Pass the project id and `path`. Returns `applied` and `warnings`. Takes the project lock as the `AI` user (proposal 0004): a free project auto-acquires; one held by a human is refused naming the holder. A refused op is a tool error and leaves system.hcl untouched."
     )]
     async fn delete_protocol(
@@ -1243,7 +1303,11 @@ impl RhizzMcp {
     #[tool(
         name = "overwrite_model",
         title = "Overwrite model file",
-        annotations(title = "Overwrite model file", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Overwrite model file",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Replace a project's primary model file (`system.hcl`, falling back to `main.hcl`) whole with new HCL content. The content is parsed and resolved; on resolver errors nothing is written and the diagnostics are returned. On success the canonical HCL is persisted (exactly what the web editor writes) and the new content-hash `version` and `totalLines` are returned with any warnings. When the file already exists, the `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed when no primary file exists yet is ignored. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched and never touches views or docs."
     )]
     async fn overwrite_model(
@@ -1316,7 +1380,11 @@ impl RhizzMcp {
     #[tool(
         name = "create_file",
         title = "Create or overwrite file",
-        annotations(title = "Create or overwrite file", destructive_hint = true, idempotent_hint = true),
+        annotations(
+            title = "Create or overwrite file",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
         description = "Create a new file in a Rhizz project, or overwrite an existing one whole (any path: `system.hcl`, `views/*.hcl`, `docs/*.md`, `README.md`, …). Pass the project id, `path` (relative, confined like `read_file`: no absolute, no `..`, no hidden/symlink), and the whole file `content`. When the file already exists, the content-hash `version` `read_file` returned is required and must match — a missing or stale `version` is refused, so re-read with `read_file` and retry; a `version` passed for a file that does not exist yet is ignored. `.hcl` writes are validated (model files: model-only compile, zero errors required, same gate as `overwrite_model`; `views/**.hcl`: `parse_views` + resolution against the current model, error `E016`/`E006`/parse errors refuse, warnings pass through and are returned; a view write while the model is broken is refused with the model's diagnostics); other paths skip validation. Returns the new `version`, `totalLines`, and `warnings` so another write can chain without re-reading. Compare-and-swap on the file version, under the project lock taken as the `AI` user (proposal 0004): a project held by a human is refused naming the holder. Any refusal leaves the file untouched."
     )]
     async fn create_file(
@@ -2228,11 +2296,7 @@ mod tests {
             let annotations = tool.get("annotations").unwrap_or(&Value::Null);
             assert_eq!(
                 annotations.get("readOnlyHint"),
-                if read_only {
-                    Some(&json!(true))
-                } else {
-                    None
-                },
+                if read_only { Some(&json!(true)) } else { None },
                 "tool `{name}` readOnlyHint mismatch"
             );
             assert_eq!(

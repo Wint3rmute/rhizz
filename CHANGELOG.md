@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **server**: add title and safety hints to MCP tools
 - set external on delegation conversion in the same dialog
 - convert typed delegation outer into proxy in one step
 
