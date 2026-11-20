@@ -472,22 +472,26 @@
             data-testid="new-connection-delegation"
           >
             <span>
-              Delegates inward — <span class="font-mono">./{outerPortName}</span
+              Delegates inward — <code class="inline-code"
+                >./{outerPortName}</code
               >
               forwards to
-              <span class="font-mono">{innerEnd.label}/{innerPortName}</span>.
+              <code class="inline-code">{innerEnd.label}/{innerPortName}</code>.
               {#if convertsOuter && conversionSource && conversionSource.protocol !== ""}
-                Moves <span class="font-mono">{conversionSource.protocol}</span>
+                Moves <code class="inline-code"
+                  >{conversionSource.protocol}</code
+                >
                 inward —
-                <span class="font-mono">./{outerPortName}</span> becomes a proxy.
+                <code class="inline-code">./{outerPortName}</code> becomes a proxy.
               {:else if convertsOuter}
-                <span class="font-mono">./{outerPortName}</span> becomes a proxy.
+                <code class="inline-code">./{outerPortName}</code> becomes a proxy.
               {:else}
                 The outer port inherits its type; leave protocol and role blank.
               {/if}
               {#if conversionExternalPort}
-                This will set <span class="font-mono">external = true</span> on
-                port <span class="font-mono">{conversionExternalPort}</span>.
+                This will set <code class="inline-code">external = true</code>
+                on port
+                <code class="inline-code">{conversionExternalPort}</code>.
               {/if}
             </span>
           </div>
