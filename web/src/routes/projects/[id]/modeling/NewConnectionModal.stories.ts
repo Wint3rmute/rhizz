@@ -318,3 +318,39 @@ export const DelegationConvertOuter: Story = {
     await expect(modal.getByTestId("new-connection-create")).toBeEnabled();
   },
 };
+
+// Conversion with a private outer: the banner also notes `external = true`
+// will be set, so the whole proxy is built in the one popup.
+export const DelegationConvertPrivateOuter: Story = {
+  args: {
+    protocols: [...protocols, protocol("sig", [], "Signal")],
+    request: {
+      scopePath: "demo/b",
+      from: {
+        key: "demo/b",
+        label: "b",
+        component: "",
+        definition: "b",
+        portLabels: ["link-a"],
+        existingPort: "link-a",
+        existingPortProtocol: "sig",
+        existingPortExternal: false,
+        existingPortExplicit: true,
+      },
+      to: {
+        key: "demo/b/c",
+        label: "c",
+        component: "c",
+        definition: "c",
+        portLabels: [],
+      },
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const modal = within(canvasElement);
+    await expect(
+      modal.getByTestId("new-connection-delegation"),
+    ).toHaveTextContent(/external = true.*link-a/i);
+    await expect(modal.getByTestId("new-connection-create")).toBeEnabled();
+  },
+};

@@ -137,9 +137,11 @@ const fn invalid(message: String) -> MutationError {
     MutationError::InvalidInput(message)
 }
 
-/// Clear an existing typed outer port and, when the inner end is new and left
-/// empty, move the outer's old type onto it. Returns the moved type when the
-/// outer was explicit (for the caller's bookkeeping); `None` is a no-op.
+/// Clear an existing outer port for delegation and, when the inner end is new
+/// and left empty, move the outer's old type onto it. Always ensures
+/// `external = true` (a proxy must be a boundary), so the dialog never
+/// bounces the user to the port inspector. Returns the moved type when the
+/// outer was explicit; `None` still sets `external` when it was missing.
 fn take_outer_type(
     raw: &mut RawFile,
     definition: usize,
@@ -148,12 +150,13 @@ fn take_outer_type(
     let owner = raw.components.get_mut(definition)?;
     let port = owner.inner.ports.iter_mut().find(|p| p.label == label)?;
     let saved = (port.inner.protocol.clone(), port.inner.role.clone());
-    if saved.0.is_none() && saved.1.is_none() {
-        return None;
-    }
+    let was_explicit = saved.0.is_some() || saved.1.is_some();
     port.inner.protocol = None;
     port.inner.role = None;
-    Some(saved)
+    if port.inner.external != Some(true) {
+        port.inner.external = Some(true);
+    }
+    if was_explicit { Some(saved) } else { None }
 }
 
 /// Implements `convert_outer_to_proxy`: exactly one empty-component end is
@@ -867,5 +870,52 @@ system "demo" {
         )
         .expect_err("must refuse without the flag");
         assert_eq!(codes(&err), vec![DiagnosticCode::E022]);
+    }
+
+    #[test]
+    fn convert_outer_to_proxy_sets_external_on_internal_outer() {
+        let baseline = r#"
+protocol "sig" { leaf = true }
+component "leaf" {
+  leaf = true
+  port "http" {
+    protocol = "sig"
+    external = true
+  }
+}
+component "svc" {
+  port "api" {
+    protocol = "sig"
+  }
+  instance "proxy" { source = "leaf" }
+}
+system "demo" {
+  instance "svc" { source = "svc" }
+}
+"#;
+        let result = connect(
+            baseline,
+            r#"{"kind":"connect_components","scopePath":"demo/svc","label":"api-delegation",
+                "convertOuterToProxy":true,
+                "from":{"component":"","port":{"existing":"api"}},
+                "to":{"component":"proxy","port":{"new":{"label":"link-svc"}}}}"#,
+        )
+        .expect("applies");
+        let hcl = result.hcl.expect("hcl");
+        let model = compiled(&hcl);
+        let svc = model
+            .components
+            .iter()
+            .find(|c| c.label == "svc")
+            .expect("svc");
+        let outer = svc
+            .ports
+            .iter()
+            .map(|id| model.port(*id).expect("port"))
+            .find(|p| p.label == "api")
+            .expect("outer api");
+        assert!(outer.inferred, "outer must be a proxy after conversion");
+        assert!(outer.external, "conversion sets external = true");
+        assert_eq!(outer.protocol, "sig");
     }
 }

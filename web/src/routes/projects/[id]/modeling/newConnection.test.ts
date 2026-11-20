@@ -13,6 +13,7 @@ import {
   isExternalEnd,
   needsOuterConversion,
   orderProtocols,
+  outerConversionSetsExternal,
   outerConversionSource,
   presetDelegationRoles,
   presetRoles,
@@ -571,7 +572,7 @@ describe("delegation", () => {
       });
     });
 
-    it("refuses an internal existing outer port", () => {
+    it("converts an internal existing outer port instead of refusing", () => {
       const req = delegationRequest({
         from: {
           existingPort: "api",
@@ -584,8 +585,10 @@ describe("delegation", () => {
         initialDraft(req, NO_CONTEXT),
         NO_CONTEXT,
       );
-      expect(valid).toBe(false);
-      expect(problems.form).toMatch(/must be external/);
+      expect(valid).toBe(true);
+      expect(problems.form).toBeUndefined();
+      expect(needsOuterConversion(req)).toBe(true);
+      expect(outerConversionSetsExternal(req)).toBe("api");
     });
 
     it("refuses a new outer port without external", () => {
