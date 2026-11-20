@@ -349,8 +349,8 @@ export const DelegationConvertPrivateOuter: Story = {
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     await expect(
-      modal.getByTestId("new-connection-delegation"),
-    ).toHaveTextContent(/external = true.*link-a/i);
+      modal.getByTestId("new-connection-external-note"),
+    ).toHaveTextContent(/external = true.*link-a.*only external ports/i);
     await expect(modal.getByTestId("new-connection-create")).toBeEnabled();
   },
 };
