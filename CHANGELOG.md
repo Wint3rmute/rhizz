@@ -6,6 +6,7 @@
 
 ### Feat
 
+- **mcp**: add file and version resource reads alongside tools
 - **mcp**: tighten input schemas to match runtime validation
 - **mcp**: remove overwrite_model, keep create_file as single whole-file write
 - **server**: shorten MCP versions to 16-char SHA-256 prefix
