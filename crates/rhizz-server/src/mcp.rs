@@ -75,6 +75,7 @@ const READ_FILE_MAX_BYTES: u64 = 4 * 1024 * 1024;
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct FetchProjectsParams {
     /// The 1-based page to fetch; when omitted, page 1.
+    #[schemars(range(min = 1))]
     page: Option<i64>,
 }
 
@@ -82,6 +83,7 @@ struct FetchProjectsParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct ListFilesParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
 }
 
@@ -89,12 +91,16 @@ struct ListFilesParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct ReadFileParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// A path relative to the project root.
+    #[schemars(length(min = 1))]
     path: String,
     /// The 0-based line to start at; when omitted, line 0.
+    #[schemars(range(min = 0))]
     offset: Option<usize>,
-    /// The number of lines to return; when omitted, 100. Maximum 500.
+    /// The number of lines to return; when omitted, 100. Maximum 500, larger values are refused.
+    #[schemars(range(min = 0, max = 500))]
     limit: Option<usize>,
 }
 
@@ -102,6 +108,7 @@ struct ReadFileParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct CheckProjectParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
 }
 
@@ -109,6 +116,7 @@ struct CheckProjectParams {
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
 struct MutationPortJson {
     /// Port label (required).
+    #[schemars(length(min = 1))]
     label: String,
     /// Optional full name.
     #[serde(default)]
@@ -130,6 +138,33 @@ struct MutationPortJson {
     tags: Option<Vec<String>>,
 }
 
+/// Closed border vocabulary: the compiler only accepts these styles.
+/// `solid` clears the border (the default); `dashed`/`dotted` set it.
+/// Free-form styles are refused with `E000`, and `font` stays free-form
+/// (no validation), as does a port `role` when its protocol declares no
+/// `roles`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum BorderStyleJson {
+    /// Solid border (the default); clears the border.
+    Solid,
+    /// Dashed border.
+    Dashed,
+    /// Dotted border.
+    Dotted,
+}
+
+impl BorderStyleJson {
+    /// Returns the lowercase wire string for this border style.
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Solid => "solid",
+            Self::Dashed => "dashed",
+            Self::Dotted => "dotted",
+        }
+    }
+}
+
 /// Options for `add_component_definition`, mirroring
 /// `rhizz_core::mutation::DefinitionOptions`.
 #[derive(Debug, Default, serde::Deserialize, schemars::JsonSchema)]
@@ -149,10 +184,10 @@ struct DefinitionOptionsJson {
     /// Optional border color.
     #[serde(default)]
     color: Option<String>,
-    /// Border style (`"dashed"` / `"dotted"`; `"solid"` and empty clear it).
+    /// Border style: `solid` clears it (the default), `dashed`/`dotted` set it.
     #[serde(default)]
-    border: Option<String>,
-    /// Optional font style.
+    border: Option<BorderStyleJson>,
+    /// Optional font style (free-form, e.g. `bold`/`italic`; `unstyled` clears it).
     #[serde(default)]
     font: Option<String>,
     /// Ports declared on the definition.
@@ -164,8 +199,10 @@ struct DefinitionOptionsJson {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct AddSystemParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// New system label (must not be empty).
+    #[schemars(length(min = 1))]
     label: String,
     /// Full official name, expanding abbreviations.
     #[serde(default)]
@@ -176,8 +213,10 @@ struct AddSystemParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct AddComponentDefinitionParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// New top-level component label (must not be empty).
+    #[schemars(length(min = 1))]
     label: String,
     /// Definition options (`leaf`, `full_name`, tags, icon, color, border, font, ports).
     #[serde(default)]
@@ -189,12 +228,16 @@ struct AddComponentDefinitionParams {
 #[serde(rename_all = "camelCase")]
 struct AddInstanceParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Container path: a bare system or definition label, or a nested instance path.
+    #[schemars(length(min = 1))]
     parent_path: String,
     /// New instance label within the container.
+    #[schemars(length(min = 1))]
     label: String,
     /// Label of the top-level component to instantiate.
+    #[schemars(length(min = 1))]
     source: String,
 }
 
@@ -203,10 +246,13 @@ struct AddInstanceParams {
 #[serde(rename_all = "camelCase")]
 struct RenameComponentParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Instance path to rename (e.g. `"demo/motor"`).
+    #[schemars(length(min = 1))]
     path: String,
     /// New label within the same container.
+    #[schemars(length(min = 1))]
     new_label: String,
 }
 
@@ -215,10 +261,13 @@ struct RenameComponentParams {
 #[serde(rename_all = "camelCase")]
 struct ReparentComponentParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Instance path to move (e.g. `"demo/motor"`).
+    #[schemars(length(min = 1))]
     source_path: String,
     /// Container path to move it into.
+    #[schemars(length(min = 1))]
     target_parent_path: String,
 }
 
@@ -235,9 +284,9 @@ struct ComponentPatchJson {
     /// Optional border color; `"default"` clears it.
     #[serde(default)]
     color: Option<String>,
-    /// Border style; `"solid"` and empty clear it.
+    /// Border style; `"solid"` clears it.
     #[serde(default)]
-    border: Option<String>,
+    border: Option<BorderStyleJson>,
     /// Optional font style; `"unstyled"` clears it.
     #[serde(default)]
     font: Option<String>,
@@ -270,8 +319,10 @@ struct SystemPatchJsonMcp {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct UpdateComponentParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Definition label or instance path (instance paths redirect to their definition).
+    #[schemars(length(min = 1))]
     path: String,
     /// Attribute patch (`full_name`, icon, color, border, font, tags, leaf, ports).
     patch: ComponentPatchJson,
@@ -281,8 +332,10 @@ struct UpdateComponentParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct UpdateSystemParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Bare system label.
+    #[schemars(length(min = 1))]
     path: String,
     /// Attribute patch (`full_name` and `icon` only).
     patch: SystemPatchJsonMcp,
@@ -292,8 +345,10 @@ struct UpdateSystemParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct DeleteComponentParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Definition label (bare) or placed instance path (e.g. `"demo/motor"`).
+    #[schemars(length(min = 1))]
     path: String,
 }
 
@@ -301,8 +356,10 @@ struct DeleteComponentParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct DeleteSystemParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Bare system label.
+    #[schemars(length(min = 1))]
     path: String,
 }
 
@@ -311,8 +368,10 @@ struct DeleteSystemParams {
 #[serde(rename_all = "camelCase")]
 struct DeleteConnectionByLabelParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Connection label (systems are searched first, then definitions).
+    #[schemars(length(min = 1))]
     label: String,
     /// Also delete endpoint ports no other connection uses. Ports still used
     /// elsewhere are kept while the unshared endpoint ports are removed.
@@ -330,6 +389,7 @@ struct DeleteConnectionByLabelParams {
 #[serde(deny_unknown_fields)]
 struct ConnectNewPortJson {
     /// Port label, unique within the owning component definition.
+    #[schemars(length(min = 1))]
     label: String,
     /// Protocol label (or free-form protocol name).
     #[serde(default)]
@@ -345,13 +405,43 @@ struct ConnectNewPortJson {
     required: Option<bool>,
 }
 
+/// Returns the tight JSON Schema for [`ConnectPortJson`]: an object with
+/// optional `existing` (non-empty) and `new`, `additionalProperties: false`,
+/// and a `oneOf` requiring exactly one of the two. The runtime keeps its
+/// `E000` guard (`exactly one of existing or new must be set`) so calls
+/// that bypass schema validation are still refused without touching the file.
+fn connect_port_json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+    let new_subschema = generator.subschema_for::<ConnectNewPortJson>();
+    let new_value = new_subschema.to_value();
+    schemars::json_schema!({
+        "type": "object",
+        "description": "The port one connect_components end lands on: exactly one of existing (a port the component already has) or new (created with the connection) must be set.",
+        "properties": {
+            "existing": {
+                "type": "string",
+                "minLength": 1,
+                "description": "A port the component already has, by label."
+            },
+            "new": new_value
+        },
+        "additionalProperties": false,
+        "oneOf": [
+            { "required": ["existing"] },
+            { "required": ["new"] }
+        ]
+    })
+}
+
 /// The port one `connect_components` end lands on: exactly one of
 /// `existing` (a port the component already has) or `new` (created with the
 /// connection) must be set.
 #[derive(Debug, Clone, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(schema_with = "connect_port_json_schema")]
 struct ConnectPortJson {
     /// A port the component already has, by label.
     #[serde(default)]
+    #[schemars(length(min = 1))]
     existing: Option<String>,
     /// A port created together with the connection.
     #[serde(default)]
@@ -364,9 +454,10 @@ struct ConnectPortJson {
 #[serde(deny_unknown_fields)]
 struct ConnectEndJson {
     /// Instance path relative to the connection's scope (`"mcu"`,
-    /// `"fc/mcu"`). Empty addresses the scope's own component.
+    /// `"fc/mcu"`). Empty addresses the scope's own component, so no
+    /// `minLength` here (every other `component`/`path` string is non-empty).
     component: String,
-    /// The port on that component.
+    /// The port on that component (exactly one of `existing`/`new`).
     port: ConnectPortJson,
 }
 
@@ -375,10 +466,13 @@ struct ConnectEndJson {
 #[serde(rename_all = "camelCase")]
 struct ConnectComponentsParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Scope the connection is declared in (system or definition path).
+    #[schemars(length(min = 1))]
     scope_path: String,
     /// New connection label within the scope.
+    #[schemars(length(min = 1))]
     label: String,
     /// One end of the connection.
     from: ConnectEndJson,
@@ -386,6 +480,7 @@ struct ConnectComponentsParams {
     to: ConnectEndJson,
     /// Optional protocol stub to create for the new ports.
     #[serde(default)]
+    #[schemars(length(min = 1))]
     create_protocol: Option<String>,
     /// Move an existing typed delegation outer inward: clear the outer port
     /// and give a new inner port its old type in the same atomic op.
@@ -399,8 +494,10 @@ struct ConnectComponentsParams {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ConnectionRefJson {
     /// Container path of the connection (system or instance path).
+    #[schemars(length(min = 1))]
     scope_path: String,
     /// Connection label, unique within its scope.
+    #[schemars(length(min = 1))]
     label: String,
 }
 
@@ -428,10 +525,13 @@ struct ConnectionPatchJson {
 #[serde(rename_all = "camelCase")]
 struct UpdateConnectionParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Scope the connection is declared in (system or definition path).
+    #[schemars(length(min = 1))]
     scope_path: String,
     /// Connection label within the scope.
+    #[schemars(length(min = 1))]
     label: String,
     /// Attribute patch (`full_name`, `tags`, `level`, `realized_by`).
     patch: ConnectionPatchJson,
@@ -464,8 +564,10 @@ struct ProtocolPatchJson {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct AddProtocolParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// New top-level protocol label (must not be empty or contain `/`).
+    #[schemars(length(min = 1))]
     label: String,
     /// Protocol attributes (`full_name`, `tags`, `roles`, `leaf`,
     /// `encapsulates`).
@@ -477,8 +579,10 @@ struct AddProtocolParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct UpdateProtocolParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Protocol label (labels never change).
+    #[schemars(length(min = 1))]
     path: String,
     /// Attribute patch (`full_name`, `tags`, `roles`, `leaf`, `encapsulates`).
     patch: ProtocolPatchJson,
@@ -488,8 +592,10 @@ struct UpdateProtocolParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct DeleteProtocolParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// Top-level protocol label.
+    #[schemars(length(min = 1))]
     path: String,
 }
 
@@ -497,15 +603,18 @@ struct DeleteProtocolParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct CreateFileParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// A path relative to the project root (any file: `system.hcl`,
     /// `views/*.hcl`, `docs/*.md`, `README.md`, …).
+    #[schemars(length(min = 1))]
     path: String,
     /// The whole file content to write.
     content: String,
     /// The short content-hash `version` `read_file` returned for the file. Required
     /// when the file already exists (compare-and-swap overwrite); ignored
     /// when creating a new file.
+    #[schemars(length(min = 1))]
     version: Option<String>,
 }
 
@@ -513,6 +622,7 @@ struct CreateFileParams {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct FileEditJson {
     /// The exact span to replace; must occur exactly once (empty is refused).
+    #[schemars(length(min = 1))]
     old_text: String,
     /// The replacement text.
     new_text: String,
@@ -522,12 +632,16 @@ struct FileEditJson {
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct EditFileParams {
     /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
     project: String,
     /// A path relative to the project root (any file).
+    #[schemars(length(min = 1))]
     path: String,
     /// Granular edits applied sequentially in order.
+    #[schemars(length(min = 1))]
     edits: Vec<FileEditJson>,
     /// The short content-hash `version` `read_file` returned for the file.
+    #[schemars(length(min = 1))]
     version: String,
 }
 
@@ -751,7 +865,7 @@ impl RhizzMcp {
         name = "read_file",
         title = "Read project file",
         annotations(title = "Read project file", read_only_hint = true),
-        description = "Read a window of lines of a file in a Rhizz project: pass the project id, a path relative to the project root, a 0-based `offset` (default 0) and a `limit` (default 100, maximum 500). Returns the lines, `totalLines`, and a short content-hash `version` that changes whenever the file changes. Reading a directory or a missing path is a tool error."
+        description = "Read a window of lines of a file in a Rhizz project: pass the project id, a path relative to the project root, a 0-based `offset` (default 0) and a `limit` (default 100, maximum 500, larger values are refused). Returns the lines, `totalLines`, and a short content-hash `version` that changes whenever the file changes. Reading a directory or a missing path is a tool error."
     )]
     async fn read_file(
         &self,
@@ -761,11 +875,15 @@ impl RhizzMcp {
         let project = params.0.project;
         let path = params.0.path;
         let offset = params.0.offset.unwrap_or(0);
-        let limit = params
-            .0
-            .limit
-            .unwrap_or(READ_FILE_DEFAULT_LIMIT)
-            .min(READ_FILE_MAX_LIMIT);
+        let limit = match params.0.limit {
+            Some(limit) if limit > READ_FILE_MAX_LIMIT => {
+                return Ok(tool_error(format!(
+                    "limit must be <= {READ_FILE_MAX_LIMIT}"
+                )));
+            }
+            Some(limit) => limit,
+            None => READ_FILE_DEFAULT_LIMIT,
+        };
 
         let loaded = tokio::task::spawn_blocking(move || {
             let root = match storage::resolve_project(&data_dir, &project) {
@@ -1118,7 +1236,7 @@ impl RhizzMcp {
             destructive_hint = false,
             idempotent_hint = true
         ),
-        description = "Create a connection with its ports atomically (`ModelOp connect_components`). `scopePath`/`label`/`from`/`to` (`{component, port: {existing} or {new}}`), optional `createProtocol`/`convertOuterToProxy`. Empty `component` (`\"\"`) is the scope's own port (`./port`); one self end is a delegation edge, and omitting `protocol`/`role` on the new outer declares a proxy inheriting its type (E022 (delegation shape) if the outer declares a type or lacks `external`). Use `{existing}` when ports already exist. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
+        description = "Create a connection with its ports atomically (`ModelOp connect_components`). `scopePath`/`label`/`from`/`to` (`{component, port: exactly one of {existing}/{new}}`), optional `createProtocol`/`convertOuterToProxy`. Empty `component` (`\"\"`) is the scope's own port (`./port`); one self end is a delegation edge, and omitting `protocol`/`role` on the new outer declares a proxy inheriting its type (E022 (delegation shape) if the outer declares a type or lacks `external`). Use `{existing}` when ports already exist. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
     )]
     async fn connect_components(
         &self,
@@ -1320,7 +1438,7 @@ impl RhizzMcp {
         name = "edit_file",
         title = "Edit file",
         annotations(title = "Edit file", destructive_hint = true, idempotent_hint = true),
-        description = "Apply granular replacements to an existing file (any path). `path` + `edits` (`{old_text,new_text}` sequential; each `old_text` must occur exactly once, empty is refused) + `version` from `read_file`. Stale `version` is refused, so re-read and retry. `system.hcl` needs a clean compile; `views/*.hcl` need E016 (view/file mismatch)/E006 (unknown system)-clean resolution. Returns new `version`/`totalLines`/`warnings`. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For structural edits use ModelOp tools."
+        description = "Apply granular replacements to an existing file (any path). `path` + non-empty `edits` (`{old_text,new_text}` sequential; each `old_text` must occur exactly once, empty is refused) + `version` from `read_file`. Stale `version` is refused, so re-read and retry. `system.hcl` needs a clean compile; `views/*.hcl` need E016 (view/file mismatch)/E006 (unknown system)-clean resolution. Returns new `version`/`totalLines`/`warnings`. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For structural edits use ModelOp tools."
     )]
     async fn edit_file(
         &self,
@@ -1458,7 +1576,7 @@ fn definition_options_from_json(
         tags: options.tags.clone(),
         icon: options.icon.clone(),
         color: options.color.clone(),
-        border: options.border.clone(),
+        border: options.border.map(|b| b.as_str().to_owned()),
         font: options.font.clone(),
         ports: options
             .ports
@@ -1473,7 +1591,7 @@ fn component_patch_from_json(patch: &ComponentPatchJson) -> rhizz_core::mutation
         full_name: patch.full_name.clone(),
         icon: patch.icon.clone(),
         color: patch.color.clone(),
-        border: patch.border.clone(),
+        border: patch.border.map(|b| b.as_str().to_owned()),
         font: patch.font.clone(),
         tags: patch.tags.clone(),
         leaf: patch.leaf,
@@ -4803,9 +4921,7 @@ mod tests {
                 .find(|t| t["name"] == json!(name))
                 .unwrap_or_else(|| panic!("tool `{name}` must be listed"))
         };
-        let prop = |tool: &Value, prop: &str| {
-            tool["inputSchema"]["properties"][prop].clone()
-        };
+        let prop = |tool: &Value, prop: &str| tool["inputSchema"]["properties"][prop].clone();
 
         // fetch_projects.page: minimum 1 (code already refuses <1).
         let fetch = by_name("fetch_projects");
@@ -4864,32 +4980,28 @@ mod tests {
 
         // Border is a closed vocabulary: enum, not free-form.
         let add_def = by_name("add_component_definition");
-        let options = &add_def["inputSchema"]["properties"]["options"];
-        let border = options.get("properties").and_then(|p| p.get("border"));
-        let border = border.unwrap_or(&Value::Null);
-        // Options is optional; when present its border must be an enum.
-        // Resolve $ref if the generator emitted one.
-        let border_schema = if border.get("$ref").is_some() {
-            // Look up the $defs entry (best-effort: check both root $defs).
-            border.clone()
-        } else {
-            border.clone()
-        };
-        // The enum may live behind a $ref; fetch the tools/list payload defs
-        // is overkill — instead assert the options schema mentions the
-        // closed set somewhere in its JSON encoding.
-        let options_text = serde_json::to_string(options).unwrap();
+        // The enum may live behind a $ref in $defs — assert the full
+        // inputSchema mentions the closed set.
+        let add_def_text = serde_json::to_string(&add_def["inputSchema"]).unwrap();
         for value in ["solid", "dashed", "dotted"] {
             assert!(
-                options_text.contains(value),
-                "add_component_definition options.border must enumerate `{value}`: {options_text}"
+                add_def_text.contains(value),
+                "add_component_definition options.border must enumerate `{value}`: {add_def_text}"
             );
         }
         assert!(
-            !options_text.contains("groovy"),
-            "border enum must not contain free-form values: {options_text}"
+            !add_def_text.contains("groovy"),
+            "border enum must not contain free-form values: {add_def_text}"
         );
-        let _ = border_schema;
+        // And the update_component patch carries the same enum.
+        let update_comp = by_name("update_component");
+        let update_comp_text = serde_json::to_string(&update_comp["inputSchema"]).unwrap();
+        for value in ["solid", "dashed", "dotted"] {
+            assert!(
+                update_comp_text.contains(value),
+                "update_component patch.border must enumerate `{value}`"
+            );
+        }
 
         // connect_components ends: exactly one of existing/new must be set.
         let connect = by_name("connect_components");
