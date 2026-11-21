@@ -13,8 +13,7 @@ const BORDERS = [undefined, "solid", "dashed", "dotted"] as const;
 const FONTS = [undefined, "bold", "italic", "underline"] as const;
 
 interface GeneratedEdit {
-  kind:
-    "visual" | "move" | "diagram" | "create" | "delete" | "connect" | "undo";
+  kind: "visual" | "move" | "diagram" | "create" | "delete" | "undo";
   componentSelector: number;
   colorSelector: number;
   borderSelector: number;
@@ -51,7 +50,6 @@ const editArbitrary = fc.record({
     "diagram",
     "create",
     "delete",
-    "connect",
     "undo",
   ),
   componentSelector: fc.nat(),
@@ -132,40 +130,6 @@ describe("deterministic workspace simulation", () => {
               await workspace.dispatch({
                 type: "delete-component",
                 component: key,
-              });
-              workspace.assertInvariants();
-              continue;
-            }
-
-            if (edit.kind === "connect") {
-              const editable = workspace.editableComponentKeys();
-              if (editable.length < 2) continue;
-              // Two siblings under one scope: parent path is shared,
-              // endpoints are leaf labels relative to that scope.
-              const byParent = new Map<string, string[]>();
-              for (const key of editable) {
-                const slash = key.lastIndexOf("/");
-                if (slash === -1) continue;
-                const parent = key.slice(0, slash);
-                const leaf = key.slice(slash + 1);
-                const list = byParent.get(parent) ?? [];
-                list.push(leaf);
-                byParent.set(parent, list);
-              }
-              const shared = [...byParent.entries()].find(
-                ([, leaves]) => leaves.length >= 2,
-              );
-              if (!shared) continue;
-              const [scopePath, leaves] = shared;
-              const from = leaves[edit.componentSelector % leaves.length];
-              const to = leaves[(edit.componentSelector + 1) % leaves.length];
-              if (!from || !to || from === to) continue;
-              await workspace.dispatch({
-                type: "add-connection",
-                scopePath,
-                label: `gen-conn-${String(edit.diagramSelector % 8)}`,
-                from,
-                to,
               });
               workspace.assertInvariants();
               continue;

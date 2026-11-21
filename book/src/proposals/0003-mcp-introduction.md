@@ -75,7 +75,6 @@ one tool per op, with the op's name and parameters.
 | `update_system` | `update_system` |
 | `delete_component` | `delete_component` |
 | `delete_system` | `delete_system` |
-| `add_connection` | `add_connection` |
 | `connect_components` | `connect_components` |
 | `delete_connection_by_label` | `delete_connection_by_label` |
 | `update_connection` | `update_connection` |
@@ -88,9 +87,8 @@ one tool per op, with the op's name and parameters.
   and `add_instance` instead.
 - **Documented connection path:** `connect_components` is the documented path
   for AI clients: it creates the connection and the ports it ends on (plus an
-  optional protocol stub) as one atomic op. `add_connection` stays for
-  port-less bare connections (gradual specification) but is not the path
-  clients should reach for first. This closes the open question on
+  optional protocol stub) as one atomic op. Bare wiring uses
+  `{existing}`/`{existing}` ends. This closes the open question on
   connections and ports below: ports are created through
   `connect_components`, patched through `update_component`, and cleaned up
   through `delete_connection_by_label` with `remove_ports`.
@@ -212,7 +210,7 @@ canonical form, exactly as the web editor does.
   content hash, and `edit_doc` and `create_doc` require it. Whether the step 2
   mutation tools should also require it is still open.
 - ~~Whether connections and ports need dedicated ops. The core only has
-  `add_connection`/`delete_connection_by_label`, and ports only through
+  connection ops plus `delete_connection_by_label`, and ports only through
   component patches.~~ Resolved: `connect_components` is the dedicated
   connection-plus-ports op (one atomic call creates the connection and its
   endpoint ports, plus an optional protocol stub). Ports are otherwise

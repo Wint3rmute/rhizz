@@ -73,13 +73,6 @@ export type ModelMutationOp =
   | { kind: "delete_component"; path: string }
   | { kind: "delete_system"; path: string }
   | {
-      kind: "add_connection";
-      scopePath: string;
-      label: string;
-      from: string;
-      to: string;
-    }
-  | {
       // A connection together with the ports it ends on (and optionally a
       // stub protocol for them): one gesture, one atomic op.
       kind: "connect_components";
