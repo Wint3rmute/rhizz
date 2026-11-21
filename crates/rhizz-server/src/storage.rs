@@ -670,7 +670,7 @@ pub fn file_version(content: &str) -> String {
     use sha2::{Digest, Sha256};
 
     let full = hex_digest(&Sha256::digest(content.as_bytes()));
-    full[..VERSION_LEN].to_owned()
+    full.chars().take(VERSION_LEN).collect()
 }
 
 /// Hashes walked entries into the project version: 16-char prefix of SHA-256
@@ -697,7 +697,7 @@ fn hash_found_entries(project_id: &str, found: &[Found]) -> String {
         hasher.update([0u8]);
     }
     let full = hex_digest(&hasher.finalize());
-    full[..VERSION_LEN].to_owned()
+    full.chars().take(VERSION_LEN).collect()
 }
 
 /// The content-hash version of a whole project: 16-char prefix of SHA-256
@@ -3090,14 +3090,17 @@ mod tests {
         use std::collections::HashMap;
 
         fn full_sha256_hex(content: &str) -> String {
-            const HEX: [u8; 16] = *b"0123456789abcdef";
+            use std::fmt::Write as _;
             let digest = Sha256::digest(content.as_bytes());
             let mut out = String::with_capacity(64);
             for byte in digest {
-                out.push(char::from(HEX[usize::from(byte >> 4)]));
-                out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+                let _ = write!(out, "{byte:02x}");
             }
             out
+        }
+
+        fn short8(full: &str) -> String {
+            full.chars().take(8).collect()
         }
 
         // Find two distinct contents whose first 8 hex chars collide but whose
@@ -3108,15 +3111,15 @@ mod tests {
         for i in 0..200_000usize {
             let content = format!("collision-probe-{i}\n");
             let full = full_sha256_hex(&content);
-            let short8 = full[..8].to_owned();
-            if let Some((prev_i, prev_full)) = seen.get(&short8) {
+            let prefix = short8(&full);
+            if let Some((prev_i, prev_full)) = seen.get(&prefix) {
                 if *prev_full != full {
                     let prev_content = format!("collision-probe-{prev_i}\n");
                     pair = Some((prev_content, content));
                     break;
                 }
             } else {
-                seen.insert(short8, (i, full));
+                seen.insert(prefix, (i, full));
             }
         }
         let (first_content, second_content) =
@@ -3124,8 +3127,8 @@ mod tests {
         let first_full = full_sha256_hex(&first_content);
         let second_full = full_sha256_hex(&second_content);
         assert_eq!(
-            &first_full[..8],
-            &second_full[..8],
+            short8(&first_full),
+            short8(&second_full),
             "test setup: 8-char prefixes must collide"
         );
         assert_ne!(
