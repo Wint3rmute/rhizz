@@ -16,38 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
-
-Schemas (`crates/rhizz-server/src/mcp.rs:74-560`, via `schemars::JsonSchema`)
-under-constrain what the code enforces, so bad calls fail at runtime instead
-of at schema time (`tool-design.md`: "every constraint in the schema is one
-fewer thing that can go wrong"):
-- `fetch_projects.page` (`i64`, optional): add `minimum: 1` (code already
-  refuses `<1` — schema/code mismatch today).
-- `read_file.limit`/`offset`: add `maximum: 500` (code clamps silently —
-  either schema-gate it or document the clamp; pick one), keep `minimum: 0`.
-- `label`/`path`/`component`/`scope_path` strings: `minLength: 1` (empty is
-  refused at runtime).
-- Closed vocabularies as enums where the compiler treats them as closed
-  (`border`, `font`, port `role` when the protocol declares `roles` — check
-  each; leave genuinely free-form strings alone).
-- `ConnectPortJson.existing`/`new`: document "exactly one must be set" in
-  descriptions at minimum; enforce via `deny_unknown_fields`-style shape or a
-  custom schema if cheap.
-- `edits` (`edit_file`): `minLength`-style non-empty (`minItems: 1` — empty
-  list is refused at runtime today).
-
-Definition of done:
-- Live `tools/list` schemas carry the new constraints; runtime clamps that
-  remain are documented in the description.
-- Red/green tests: schema snapshot + refusal tests for each new constraint
-  (page 0, limit >500, empty label, both/neither `existing`/`new`, empty
-  `edits`).
-- `just test`, `just lint`, `just build` green.
-- Suggested branch: `feat/mcp-tight-schemas`.
-
----
-
 ## Task <N> — [Spike] Serve file reads as `file:///{path}` resource templates
 
 Audit finding (`resources-and-prompts.md`): `fetch_projects`/`list_files`/
