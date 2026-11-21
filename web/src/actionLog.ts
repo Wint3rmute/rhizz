@@ -48,7 +48,7 @@ export interface SystemPatch {
 }
 
 // Address of one connection: the container it is visible in plus its label.
-// `scopePath` follows `add_connection` / `delete_connection`: a system label,
+// `scopePath` follows the connection ops: a system label,
 // an instance path (`banking/bank-a`) or a top-level definition label. Rust
 // writes it as `ConnectionRef` in rhizz-core `model.rs`.
 export interface ConnectionRef {
@@ -124,13 +124,6 @@ export type ModelAction =
   | { op: "reparent_component"; sourcePath: string; targetParentPath: string }
   | { op: "update_component"; path: string; patch: ComponentPatch }
   | { op: "update_system"; path: string; patch: SystemPatch }
-  | {
-      op: "add_connection";
-      scopePath: string;
-      label: string;
-      from: string;
-      to: string;
-    }
   | {
       op: "connect_components";
       scopePath: string;
@@ -276,14 +269,6 @@ function toMutationOp(action: ModelAction): unknown {
         kind: "update_system",
         path: action.path,
         patch: action.patch,
-      };
-    case "add_connection":
-      return {
-        kind: "add_connection",
-        scopePath: action.scopePath,
-        label: action.label,
-        from: action.from,
-        to: action.to,
       };
     case "connect_components": {
       const { op, ...fields } = action;

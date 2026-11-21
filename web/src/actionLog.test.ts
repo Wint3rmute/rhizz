@@ -139,23 +139,6 @@ describe("actionLog", () => {
     );
   });
 
-  it("encodes add_connection with its resolved scope", () => {
-    expect(
-      encodeCall(
-        {
-          op: "add_connection",
-          scopePath: "main",
-          label: "rf-link",
-          from: "fc/link-radio",
-          to: "radio/link-fc",
-        },
-        "fs",
-      ),
-    ).toContain(
-      '{"kind":"add_connection","scopePath":"main","label":"rf-link","from":"fc/link-radio","to":"radio/link-fc"}',
-    );
-  });
-
   it("encodes connect_components as the op that produced it", () => {
     const line = encodeCall(
       {

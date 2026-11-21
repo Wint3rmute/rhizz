@@ -262,18 +262,18 @@ describe("applyModelMutation", () => {
         source: "dsp",
       },
       {
-        kind: "add_connection",
+        kind: "connect_components",
         scopePath: "mobile",
         label: "rf-antenna",
-        from: "baseband/rf/out",
-        to: "antenna/in",
+        from: { component: "baseband/rf", port: { existing: "out" } },
+        to: { component: "antenna", port: { existing: "in" } },
       },
       {
-        kind: "add_connection",
+        kind: "connect_components",
         scopePath: "mobile",
         label: "rf-dsp",
-        from: "baseband/rf/out",
-        to: "baseband/dsp/in",
+        from: { component: "baseband/rf", port: { existing: "out" } },
+        to: { component: "baseband/dsp", port: { existing: "in" } },
       },
     ];
     for (const op of ops) {
@@ -385,7 +385,7 @@ describe("applyModelMutation", () => {
     expect(content).toContain('instance "imu"');
   });
 
-  it("add_connection under an instance persists in the definition body", async () => {
+  it("connect_components under an instance persists in the definition body", async () => {
     // UI regression: wiring two children of an instance (e.g. main/drone)
     // silently dropped the connection — instance blocks carry only `source`.
     const fs = memoryFs();
@@ -428,11 +428,11 @@ describe("applyModelMutation", () => {
       baseline = fs.store.get("system.hcl") ?? "";
     }
     const added = await applyModelMutation(fs, "system.hcl", baseline, {
-      kind: "add_connection",
+      kind: "connect_components",
       scopePath: "main/drone",
       label: "power-supply",
-      from: "battery/out",
-      to: "flight-controller/in",
+      from: { component: "battery", port: { existing: "out" } },
+      to: { component: "flight-controller", port: { existing: "in" } },
     });
     expect(added.applied).toBe(true);
     const content = fs.store.get("system.hcl") ?? "";
@@ -597,11 +597,11 @@ describe("applyModelMutation", () => {
       baseline = fs.store.get("system.hcl") ?? "";
     }
     const added = await applyModelMutation(fs, "system.hcl", baseline, {
-      kind: "add_connection",
+      kind: "connect_components",
       scopePath: "demo",
       label: "link",
-      from: "a/out",
-      to: "b/in",
+      from: { component: "a", port: { existing: "out" } },
+      to: { component: "b", port: { existing: "in" } },
     });
     expect(added.applied).toBe(true);
     baseline = fs.store.get("system.hcl") ?? "";
@@ -669,11 +669,11 @@ describe("applyModelMutation", () => {
       { kind: "add_system", label: "demo" },
       { kind: "add_instance", parentPath: "demo", label: "f", source: "fc" },
       {
-        kind: "add_connection",
+        kind: "connect_components",
         scopePath: "demo",
         label: "link",
-        from: "/demo/f/mcu/p",
-        to: "/demo/f/q",
+        from: { component: "f/mcu", port: { existing: "p" } },
+        to: { component: "f", port: { existing: "q" } },
       },
     ];
     for (const op of setup) {

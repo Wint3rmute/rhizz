@@ -59,13 +59,6 @@ export type WorkspaceAction =
     }
   | { type: "delete-component"; component: string }
   | {
-      type: "add-connection";
-      scopePath: string;
-      label: string;
-      from: string;
-      to: string;
-    }
-  | {
       type: "delete-connection";
       label: string;
       removePorts?: boolean;
@@ -226,20 +219,6 @@ export class WorkspaceHarness {
         await this.executeModelTransaction(
           `delete ${action.component}`,
           { kind: "delete_component", path: action.component },
-          undefined,
-          true,
-        );
-        return;
-      case "add-connection":
-        await this.executeModelTransaction(
-          `connect ${action.label}`,
-          {
-            kind: "add_connection",
-            scopePath: action.scopePath,
-            label: action.label,
-            from: action.from,
-            to: action.to,
-          },
           undefined,
           true,
         );
