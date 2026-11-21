@@ -3070,7 +3070,11 @@ mod tests {
     #[test]
     fn file_version_is_stable_and_content_sensitive() {
         let version = file_version("system \"s\" {}\n");
-        assert_eq!(version.len(), VERSION_LEN, "short SHA-256 prefix is 16 chars");
+        assert_eq!(
+            version.len(),
+            VERSION_LEN,
+            "short SHA-256 prefix is 16 chars"
+        );
         assert_eq!(file_version("system \"s\" {}\n"), version);
         assert_ne!(file_version("system \"s\" {}"), version);
         assert_ne!(file_version(""), version);
@@ -3150,20 +3154,14 @@ mod tests {
         // Stale write with the first version after the file moved to the
         // second content must be refused byte-identical.
         let dir = data_dir_with_drone();
-        write_file(
-            &dir.path().join("drone/docs/collide.md"),
-            &first_content,
-        );
+        write_file(&dir.path().join("drone/docs/collide.md"), &first_content);
         assert_eq!(
             file_version(&first_content),
             first_version,
             "fixture content must hash to the probed version"
         );
         // Outside edit (git, editor) flips the file without going through CAS.
-        write_file(
-            &dir.path().join("drone/docs/collide.md"),
-            &second_content,
-        );
+        write_file(&dir.path().join("drone/docs/collide.md"), &second_content);
         let locks = crate::locks::LockManager::new();
         let refused = create_file(
             dir.path(),
