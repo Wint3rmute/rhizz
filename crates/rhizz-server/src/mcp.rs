@@ -2595,7 +2595,10 @@ mod tests {
             .unwrap();
         assert_eq!(system["kind"], json!("file"));
         assert!(system["revision"].is_u64());
-        assert_eq!(system["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
+        assert_eq!(
+            system["version"].as_str().unwrap().len(),
+            crate::storage::VERSION_LEN
+        );
 
         let views = files.iter().find(|f| f["path"] == json!("views")).unwrap();
         assert_eq!(views["kind"], json!("directory"));
@@ -3179,7 +3182,10 @@ mod tests {
         let state: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(state["lockedBy"], json!("AI"));
         assert!(state["lockExpiresAt"].as_str().is_some());
-        assert_eq!(state["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
+        assert_eq!(
+            state["version"].as_str().unwrap().len(),
+            crate::storage::VERSION_LEN
+        );
     }
 
     #[tokio::test]
@@ -4150,7 +4156,10 @@ mod tests {
         let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
         assert_eq!(content, "# Note\n\nALPHA\n\nbeta\n");
         assert_eq!(result["totalLines"], json!(content.lines().count()));
-        assert_eq!(result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
+        assert_eq!(
+            result["version"].as_str().unwrap().len(),
+            crate::storage::VERSION_LEN
+        );
         assert_ne!(result["version"], json!(version));
         assert!(result.get("warnings").is_some());
     }
@@ -4499,7 +4508,10 @@ mod tests {
         assert_ne!(created["result"]["isError"], json!(true), "{created}");
         let created_result = result_value(&created);
         assert_eq!(created_result["totalLines"], json!(3));
-        assert_eq!(created_result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
+        assert_eq!(
+            created_result["version"].as_str().unwrap().len(),
+            crate::storage::VERSION_LEN
+        );
 
         let path = tmp.path().join("demo/docs/guides/getting-started.md");
         let content = std::fs::read_to_string(&path).unwrap();
@@ -4944,7 +4956,10 @@ mod tests {
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         assert_eq!(result["applied"], json!(true));
-        assert_eq!(result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
+        assert_eq!(
+            result["version"].as_str().unwrap().len(),
+            crate::storage::VERSION_LEN
+        );
 
         let stored = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
         assert!(
