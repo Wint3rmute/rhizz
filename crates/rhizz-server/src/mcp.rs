@@ -306,22 +306,6 @@ struct DeleteSystemParams {
     path: String,
 }
 
-/// Arguments accepted by the `add_connection` tool.
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-#[serde(rename_all = "camelCase")]
-struct AddConnectionParams {
-    /// The project id as returned by `fetch_projects`.
-    project: String,
-    /// Scope the connection is declared in (system or definition path).
-    scope_path: String,
-    /// New connection label within the scope.
-    label: String,
-    /// `from` endpoint (`comp/port` or a relative path ending in a port).
-    from: String,
-    /// `to` endpoint (`comp/port` or a relative path ending in a port).
-    to: String,
-}
-
 /// Arguments accepted by the `delete_connection_by_label` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1115,30 +1099,6 @@ impl RhizzMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
-    /// Adds a connection inside a scope. Takes the project lock as the hardcoded `AI` user (proposal 0004).
-    #[tool(
-        name = "add_connection",
-        title = "Add connection",
-        annotations(
-            title = "Add connection",
-            destructive_hint = false,
-            idempotent_hint = true
-        ),
-        description = "Add a connection in a scope (`ModelOp add_connection`). `scopePath`/`label`/`from`/`to` (`comp/port`, relative path ending in a port, or `./port` for a delegation edge with exactly one self end). Use `connect_components` when ports must be created with the connection; use this when ports already exist. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
-    )]
-    async fn add_connection(
-        &self,
-        params: Parameters<AddConnectionParams>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let op = rhizz_core::mutation::ModelOp::AddConnection {
-            scope_path: params.0.scope_path.clone(),
-            label: params.0.label.clone(),
-            from: params.0.from.clone(),
-            to: params.0.to.clone(),
-        };
-        Ok(self.run_mutation(params.0.project.clone(), op).await)
-    }
-
     /// Deletes a connection by label. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "delete_connection_by_label",
@@ -1164,7 +1124,7 @@ impl RhizzMcp {
 
     /// Creates a connection together with the ports it ends on. This is the
     /// documented connection path for AI clients: one atomic op instead of
-    /// separate port patches plus `add_connection`. Takes the project lock as the hardcoded `AI` user (proposal 0004).
+    /// separate port patches. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "connect_components",
         title = "Connect components",
@@ -1173,7 +1133,7 @@ impl RhizzMcp {
             destructive_hint = false,
             idempotent_hint = true
         ),
-        description = "Create a connection with its ports atomically (`ModelOp connect_components`). `scopePath`/`label`/`from`/`to` (`{component, port: {existing} or {new}}`), optional `createProtocol`/`convertOuterToProxy`. Empty `component` (`\"\"`) is the scope's own port (`./port`); one self end is a delegation edge, and omitting `protocol`/`role` on the new outer declares a proxy inheriting its type (E022 (delegation shape) if the outer declares a type or lacks `external`). Use `add_connection` when ports already exist. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
+        description = "Create a connection with its ports atomically (`ModelOp connect_components`). `scopePath`/`label`/`from`/`to` (`{component, port: {existing} or {new}}`), optional `createProtocol`/`convertOuterToProxy`. Empty `component` (`\"\"`) is the scope's own port (`./port`); one self end is a delegation edge, and omitting `protocol`/`role` on the new outer declares a proxy inheriting its type (E022 (delegation shape) if the outer declares a type or lacks `external`). Use `{existing}` when ports already exist. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
     )]
     async fn connect_components(
         &self,
@@ -1710,7 +1670,6 @@ const fn tool_name_for_op(op: &rhizz_core::mutation::ModelOp) -> Option<&'static
         rhizz_core::mutation::ModelOp::UpdateSystem { .. } => Some("update_system"),
         rhizz_core::mutation::ModelOp::Delete { .. } => Some("delete_component"),
         rhizz_core::mutation::ModelOp::DeleteSystem { .. } => Some("delete_system"),
-        rhizz_core::mutation::ModelOp::AddConnection { .. } => Some("add_connection"),
         rhizz_core::mutation::ModelOp::ConnectComponents { .. } => Some("connect_components"),
         rhizz_core::mutation::ModelOp::DeleteConnectionByLabel { .. } => {
             Some("delete_connection_by_label")
@@ -2197,7 +2156,6 @@ mod tests {
             names,
             vec![
                 "add_component_definition",
-                "add_connection",
                 "add_instance",
                 "add_protocol",
                 "add_system",
@@ -2255,7 +2213,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 23, "all tools must be listed: {tools:?}");
+        assert_eq!(tools.len(), 22, "all tools must be listed: {tools:?}");
 
         // (name, expect_read_only, expect_destructive).
         let expectations = [
@@ -2266,7 +2224,6 @@ mod tests {
             ("add_system", false, Some(false)),
             ("add_component_definition", false, Some(false)),
             ("add_instance", false, Some(false)),
-            ("add_connection", false, Some(false)),
             ("connect_components", false, Some(false)),
             ("add_protocol", false, Some(false)),
             ("rename_component", false, Some(true)),
@@ -2327,7 +2284,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 23);
+        assert_eq!(tools.len(), 22);
 
         let mut total = 0usize;
         let mut by_name = std::collections::HashMap::new();
@@ -2380,7 +2337,6 @@ mod tests {
             "update_system",
             "delete_component",
             "delete_system",
-            "add_connection",
             "delete_connection_by_label",
             "connect_components",
             "update_connection",
@@ -2401,12 +2357,8 @@ mod tests {
 
         // Sibling disambiguation, one clause each.
         assert!(
-            by_name["add_connection"].contains("connect_components"),
-            "add_connection must point to connect_components"
-        );
-        assert!(
-            by_name["connect_components"].contains("add_connection"),
-            "connect_components must point to add_connection"
+            by_name["connect_components"].contains("{existing}"),
+            "connect_components must document the existing-port path"
         );
         assert!(
             by_name["overwrite_model"].contains("create_file"),
@@ -3493,34 +3445,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn tools_call_add_connection_applies_and_persists() {
-        let tmp = tempfile::tempdir().unwrap();
-        write_connected_project(tmp.path());
-        let app = app(tmp.path().to_path_buf());
-        let session = handshake(&app).await;
-
-        let payload = call_tool(
-            &app,
-            &session,
-            95,
-            "add_connection",
-            json!({
-                "project": "demo",
-                "scopePath": "demo",
-                "label": "link",
-                "from": "a/out",
-                "to": "b/in",
-            }),
-        )
-        .await;
-        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
-        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
-
-        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
-        assert!(content.contains("connection \"link\""), "{content}");
-    }
-
-    #[tokio::test]
     async fn tools_call_delete_connection_applies_and_persists() {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
@@ -3531,13 +3455,13 @@ mod tests {
             &app,
             &session,
             96,
-            "add_connection",
+            "connect_components",
             json!({
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "link",
-                "from": "a/out",
-                "to": "b/in",
+                "from": { "component": "a", "port": { "existing": "out" } },
+                "to": { "component": "b", "port": { "existing": "in" } },
             }),
         )
         .await;
@@ -3580,73 +3504,6 @@ mod tests {
 
         let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
         assert_eq!(before, after, "a refused delete must not touch system.hcl");
-    }
-
-    #[tokio::test]
-    async fn tools_call_add_connection_accepts_self_port_endpoints() {
-        // `./port` names the declaring scope's own port: exactly one such
-        // end makes a delegation edge.
-        let tmp = tempfile::tempdir().unwrap();
-        let project = tmp.path().join("demo");
-        std::fs::create_dir_all(&project).unwrap();
-        std::fs::write(
-            project.join("system.hcl"),
-            "component \"leaf\" {\n  leaf = true\n  port \"http\" {\n    protocol = \"rest\"\n    role = \"provider\"\n    external = true\n  }\n}\nprotocol \"rest\" { leaf = true }\ncomponent \"svc\" {\n  port \"api\" { external = true }\n  instance \"inner\" { source = \"leaf\" }\n}\nsystem \"demo\" {\n  instance \"svc\" { source = \"svc\" }\n}\n",
-        )
-        .unwrap();
-        let app = app(tmp.path().to_path_buf());
-        let session = handshake(&app).await;
-
-        let payload = call_tool(
-            &app,
-            &session,
-            98,
-            "add_connection",
-            json!({
-                "project": "demo",
-                "scopePath": "demo/svc",
-                "label": "api-delegation",
-                "from": "./api",
-                "to": "inner/http"
-            }),
-        )
-        .await;
-        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
-        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
-        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
-        assert!(content.contains("\"./api\""), "{content}");
-    }
-
-    #[tokio::test]
-    async fn tools_call_add_connection_with_unknown_endpoint_is_refused() {
-        let tmp = tempfile::tempdir().unwrap();
-        write_connected_project(tmp.path());
-        let app = app(tmp.path().to_path_buf());
-        let session = handshake(&app).await;
-        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
-
-        let payload = call_tool(
-            &app,
-            &session,
-            99,
-            "add_connection",
-            json!({
-                "project": "demo",
-                "scopePath": "demo",
-                "label": "bad",
-                "from": "ghost/port",
-                "to": "b/in",
-            }),
-        )
-        .await;
-        let text = tool_error_text(&payload);
-        assert!(
-            text.contains('E'),
-            "expected a diagnostic code in refusal: {text}"
-        );
-
-        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
-        assert_eq!(before, after, "a refused op must not touch system.hcl");
     }
 
     #[tokio::test]
@@ -3824,8 +3681,8 @@ mod tests {
 
     #[tokio::test]
     async fn tools_call_connect_components_with_existing_ports_covers_delegation() {
-        // `connect_components` with `existing`/`existing` covers the bare
-        // `add_connection` delegation case: empty `component` is `./port`.
+        // `connect_components` with `existing`/`existing` covers bare wiring:
+        // empty `component` is `./port` delegation.
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("demo");
         std::fs::create_dir_all(&project).unwrap();
@@ -3966,13 +3823,13 @@ mod tests {
             &app,
             &session,
             114,
-            "add_connection",
+            "connect_components",
             json!({
                 "project": "demo",
                 "scopePath": "demo",
                 "label": "link",
-                "from": "a/out",
-                "to": "b/in",
+                "from": { "component": "a", "port": { "existing": "out" } },
+                "to": { "component": "b", "port": { "existing": "in" } },
             }),
         )
         .await;
@@ -4051,12 +3908,6 @@ mod tests {
             ModelOp::DeleteSystem {
                 path: "s".to_owned(),
             },
-            ModelOp::AddConnection {
-                scope_path: "s".to_owned(),
-                label: "l".to_owned(),
-                from: "i/p".to_owned(),
-                to: "i/q".to_owned(),
-            },
             ModelOp::ConnectComponents {
                 scope_path: "s".to_owned(),
                 label: "l".to_owned(),
@@ -4112,7 +3963,7 @@ mod tests {
                 ),
             }
         }
-        assert_eq!(mapped, 16, "every op except create_component must map");
+        assert_eq!(mapped, 15, "every op except create_component must map");
 
         // And every mapped name must actually be served on `/mcp`.
         let tmp = tempfile::tempdir().unwrap();
