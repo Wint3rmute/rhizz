@@ -14,6 +14,10 @@
 
 ### Refactor
 
+- **core**: remove unused applied_none after AddConnection wipe
+- **web,docs**: remove add_connection, keep connect_components
+- **server**: remove add_connection tool, keep connect_components
+- **core**: remove AddConnection op, keep connect_components
 - **web**: seed stories from shared cross-level fixture
 
 ## 0.13.0 (2026-11-19)
