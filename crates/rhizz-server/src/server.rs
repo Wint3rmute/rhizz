@@ -14,7 +14,7 @@ use axum::http::{HeaderMap, StatusCode, Uri, header};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router, routing::delete, routing::get, routing::post, routing::put};
 use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
+    StreamableHttpServerConfig, StreamableHttpService, session::never::NeverSessionManager,
 };
 use rust_embed::EmbeddedFile;
 use serde_json::Value;
@@ -45,13 +45,11 @@ pub fn app(data_dir: PathBuf) -> Router {
     let mcp_locks = locks.clone();
     let mcp = StreamableHttpService::new(
         move || Ok(RhizzMcp::new(mcp_data_dir.clone(), mcp_locks.clone())),
-        Arc::new(LocalSessionManager::default()),
-        StreamableHttpServerConfig::default().with_allowed_hosts([
-            "localhost",
-            "127.0.0.1",
-            "::1",
-            "rhizz.fly.dev",
-        ]),
+        Arc::new(NeverSessionManager::default()),
+        StreamableHttpServerConfig::default()
+            .with_allowed_hosts(["localhost", "127.0.0.1", "::1", "rhizz.fly.dev"])
+            .with_legacy_session_mode(false)
+            .with_stateless_protocol_metadata_required(true),
     );
     Router::new()
         .route("/healthz", get(healthz))
