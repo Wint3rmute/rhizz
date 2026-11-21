@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
+
+- **Schemas (`mcp.rs`):** `fetch_projects.page` `range(min=1)`; `read_file.limit` `range(min=0,max=500)` with runtime refusal (was silent `.min()` clamp), `offset` `range(min=0)`; `label`/`path`/`project`/`scope_path`/`source`/`new_label` `length(min=1)` everywhere except `ConnectEndJson.component` (empty `""` is `./port` delegation, documented); `create_protocol`/`version`/`existing` also `minLength:1` when present.
+- **Closed vocabularies:** `border` is now `BorderStyleJson` enum (`solid`/`dashed`/`dotted`; `solid` clears) in `DefinitionOptionsJson` + `ComponentPatchJson`; checked `font` (no validation, free-form) and port `role` (validated against protocol `roles` only when present, otherwise free-form) — both left as `String` with docs.
+- **`ConnectPortJson`:** `#[serde(deny_unknown_fields)]` + custom `schema_with` `oneOf: [{required:[existing]},{required:[new]}]` (`existing` `minLength:1`); runtime `E000` exactly-one guard kept; `connect_components` description now says `exactly one of {existing}/{new}`.
+- **File tools:** `edits` `length(min=1)` (`minItems:1`), `FileEditJson.old_text` `minLength:1` (`new_text` may be empty for deletion); `edit_file` description says non-empty `edits`; `read_file` description says larger `limit` refused.
+- **TDD (red->green):** new `tools_list_schemas_are_tightened` (page minimum, limit max/min, offset min, project/path/label minLength, border enum, oneOf, edits minItems) failed before, passes after; new `tools_call_read_file_refuses_limit_over_500`, `tools_call_add_system_refuses_empty_label`, `tools_call_connect_components_refuses_both_and_neither_port` (page-0 + empty-edits already covered).
+- `just test` green (cargo + vitest + 175 e2e), `just lint` green, `just build` green; `just format` clean.
+- Branch: `feat/mcp-tight-schemas`.
+
+---
+
 ## Task <N> — [Spike] `overwrite_model` vs `create_file`: keep only `create_file`
 
 - **Spike (gate matrix):** CAS identical (version-required-when-exists, ignored-when-new, stale-refused); locks identical outcome (both serialize via `MODEL_WRITE_LOCK`, `create_file` additionally holds `FILE_WRITE_LOCK` file-first-then-model). Validation: `overwrite` = `parse+resolve` single file + canonical serialize; `create(path=system.hcl)` = `compile` of substituted sources (merge + single-system check + docs `W018` + default project name), raw write. For single-file projects gates coincide; `create` is strictly more correct. Repair hatch holds both ways (`create` replaces + compiles substituted sources, so fixed content applies on broken baseline). Deltas: auto-discovery (`system.hcl` else `main.hcl`) vs explicit `path` (caller does `list_files` first; split-brain `system+main` correctly refuses `E000`); canonical vs raw (raw is what `edit_file`/`save_vfs` already do, next `ModelOp` re-canonicalizes); `applied:true` vs bare `version` payload.
