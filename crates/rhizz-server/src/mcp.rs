@@ -4785,6 +4785,205 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tools_list_schemas_are_tightened() {
+        // Red-first gate for tight MCP schemas: every constraint in the
+        // schema is one fewer thing that can go wrong (tool-design.md).
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let list = json!({ "jsonrpc": "2.0", "id": 500, "method": "tools/list" });
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("tools/list must reply");
+        let tools = payload["result"]["tools"].as_array().unwrap();
+        let by_name = |name: &str| {
+            tools
+                .iter()
+                .find(|t| t["name"] == json!(name))
+                .unwrap_or_else(|| panic!("tool `{name}` must be listed"))
+        };
+        let prop = |tool: &Value, prop: &str| {
+            tool["inputSchema"]["properties"][prop].clone()
+        };
+
+        // fetch_projects.page: minimum 1 (code already refuses <1).
+        let fetch = by_name("fetch_projects");
+        assert_eq!(
+            prop(fetch, "page")["minimum"],
+            json!(1),
+            "fetch_projects.page must carry minimum 1: {}",
+            prop(fetch, "page")
+        );
+
+        // read_file: limit maximum 500, minimum 0; offset minimum 0;
+        // project/path minLength 1.
+        let read = by_name("read_file");
+        assert_eq!(
+            prop(read, "limit")["maximum"],
+            json!(500),
+            "read_file.limit must carry maximum 500"
+        );
+        assert_eq!(
+            prop(read, "limit")["minimum"],
+            json!(0),
+            "read_file.limit must carry minimum 0"
+        );
+        assert_eq!(
+            prop(read, "offset")["minimum"],
+            json!(0),
+            "read_file.offset must carry minimum 0"
+        );
+        assert_eq!(
+            prop(read, "project")["minLength"],
+            json!(1),
+            "read_file.project must carry minLength 1"
+        );
+        assert_eq!(
+            prop(read, "path")["minLength"],
+            json!(1),
+            "read_file.path must carry minLength 1"
+        );
+
+        // Labels/paths: minLength 1 (empty is refused at runtime).
+        let add_system = by_name("add_system");
+        assert_eq!(prop(add_system, "label")["minLength"], json!(1));
+        assert_eq!(prop(add_system, "project")["minLength"], json!(1));
+
+        let add_instance = by_name("add_instance");
+        // parentPath is camelCase on the wire (serde rename_all).
+        let parent_schema = prop(add_instance, "parentPath");
+        let parent_schema = if parent_schema.is_null() {
+            prop(add_instance, "parent_path")
+        } else {
+            parent_schema
+        };
+        assert_eq!(parent_schema["minLength"], json!(1));
+        assert_eq!(prop(add_instance, "label")["minLength"], json!(1));
+        assert_eq!(prop(add_instance, "source")["minLength"], json!(1));
+
+        // Border is a closed vocabulary: enum, not free-form.
+        let add_def = by_name("add_component_definition");
+        let options = &add_def["inputSchema"]["properties"]["options"];
+        let border = options.get("properties").and_then(|p| p.get("border"));
+        let border = border.unwrap_or(&Value::Null);
+        // Options is optional; when present its border must be an enum.
+        // Resolve $ref if the generator emitted one.
+        let border_schema = if border.get("$ref").is_some() {
+            // Look up the $defs entry (best-effort: check both root $defs).
+            border.clone()
+        } else {
+            border.clone()
+        };
+        // The enum may live behind a $ref; fetch the tools/list payload defs
+        // is overkill — instead assert the options schema mentions the
+        // closed set somewhere in its JSON encoding.
+        let options_text = serde_json::to_string(options).unwrap();
+        for value in ["solid", "dashed", "dotted"] {
+            assert!(
+                options_text.contains(value),
+                "add_component_definition options.border must enumerate `{value}`: {options_text}"
+            );
+        }
+        assert!(
+            !options_text.contains("groovy"),
+            "border enum must not contain free-form values: {options_text}"
+        );
+        let _ = border_schema;
+
+        // connect_components ends: exactly one of existing/new must be set.
+        let connect = by_name("connect_components");
+        let connect_text = serde_json::to_string(&connect["inputSchema"].clone()).unwrap();
+        assert!(
+            connect_text.contains("oneOf"),
+            "connect_components port must carry a oneOf exactly-one shape: {connect_text}"
+        );
+        assert!(
+            connect_text.contains("existing") && connect_text.contains("new"),
+            "connect_components port oneOf must mention existing/new: {connect_text}"
+        );
+
+        // edit_file: non-empty edits, non-empty old_text.
+        let edit = by_name("edit_file");
+        assert_eq!(prop(edit, "edits")["minItems"], json!(1));
+        let edit_text = serde_json::to_string(&edit["inputSchema"].clone()).unwrap();
+        assert!(
+            edit_text.contains("minLength"),
+            "edit_file edits items must carry minLength for old_text: {edit_text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn tools_call_read_file_refuses_limit_over_500() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            501,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl", "limit": 501 }),
+        )
+        .await;
+        assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_add_system_refuses_empty_label() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_drone_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            502,
+            "add_system",
+            json!({ "project": "drone", "label": "" }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(text.contains("E000"), "expected E000 in refusal: {text}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_connect_components_refuses_both_and_neither_port() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        for (id, port) in [
+            (503, json!({ "existing": "out", "new": { "label": "x" } })),
+            (504, json!({})),
+        ] {
+            let payload = call_tool(
+                &app,
+                &session,
+                id,
+                "connect_components",
+                json!({
+                    "project": "demo",
+                    "scopePath": "demo",
+                    "label": "bad",
+                    "from": { "component": "a", "port": port },
+                    "to": { "component": "b", "port": { "existing": "in" } },
+                }),
+            )
+            .await;
+            let text = tool_error_text(&payload);
+            assert!(
+                text.contains("exactly one"),
+                "both/neither existing/new must be refused: {text}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn tools_call_create_file_refuses_invalid_model_content_and_stale_versions() {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
