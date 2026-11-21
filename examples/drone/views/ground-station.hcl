@@ -7,33 +7,53 @@ view "ground-station" {
   }
 
   node "ground-control/goggles" {
-    x          = 70
+    x          = 100
     y          = 1600
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "video-in" {
+      side   = "top"
+      offset = 0.5
+    }
   }
 
   node "ground-control/ground-station-pc" {
-    x          = 70
-    y          = 1420
-    width      = 100
+    x          = 50
+    y          = 1400
+    width      = 200
     height     = 100
     text_align = "center"
+
+    port "control-in" {
+      side   = "top"
+      offset = 0.5
+    }
+
+    port "video-out" {
+      side   = "bottom"
+      offset = 0.5
+    }
   }
 
   node "ground-control/transmitter" {
-    x          = 70
-    y          = 1240
+    x          = 100
+    y          = 1200
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "control-out" {
+      side   = "bottom"
+      offset = 0.5
+    }
   }
 
   annotation {
-    x    = -120
-    y    = 1960
-    text = "Ground station shown with optional goggles"
+    x     = -270
+    y     = 1360
+    text  = "Ground station shown with optional goggles"
     scale = 1.5
   }
 }

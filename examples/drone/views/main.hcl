@@ -2,88 +2,148 @@ view "main" {
   system      = "quadcopter"
 
   node "quadcopter/drone/battery" {
-    x          = 397.5886850211688
-    y          = 1581.2642298997941
+    x          = 100
+    y          = 1260
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "power-out" {
+      side   = "right"
+      offset = 0.2
+    }
   }
 
   node "quadcopter/drone/camera" {
-    x          = 619.9859400106056
-    y          = 1258.5786443151217
+    x          = 650
+    y          = 850
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "video-out" {
+      side   = "bottom"
+      offset = 0.5001405998939435
+    }
   }
 
   node "quadcopter/drone/esc" {
-    x          = 397.71855206835744
-    y          = 1399.8429204804868
+    x          = 300
+    y          = 1200
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "bec-out" {
+      side   = "left"
+      offset = 0.2
+    }
+
+    port "motor-in" {
+      side   = "right"
+      offset = 0.2
+    }
+
+    port "power-in" {
+      side   = "left"
+      offset = 0.8
+    }
   }
 
   node "quadcopter/drone/flight-controller" {
-    x          = 148.23905854287835
-    y          = 810.8032335276948
-    width      = 599.0845184326172
-    height     = 358.4466247558594
+    x          = 100
+    y          = 800
+    width      = 500
+    height     = 360
     text_align = "top-center"
+
+    port "gps-serial" {
+      side   = "left"
+      offset = 0.22318525123367694
+    }
+
+    port "motor-out" {
+      side   = "bottom"
+      offset = 0.8
+    }
+
+    port "power-in" {
+      side   = "bottom"
+      offset = 0.2003056268487051
+    }
+
+    port "rc-in" {
+      side   = "left"
+      offset = 0.7777777777777778
+    }
   }
 
   node "quadcopter/drone/flight-controller/barometer" {
-    x          = 427.9488330060247
-    y          = 1057.4383389761429
-    width      = 186.22536630050203
-    height     = 101.76402374223119
+    x          = 380
+    y          = 850
+    width      = 130
+    height     = 100
     text_align = "center"
   }
 
   node "quadcopter/drone/flight-controller/imu" {
-    x          = 426.49380493555094
-    y          = 838.8032335276948
-    width      = 186.22536630050203
-    height     = 101.76402374223119
+    x          = 380
+    y          = 1010
+    width      = 130
+    height     = 100
     text_align = "center"
   }
 
   node "quadcopter/drone/flight-controller/mcu" {
-    x          = 201.18830745393797
-    y          = 938.429447512161
-    width      = 186.22536630050203
-    height     = 101.76402374223119
+    x          = 160
+    y          = 930
+    width      = 130
+    height     = 100
     text_align = "center"
   }
 
   node "quadcopter/drone/gps" {
-    x          = -60.738178048735534
-    y          = 907.431951986069
+    x          = -100
+    y          = 800
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "serial" {
+      side   = "right"
+      offset = 0.8
+    }
   }
 
   node "quadcopter/drone/radio-rx" {
-    x          = 856.2831615881456
-    y          = 907.1756565957492
+    x          = -100
+    y          = 1000
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "crsf" {
+      side   = "right"
+      offset = 0.8
+    }
   }
 
   node "quadcopter/drone/vtx" {
-    x          = 620
-    y          = 1440
+    x          = 650
+    y          = 1050
     width      = 100
     height     = 100
     text_align = "center"
+
+    port "video-in" {
+      side   = "top"
+      offset = 0.5
+    }
   }
 
   annotation {
-    x    = 400
-    y    = 480
-    text = "GPS feed is noisy — see issue #42"
+    x     = -160
+    y     = 780
+    text  = "GPS feed is noisy — see issue #42"
   }
 }
