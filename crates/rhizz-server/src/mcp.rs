@@ -3823,6 +3823,75 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tools_call_connect_components_with_existing_ports_covers_delegation() {
+        // `connect_components` with `existing`/`existing` covers the bare
+        // `add_connection` delegation case: empty `component` is `./port`.
+        let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("demo");
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            "component \"leaf\" {\n  leaf = true\n  port \"http\" {\n    protocol = \"rest\"\n    role = \"provider\"\n    external = true\n  }\n}\nprotocol \"rest\" { leaf = true }\ncomponent \"svc\" {\n  port \"api\" { external = true }\n  instance \"inner\" { source = \"leaf\" }\n}\nsystem \"demo\" {\n  instance \"svc\" { source = \"svc\" }\n}\n",
+        )
+        .unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            98,
+            "connect_components",
+            json!({
+                "project": "demo",
+                "scopePath": "demo/svc",
+                "label": "api-delegation",
+                "from": { "component": "", "port": { "existing": "api" } },
+                "to": { "component": "inner", "port": { "existing": "http" } }
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+        assert_eq!(result_value(&payload)["applied"], json!(true), "{payload}");
+        let content = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(content.contains("\"./api\""), "{content}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_connect_components_with_unknown_existing_port_is_refused() {
+        // `connect_components` with a missing `existing` port refuses without
+        // touching the file — the kept path covers the removed bare path.
+        let tmp = tempfile::tempdir().unwrap();
+        write_connected_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+
+        let payload = call_tool(
+            &app,
+            &session,
+            99,
+            "connect_components",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "bad",
+                "from": { "component": "ghost", "port": { "existing": "port" } },
+                "to": { "component": "b", "port": { "existing": "in" } },
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(
+            text.contains('E'),
+            "expected a diagnostic code in refusal: {text}"
+        );
+
+        let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        assert_eq!(before, after, "a refused op must not touch system.hcl");
+    }
+
+    #[tokio::test]
     async fn tools_call_delete_referenced_protocol_is_refused_byte_identical() {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("demo");
