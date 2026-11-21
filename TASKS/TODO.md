@@ -16,34 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [Spike] Shorten MCP `version` hashes to 8 chars (like short git hashes)
-
-`file_version`/`project_version`/`hash_found_entries`
-(`crates/rhizz-server/src/storage.rs:636-708`) are hex SHA-256 (64 chars),
-asserted as `len() == 64` in several tests. Full hashes bloat every tool
-payload and are painful to quote. Question: can the *wire* `version` become
-an 8-char prefix while comparison stays collision-safe?
-
-Scope (spike first, implement only if safe):
-- Decide semantics: truncate-and-compare (8-hex prefix equality, 32-bit —
-  collision-prone at scale, state why acceptable or not) vs display-shortening
-  (compare full 64, transmit 8, re-expand server-side — needs a lookup, state
-  cost) vs longer prefix (12–16 chars). Count projects/files per server to
-  size the birthday risk.
-- If adopted: change `file_version`/`project_version` output or add a
-  `short_version` used only in MCP payloads; keep CAS correctness (a short
-  collision must never cause last-writer-wins); update the `len() == 64`
-  assertions and MCP tests; update tool descriptions that say "content-hash
-  `version`".
-
-Definition of done:
-- Spike note in the task PR (options, collision math, recommendation).
-- If adopted: red/green tests (stale/prefix-collision refusal, chaining
-  without re-read), `just test`/`lint`/`build` green.
-- Suggested branch: `spike/mcp-short-versions`.
-
----
-
 ## Task <N> — [Spike] `add_connection` vs `connect_components`: keep only one
 
 Audit finding (`tool-design.md` 15–30 band): two ways to create a connection.
