@@ -220,9 +220,8 @@ fn apply_outer_conversion(
     }
 }
 
-/// A connection label must be usable in paths and unique in its scope. Unlike
-/// `add_connection`, which silently ignores a duplicate, a taken label is a
-/// refusal here: the gesture would otherwise report success and change
+/// A connection label must be usable in paths and unique in its scope. A taken
+/// label is a refusal: the gesture would otherwise report success and change
 /// nothing.
 fn check_connection_label(
     raw: &mut RawFile,

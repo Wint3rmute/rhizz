@@ -505,8 +505,7 @@ pub struct Field {
 
 /// Address of one connection: the scope it is visible in, plus its label.
 ///
-/// `scope_path` uses the same convention as `add_connection` and
-/// `delete_connection`:
+/// `scope_path` uses the same convention as the connection ops:
 ///
 /// - a connection declared directly in a system is addressed by the system
 ///   label, e.g. `banking`;
