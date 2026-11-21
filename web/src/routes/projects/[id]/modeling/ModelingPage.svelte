@@ -122,6 +122,7 @@
     type PortSpot,
     type ResizeHandle,
     snapPortSpot,
+    surroundingBox,
     unionBox,
   } from "./geometry";
   import type { Box, TextAlign } from "./geometry";
@@ -1228,15 +1229,32 @@
     }
 
     // Restore the remembered layout if this component has been placed before
-    // (even if it was later unchecked); otherwise land it at the viewport
-    // center so it appears where the user is looking.
+    // (even if it was later unchecked); otherwise surround already-placed
+    // descendants (full descendant union, not just direct children) so a
+    // newly shown parent wraps its children instead of squishing them into
+    // a default-sized box via the reclampChildren below. With no placed
+    // descendants, land at the viewport center so it appears where the user
+    // is looking.
     const remembered = savedLayout[getComponentKey(index)];
-    const fallback = viewportCenterBox();
+    const descendantBoxes =
+      remembered === undefined ? placedDescendantBoxes(index) : [];
+    const fallback: Box =
+      descendantBoxes.length > 0
+        ? surroundingBox(
+            descendantBoxes,
+            CHILD_CONTAINMENT_MARGIN,
+            CHILD_CONTAINMENT_TOP_MARGIN,
+          )
+        : {
+            ...viewportCenterBox(),
+            width: DEFAULT_NODE_WIDTH,
+            height: DEFAULT_NODE_HEIGHT,
+          };
     let box: Box = {
       x: remembered?.x ?? fallback.x,
       y: remembered?.y ?? fallback.y,
-      width: remembered?.width ?? DEFAULT_NODE_WIDTH,
-      height: remembered?.height ?? DEFAULT_NODE_HEIGHT,
+      width: remembered?.width ?? fallback.width,
+      height: remembered?.height ?? fallback.height,
     };
     const parentBox = activeParentBox(index);
     if (parentBox) {
@@ -1300,6 +1318,30 @@
   // child overlapping the exact middle would still obscure it). Sized to
   // comfortably clear a label line plus its own padding.
   const CHILD_CONTAINMENT_TOP_MARGIN = 28;
+
+  // Boxes of every currently-placed descendant of `parentIndex` (children,
+  // grandchildren, ...) — full descendant union, not just direct children.
+  // Used when newly placing a parent with no remembered layout to surround
+  // them instead of landing at a default size and squishing them via the
+  // reclampChildren below. Walks each candidate's parent chain up to the
+  // root; naturally bounded by what's on-screen since unplaced components
+  // have no box to collect.
+  function placedDescendantBoxes(parentIndex: number): Box[] {
+    const boxes: Box[] = [];
+    components.forEach((_component, childIndex) => {
+      if (childIndex === parentIndex) return;
+      let current = components[childIndex]?.parent_component_index;
+      while (current !== undefined) {
+        if (current === parentIndex) {
+          const box = nodeBox(childIndex);
+          if (box) boxes.push(box);
+          break;
+        }
+        current = components[current]?.parent_component_index;
+      }
+    });
+    return boxes;
+  }
 
   // Returns the box of `index`'s parent component, but only if that parent is
   // itself currently placed on the canvas ("active") — a node with a parent

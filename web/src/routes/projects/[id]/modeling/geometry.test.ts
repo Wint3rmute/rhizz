@@ -27,6 +27,8 @@ import {
   portSpotToXY,
   routeConnection,
   snapPortSpot,
+  surroundingBox,
+  expandBox,
   TEXT_ALIGN_PADDING,
   textPosition,
   unionBox,
@@ -182,6 +184,62 @@ describe("unionBox", () => {
 
   it("throws instead of silently returning Infinity/NaN geometry for an empty array", () => {
     expect(() => unionBox([])).toThrow();
+  });
+});
+
+describe("expandBox", () => {
+  it("expands symmetrically when only margin is given", () => {
+    const box: Box = { x: 100, y: 100, width: 50, height: 50 };
+    expect(expandBox(box, 10)).toEqual({
+      x: 90,
+      y: 90,
+      width: 70,
+      height: 70,
+    });
+  });
+
+  it("reserves extra space at the top when topMargin is given", () => {
+    const box: Box = { x: 100, y: 100, width: 50, height: 50 };
+    expect(expandBox(box, 10, 28)).toEqual({
+      x: 90,
+      y: 72, // 100 - topMargin(28)
+      width: 70, // 50 + margin * 2
+      height: 88, // 50 + margin(10) + topMargin(28)
+    });
+  });
+
+  it("defaults topMargin to margin, matching clampWithin symmetry", () => {
+    const box: Box = { x: 0, y: 0, width: 20, height: 20 };
+    expect(expandBox(box, 10)).toEqual(expandBox(box, 10, 10));
+  });
+});
+
+describe("surroundingBox", () => {
+  it("surrounds a single child with padding", () => {
+    const child: Box = { x: 100, y: 100, width: 80, height: 60 };
+    expect(surroundingBox([child], 10, 28)).toEqual({
+      x: 90,
+      y: 72,
+      width: 100,
+      height: 98,
+    });
+  });
+
+  it("surrounds scattered descendants with one union plus padding", () => {
+    const a: Box = { x: 100, y: 900, width: 100, height: 100 };
+    const b: Box = { x: 300, y: 900, width: 100, height: 100 };
+    const c: Box = { x: 500, y: 900, width: 200, height: 100 };
+    // union is x:100 y:900 w:600 h:100, then pad by 10 / 28
+    expect(surroundingBox([a, b, c], 10, 28)).toEqual({
+      x: 90,
+      y: 872,
+      width: 620,
+      height: 138,
+    });
+  });
+
+  it("throws for an empty array like unionBox does", () => {
+    expect(() => surroundingBox([], 10, 28)).toThrow();
   });
 });
 
