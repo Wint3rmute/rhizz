@@ -7,36 +7,36 @@ view "power-paths" {
   }
 
   node "quadcopter/drone" {
-    x          = 288.21099495849603
-    y          = 860.3813252319337
-    width      = 100
-    height     = 100
-    text_align = "center"
+    x          = 90
+    y          = 760
+    width      = 580
+    height     = 150
+    text_align = "top-center"
   }
 
   node "quadcopter/drone/battery" {
-    x          = 298.21099495849603
-    y          = 888.3813252319337
-    width      = 80
-    height     = 62
+    x          = 100
+    y          = 800
+    width      = 100
+    height     = 100
     text_align = "center"
 
     port "power-out" {
       side   = "right"
-      offset = 0.2
+      offset = 0.8
     }
   }
 
   node "quadcopter/drone/esc" {
-    x          = 298.21099495849603
-    y          = 888.3813252319337
-    width      = 80
-    height     = 62
+    x          = 300
+    y          = 800
+    width      = 100
+    height     = 100
     text_align = "center"
 
     port "bec-out" {
       side   = "right"
-      offset = 0.3
+      offset = 0.2
     }
 
     port "motor-in" {
@@ -46,15 +46,15 @@ view "power-paths" {
 
     port "power-in" {
       side   = "left"
-      offset = 0.2
+      offset = 0.8
     }
   }
 
   node "quadcopter/drone/flight-controller" {
-    x          = 298.21099495849603
-    y          = 888.3813252319337
-    width      = 80
-    height     = 62
+    x          = 500
+    y          = 800
+    width      = 160
+    height     = 100
     text_align = "center"
 
     port "motor-out" {
@@ -64,7 +64,7 @@ view "power-paths" {
 
     port "power-in" {
       side   = "left"
-      offset = 0.3
+      offset = 0.2
     }
   }
 }
