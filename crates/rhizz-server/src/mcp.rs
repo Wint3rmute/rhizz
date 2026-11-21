@@ -1,4 +1,4 @@
-//! Proof-of-concept Model Context Protocol (MCP) endpoint.
+//! Model Context Protocol (MCP) endpoint, modern-only (`2026-07-28`).
 //!
 //! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
@@ -9,6 +9,11 @@
 //! canonical HCL back atomically. File writes replace whole files or exact
 //! spans under a compare-and-swap version guard, with compile validation for
 //! `.hcl` paths. A refused op leaves the file untouched.
+//!
+//! Modern-only: `server/discover` with per-request `_meta`, no `initialize`
+//! handshake, no `mcp-session-id`, stateless (`NeverSessionManager` +
+//! `legacy_session_mode(false)` + `stateless_protocol_metadata_required`).
+//! `tools/list` carries `ttlMs`/`cacheScope`.
 //!
 //! This is a POC: there is no authentication. Writes take the project lock
 //! as the hardcoded `AI` user (proposal 0004): a project held by a human is
@@ -23,8 +28,9 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+    DiscoverResult, Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
+    ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, tool, tool_router};
@@ -1935,6 +1941,29 @@ impl ServerHandler for RhizzMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("rhizz", env!("CARGO_PKG_VERSION")))
+            .with_protocol_version(ProtocolVersion::V_2026_07_28)
+            .with_instructions(
+                "Rhizz code-first MBSE server. Reads via fetch_projects/list_files/read_file/check_project; mutations via ModelOp tools; file edits via create_file/edit_file with version CAS.",
+            )
+    }
+
+    fn supported_protocol_versions(&self) -> std::borrow::Cow<'static, [ProtocolVersion]> {
+        // Modern-only: 2026-07-28 stateless discovery. No initialize handshake.
+        std::borrow::Cow::Borrowed(&[ProtocolVersion::V_2026_07_28])
+    }
+
+    fn discover(
+        &self,
+        context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<DiscoverResult, ErrorData>> + MaybeSendFuture + '_ {
+        let result = DiscoverResult::from_server_info(
+            self.supported_protocol_versions().into_owned(),
+            self.get_info(),
+        )
+        .with_ttl_ms(60_000)
+        .with_cache_scope(CacheScope::Public);
+        let _ = context;
+        std::future::ready(Ok(result))
     }
 
     fn call_tool(
@@ -1963,7 +1992,9 @@ impl ServerHandler for RhizzMcp {
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + MaybeSendFuture + '_ {
         std::future::ready(Ok(ListToolsResult::with_all_items(
             self.tool_router.list_all(),
-        )))
+        )
+        .with_ttl_ms(60_000)
+        .with_cache_scope(CacheScope::Public)))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
@@ -1982,38 +2013,73 @@ mod tests {
 
     use crate::server::app;
 
-    const MCP_SESSION_ID: &str = "mcp-session-id";
+    const MODERN_PROTOCOL_VERSION: &str = "2026-07-28";
+
+    fn modern_meta() -> Value {
+        json!({
+            "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL_VERSION,
+            "io.modelcontextprotocol/clientCapabilities": {},
+            "io.modelcontextprotocol/clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
+        })
+    }
+
+    /// Ensures `message` carries modern `_meta`. Clones and injects when missing,
+    /// so existing call sites stay unchanged.
+    fn with_modern_meta(message: &Value) -> Value {
+        let mut msg = message.clone();
+        if msg.get("method").and_then(|m| m.as_str()).is_some() {
+            let meta = modern_meta();
+            if let Some(params) = msg.get_mut("params") {
+                if let Some(obj) = params.as_object_mut() {
+                    obj.entry("_meta").or_insert(meta);
+                }
+            } else if let Some(obj) = msg.as_object_mut() {
+                obj.insert("params".to_owned(), json!({ "_meta": meta }));
+            }
+        }
+        msg
+    }
 
     /// Sends one JSON-RPC message to `/mcp` and returns the status, the
-    /// session id header (if any) and the parsed JSON-RPC payload (if any).
+    /// session id header (always `None` in modern stateless mode) and the parsed
+    /// JSON-RPC payload (if any).
     async fn post_rpc(
         app: &Router,
         message: &Value,
-        session: Option<&str>,
+        _session: Option<&str>,
     ) -> (StatusCode, Option<String>, Option<Value>) {
+        let message = with_modern_meta(message);
+        let method = message.get("method").and_then(|m| m.as_str()).unwrap_or("");
+        let name = message
+            .get("params")
+            .and_then(|p| p.get("name"))
+            .and_then(|n| n.as_str())
+            .map(ToOwned::to_owned);
         let mut builder = Request::builder()
             .method("POST")
             .uri("/mcp")
             .header(header::HOST, "localhost")
             .header(header::CONTENT_TYPE, "application/json")
-            .header(header::ACCEPT, "application/json, text/event-stream");
-        if let Some(session) = session {
-            builder = builder.header(MCP_SESSION_ID, session);
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .header("MCP-Protocol-Version", MODERN_PROTOCOL_VERSION)
+            .header("Mcp-Method", method);
+        if let Some(name) = name {
+            // Only tools/call, prompts/get, resources/read carry Mcp-Name;
+            // sending it for tools/call is enough for the suite.
+            if method == "tools/call" {
+                builder = builder.header("Mcp-Name", name);
+            }
         }
         let request = builder.body(Body::from(message.to_string())).unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
 
         let status = response.status();
-        let session_id = response
-            .headers()
-            .get(MCP_SESSION_ID)
-            .map(|value| value.to_str().unwrap().to_owned());
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
         let text = String::from_utf8(bytes.to_vec()).unwrap();
         let payload = parse_payload(&text);
-        (status, session_id, payload)
+        (status, None, payload)
     }
 
     /// The reply is either a bare JSON object or a server-sent-events stream
@@ -2034,31 +2100,32 @@ mod tests {
             .map(|data| serde_json::from_str(data).unwrap())
     }
 
-    fn initialize_request() -> Value {
+    fn discover_request() -> Value {
         json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-06-18",
-                "capabilities": {},
-                "clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
-            }
+            "method": "server/discover",
+            "params": { "_meta": {
+                "io.modelcontextprotocol/protocolVersion": MODERN_PROTOCOL_VERSION,
+                "io.modelcontextprotocol/clientCapabilities": {},
+                "io.modelcontextprotocol/clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
+            } }
         })
     }
 
-    /// Runs the `initialize` handshake and returns the session id to reuse.
-    /// The session lives in the router's session manager, so every request of
-    /// a test must go through the same router (as the real server does).
+    /// Runs modern `server/discover` and returns a dummy session placeholder.
+    /// Kept returning `String` so existing call sites stay unchanged; the value
+    /// is ignored (stateless, no `mcp-session-id`).
     async fn handshake(app: &Router) -> String {
-        let (status, session, _) = post_rpc(app, &initialize_request(), None).await;
+        let (status, _, payload) = post_rpc(app, &discover_request(), None).await;
         assert_eq!(status, StatusCode::OK);
-        let session = session.expect("initialize must return a session id");
-
-        let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
-        let (status, _, _) = post_rpc(app, &initialized, Some(&session)).await;
-        assert_eq!(status, StatusCode::ACCEPTED);
-        session
+        let payload = payload.expect("server/discover must reply");
+        assert_eq!(
+            payload["result"]["supportedVersions"],
+            json!(["2026-07-28"]),
+            "{payload}"
+        );
+        String::new()
     }
 
     fn write_drone_project(data_dir: &std::path::Path) {
@@ -2514,7 +2581,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn initialize_accepts_the_public_hostname() {
+    async fn discover_accepts_the_public_hostname() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
 
@@ -2524,10 +2591,124 @@ mod tests {
             .header(header::HOST, "rhizz.fly.dev")
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::ACCEPT, "application/json, text/event-stream")
-            .body(Body::from(initialize_request().to_string()))
+            .header("MCP-Protocol-Version", MODERN_PROTOCOL_VERSION)
+            .header("Mcp-Method", "server/discover")
+            .body(Body::from(discover_request().to_string()))
             .unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn modern_discover_advertises_only_2026_07_28_with_cache_hints() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let _ = handshake(&app).await;
+
+        let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
+        let (status, _, payload) = post_rpc(&app, &list, None).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("tools/list must reply");
+        assert_eq!(payload["result"]["resultType"], json!("complete"));
+        assert!(payload["result"]["ttlMs"].is_number());
+        assert!(payload["result"]["cacheScope"].is_string());
+    }
+
+    #[tokio::test]
+    async fn modern_initialize_is_rejected_as_unsupported() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let init = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
+            }
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header(header::HOST, "localhost")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .header("MCP-Protocol-Version", "2025-06-18")
+            .header("Mcp-Method", "initialize")
+            .body(Body::from(init.to_string()))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        // Modern-only: legacy handshake must fail with -32022 (legacy wire
+        // keeps HTTP 200 + JSON-RPC error), never a usable session.
+        let status = response.status();
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(
+            text.contains("-32022"),
+            "initialize must be rejected with -32022, got {status}: {text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn modern_header_mismatch_is_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let mut list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
+        // post_rpc would inject correct _meta; do it manually here to control headers.
+        list["params"] = json!({ "_meta": modern_meta() });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header(header::HOST, "localhost")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .header("MCP-Protocol-Version", MODERN_PROTOCOL_VERSION)
+            .header("Mcp-Method", "tools/call")
+            .body(Body::from(list.to_string()))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(text.contains("-32020"), "{text}");
+    }
+
+    #[tokio::test]
+    async fn modern_missing_metadata_is_rejected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/mcp")
+            .header(header::HOST, "localhost")
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::ACCEPT, "application/json, text/event-stream")
+            .header("Mcp-Method", "tools/list")
+            .body(Body::from(list.to_string()))
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn modern_get_on_mcp_is_method_not_allowed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let request = Request::builder()
+            .method("GET")
+            .uri("/mcp")
+            .header(header::HOST, "localhost")
+            .header(header::ACCEPT, "text/event-stream")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[tokio::test]
