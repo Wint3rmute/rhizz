@@ -2,12 +2,14 @@
 
 ### Feat
 
+- **server**: shorten MCP versions to 16-char SHA-256 prefix
 - **server**: add title and safety hints to MCP tools
 - set external on delegation conversion in the same dialog
 - convert typed delegation outer into proxy in one step
 
 ### Fix
 
+- **server**: avoid string-slice clippy lints in short versions
 - keep connection label weight stable when selected
 
 ### Refactor
