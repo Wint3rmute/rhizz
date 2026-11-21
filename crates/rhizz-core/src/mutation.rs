@@ -819,14 +819,6 @@ const fn idle() -> ApplyOutcome {
     }
 }
 
-const fn applied_none() -> ApplyOutcome {
-    ApplyOutcome {
-        applied: true,
-        path: None,
-        actions: Vec::new(),
-    }
-}
-
 const fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
     ApplyOutcome {
         applied: true,
