@@ -4,6 +4,17 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [Spike] Shorten MCP `version` hashes (16-char prefix, not 8)
+
+- **Spike:** 8-char truncate-and-compare is unsafe — per-write false-accept 2^-32 (~2.3e-10), birthday among ~100k distinct contents ~1% (examples today: 6 projects / 47 files; realistic servers <1000 projects x <100 files). Display-shortening (compare full 64, transmit 8) needs a version-history DB the stateless server doesn't have (breaks after restart/outside git edit). 16-char (64-bit) keeps 75% of the saving (64 -> 16) with negligible risk: per-write 2^-64 (~5.4e-20), birthday 100k ~2.7e-10, 1M trees ~2.7e-8. Recommendation: 16-char truncate-and-compare.
+- **Storage (`storage.rs`):** new `VERSION_LEN = 16` with collision-math rationale; `file_version`/`hash_found_entries` return the 16-char prefix (via `chars().take()`, no string-slice clippy lint); `ProjectEntry::File` + `project_version` docs say short content-hash.
+- **MCP/server docs:** 4 read-tool descriptions + 3 param schemas + `lock_state`/`server.rs` state doc: `content-hash` -> `short content-hash`. Trim gate still green (~8466 < 8750).
+- **TDD (red->green):** `file_version_is_the_sha256_prefix` (empty-string vector `e3b0c44298fc1c14`); `short_versions_refuse_an_8char_prefix_collision` brute-forces a real 8-char SHA-256 collision (~65k probes) and asserts the stale write is still refused — fails on `VERSION_LEN = 8` (wire versions equal), passes on 16. Existing stale/chaining tests cover the rest.
+- `just test` green (cargo + vitest + 175 e2e), `just lint` green, `just build` green; `just format` clean.
+- Branch: `spike/mcp-short-versions`.
+
+---
+
 ## Task <N> — [P0] Trim MCP write-tool descriptions (drop `proposal 0004`, bare codes, steering)
 
 - **MCP (`mcp.rs` descriptions only):** replaced 19x lock boilerplate with shared `Writes take the project lock as AI; held-by-human is a refusal naming the holder.`, dropped all `proposal 0004` refs, glossed E022 (delegation shape) / E017 (unresolved realized_by) / E018 (realization cycle) / E019 (leaf with realized_by) / E016 (view/file mismatch) / E006 (unknown system), deleted the documented-connection-path steering line, added sibling disambiguation (`add_connection` <-> `connect_components`, `overwrite_model` <-> `create_file`, ModelOp <-> file tools).
