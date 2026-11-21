@@ -25,11 +25,10 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, CacheScope, ContentBlock,
-    Implementation, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
-    MetaObject, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
-    ReadResourceResult, ResourceContents, ResourceTemplate, ServerCapabilities, ServerConfig,
-    Tool,
+    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
+    Implementation, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, MetaObject,
+    PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult,
+    ResourceContents, ResourceTemplate, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, tool, tool_router};
@@ -1950,7 +1949,13 @@ const RESOURCE_TTL_MS: u64 = 0;
 /// reads are whole-file, windowing stays on `read_file`.
 fn parse_file_uri(uri: &str) -> Option<(String, String)> {
     let rest = uri.strip_prefix("file://")?;
-    let rest = rest.split('#').next().unwrap_or("").split('?').next().unwrap_or("");
+    let rest = rest
+        .split('#')
+        .next()
+        .unwrap_or("")
+        .split('?')
+        .next()
+        .unwrap_or("");
     let rest = rest.trim_start_matches('/');
     let (project, path) = rest.split_once('/')?;
     if project.is_empty() || path.is_empty() {
@@ -1962,7 +1967,13 @@ fn parse_file_uri(uri: &str) -> Option<(String, String)> {
 /// Split `project://{project}/version` into the project id.
 fn parse_version_uri(uri: &str) -> Option<String> {
     let rest = uri.strip_prefix("project://")?;
-    let rest = rest.split('#').next().unwrap_or("").split('?').next().unwrap_or("");
+    let rest = rest
+        .split('#')
+        .next()
+        .unwrap_or("")
+        .split('?')
+        .next()
+        .unwrap_or("");
     let rest = rest.trim_start_matches('/');
     let (project, tail) = rest.split_once('/')?;
     if project.is_empty() || tail != "version" {
@@ -2020,11 +2031,10 @@ fn read_file_resource(
     };
     let version = storage::file_version(&content);
     let total_lines = content.lines().count();
-    let mime_type = mime_guess::from_path(rel).first_or_octet_stream().to_string();
-    let meta = version_meta(
-        &version,
-        &[("totalLines", Value::from(total_lines))],
-    );
+    let mime_type = mime_guess::from_path(rel)
+        .first_or_octet_stream()
+        .to_string();
+    let meta = version_meta(&version, &[("totalLines", Value::from(total_lines))]);
     let contents = ResourceContents::TextResourceContents {
         uri: uri.to_owned(),
         mime_type: Some(mime_type),
@@ -2057,9 +2067,8 @@ fn read_version_resource(
     };
     let mut payload = serde_json::Map::new();
     payload.extend(lock_state(locks, project, version.clone()));
-    let text = serde_json::to_string(&Value::Object(payload)).map_err(|_| {
-        ErrorData::internal_error("failed to encode version", None)
-    })?;
+    let text = serde_json::to_string(&Value::Object(payload))
+        .map_err(|_| ErrorData::internal_error("failed to encode version", None))?;
     let meta = version_meta(&version, &[]);
     let contents = ResourceContents::TextResourceContents {
         uri: uri.to_owned(),
@@ -2158,11 +2167,11 @@ impl ServerHandler for RhizzMcp {
                 "Project-level short content-hash version plus lock holder as JSON (same version the tools echo; use for staleness checks).",
             )
             .with_mime_type("application/json");
-        std::future::ready(Ok(
-            ListResourceTemplatesResult::with_all_items(vec![files, version])
-                .with_ttl_ms(RESOURCE_TTL_MS)
-                .with_cache_scope(CacheScope::Private),
-        ))
+        std::future::ready(Ok(ListResourceTemplatesResult::with_all_items(vec![
+            files, version,
+        ])
+        .with_ttl_ms(RESOURCE_TTL_MS)
+        .with_cache_scope(CacheScope::Private)))
     }
 
     fn read_resource(
@@ -2183,7 +2192,12 @@ impl ServerHandler for RhizzMcp {
                     return read_file_resource(&data_dir_inner, &uri_inner, &project, &path);
                 }
                 if let Some(project) = parse_version_uri(&uri_inner) {
-                    return read_version_resource(&data_dir_inner, &locks_inner, &uri_inner, &project);
+                    return read_version_resource(
+                        &data_dir_inner,
+                        &locks_inner,
+                        &uri_inner,
+                        &project,
+                    );
                 }
                 Err(ErrorData::resource_not_found(
                     format!("unknown resource `{uri_inner}`"),
@@ -5474,8 +5488,7 @@ mod tests {
         assert_eq!(result_value(&tool)["version"], json!(version));
 
         // Triple-slash form with an empty host reads the same file.
-        let triple =
-            call_read_resource(&app, &session, 604, "file:///drone/system.hcl").await;
+        let triple = call_read_resource(&app, &session, 604, "file:///drone/system.hcl").await;
         assert!(triple.get("error").is_none(), "{triple}");
         assert_eq!(
             triple["result"]["contents"][0]["_meta"]["version"],
@@ -5523,8 +5536,7 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_read_resource(&app, &session, 620, "project://drone/version").await;
+        let payload = call_read_resource(&app, &session, 620, "project://drone/version").await;
         assert!(payload.get("error").is_none(), "{payload}");
         let first = &payload["result"]["contents"][0];
         assert_eq!(first["uri"], json!("project://drone/version"));
@@ -5562,8 +5574,7 @@ mod tests {
         let app = app(tmp.path().to_path_buf());
         let session = handshake(&app).await;
 
-        let payload =
-            call_read_resource(&app, &session, 630, "file://demo/docs/note.md").await;
+        let payload = call_read_resource(&app, &session, 630, "file://demo/docs/note.md").await;
         assert!(payload.get("error").is_none(), "{payload}");
         let version = payload["result"]["contents"][0]["_meta"]["version"]
             .as_str()
