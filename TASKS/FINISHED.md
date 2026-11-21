@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [Spike] `overwrite_model` vs `create_file`: keep only `create_file`
+
+- **Spike (gate matrix):** CAS identical (version-required-when-exists, ignored-when-new, stale-refused); locks identical outcome (both serialize via `MODEL_WRITE_LOCK`, `create_file` additionally holds `FILE_WRITE_LOCK` file-first-then-model). Validation: `overwrite` = `parse+resolve` single file + canonical serialize; `create(path=system.hcl)` = `compile` of substituted sources (merge + single-system check + docs `W018` + default project name), raw write. For single-file projects gates coincide; `create` is strictly more correct. Repair hatch holds both ways (`create` replaces + compiles substituted sources, so fixed content applies on broken baseline). Deltas: auto-discovery (`system.hcl` else `main.hcl`) vs explicit `path` (caller does `list_files` first; split-brain `system+main` correctly refuses `E000`); canonical vs raw (raw is what `edit_file`/`save_vfs` already do, next `ModelOp` re-canonicalizes); `applied:true` vs bare `version` payload.
+- **Recommendation:** keep `create_file`, full wipe of `overwrite_model` — no compat shim, no alias, breaking by design (same precedent as `add_connection` removal). Migration: `overwrite_model(p,c,v)` -> `create_file(p,path=<primary from list_files>,c,v)`.
+- **Core (`storage.rs`):** removed `OverwriteModelResult`/`OverwriteModelError`/`overwrite_model` + 3 tests; new `create_file_replaces_a_broken_model_whole` proves the repair hatch; `write_project_touching_model_races_with_overwrite_model…` rewritten as `…_with_create_file…` (raw winners, byte-identical check). Comments updated (`mutate_project`-only).
+- **MCP (`mcp.rs`):** removed `OverwriteModelParams` + tool (22 -> 21 tools), updated `create_file` description (no `overwrite_model` refs, `ModelOp` repair-hatch pointer), `tools/list` gates, sibling disambiguation, lock test, and both `overwrite_model` tool tests (ported to `create_file_replaces_a_broken_model_whole` + `create_file_refuses_invalid_model_content_and_stale_versions`).
+- **Docs:** `book/src/proposals/0003-mcp-introduction.md` updated (no `overwrite_model` refs).
+- `cargo test -p rhizz-server` green (193 storage + 64 mcp), `clippy` clean. Full `just test`/`lint`/`build` via CICD.
+- Branch: `spike/mcp-single-model-write`.
+
+---
+
 ## Task <N> — [Spike] `add_connection` vs `connect_components`: keep only `connect_components`
 
 - **Spike (caller matrix):** web prod (`newConnection.ts:430,460`) already `connect_components`-only; `WorkspaceHarness` `add-connection` test-only; e2e has no `add_connection`; MCP/core/history/actionLog tests mechanical. `connect_components` with `{existing}`/`{existing}` fully covers the bare path (reuse, `./port` delegation via `""`, `convertOuterToProxy`); `add_connection` adds nothing except a silent duplicate no-op (`applied_none`) vs `connect_components` refusal.
