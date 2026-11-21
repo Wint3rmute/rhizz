@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [Spike] Serve file reads as `file:///{path}` resource templates
+
+- **Spike (prototype, tools unchanged):** `ServerCapabilities` now `enable_tools()+enable_resources()`; `resources/list` returns `[]` (files dynamic, templates cover reads, cheap); `resources/templates/list` returns 2 (`file://{project}/{path}` as `project-file`, `project://{project}/version` as `project-version` with `application/json`); `resources/read` serves whole files (same `resolve_project`/`resolve_confined_path`/hidden/symlink/regular-file/4MB-cap/`read_to_string` gates as `read_file`) with MIME via `mime_guess`, and project versions as JSON (`version`+`lockedBy` from `lock_state`). Both carry quotable short content-hash `version` in `_meta` (`totalLines` extra on files), `ttlMs:0` + `cacheScope:private` (files flip on write, per-loop state, immediately stale).
+- **URI scheme:** `file://{project}/{path}` + accepted `file:///{project}/{path}` (empty host, trim leading `/`, split first `/`, strip `?…`/`#…` — resource reads are whole-file, windowing stays on `read_file`); `project://{project}/version` (host or first path segment, tail must be `version`). Unknown scheme/project/path/cap/directory/missing -> `resource_not_found` (`-32002`, upgrades to `-32602` on 2026-07-28), IO failures -> `internal_error`. Triple-slash covered in tests.
+- **Context cost:** no saving while tools stay (schemas stay listed regardless; 2 templates add ~hundreds of chars to `templates/list`). Tool `read_file` windows (default 100, max 500 lines) vs resource full-file up to 4MB: identical for small files, resource costs strictly more for large files. Version in-band (tool JSON text) vs in `_meta` (resource): tool quoting is reliable, resource relies on client surfacing `_meta`.
+- **OpenCode:** not exercised end-to-end in this spike; wire shapes are standard (`TextResourceContents` + `_meta`, `ttlMs`/`cacheScope`) so any MCP-capable client can render text, but `_meta` visibility for CAS quoting is client-dependent — hence `read_file` remains the canonical CAS source.
+- **Recommendation:** hybrid adopted here (additive, low-risk): resources for convenience reads + tools for writes (and for windowed/large-file/CAS-critical reads). No read-tool removal — that would be the follow-up saving, at the cost of windowing + reliable in-band versions. If `_meta` proves invisible in OpenCode or models prefer full files and blow context, follow up by documenting tools-only and wiping resources.
+- **TDD (red->green):** 6 new `resources_*` tests mirroring `read_file` (templates advertise both, list empty, file full-content + `_meta` version/totalLines + triple-slash + tool-version parity, confinement/symlink/hidden/directory/missing/unknown-project/over-cap refused as protocol errors, version JSON + `list_files` parity + unknown refused, file `_meta` version chains into `edit_file` CAS). Failed before (no `resources/*` methods, tools-only caps), pass after.
+- `cargo test -p rhizz-server` green (203), `clippy` clean. Full `just test`/`lint`/`build` via CICD.
+- Branch: `spike/mcp-file-resources`.
+
+---
+
 ## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
 
 - **Schemas (`mcp.rs`):** `fetch_projects.page` `range(min=1)`; `read_file.limit` `range(min=0,max=500)` with runtime refusal (was silent `.min()` clamp), `offset` `range(min=0)`; `label`/`path`/`project`/`scope_path`/`source`/`new_label` `length(min=1)` everywhere except `ConnectEndJson.component` (empty `""` is `./port` delegation, documented); `create_protocol`/`version`/`existing` also `minLength:1` when present.

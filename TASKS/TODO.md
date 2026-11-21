@@ -16,35 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [Spike] Serve file reads as `file:///{path}` resource templates
-
-Audit finding (`resources-and-prompts.md`): `fetch_projects`/`list_files`/
-`read_file`/`check_project` are read-only context — textbook resource
-candidates — but the CAS-chaining design (`version` round-trips through tool
-calls) argues for tools. Capabilities today are tools-only
-(`mcp.rs:1836`).
-
-Scope (spike first, tools keep working regardless):
-- Prototype `resources/list` + `resources/templates/list` + `resources/read`
-  for `file:///{path}` (and `project://{id}/version` if cheap): URI scheme,
-  MIME types, `ttlMs`/`cacheScope`, confinement (same
-  `resolve_confined_path`/hidden/symlink rules as `read_file`), 4MB cap
-  behavior, and how `version` chaining works when the read is a resource
-  (does the model still get a quotable `version` for the next tool write?).
-- Measure: does it actually save context vs tools (schemas stay listed
-  regardless), and does our client surface (OpenCode) render resources usefully?
-- Recommendation: resources for reads + tools for writes, or documented
-  tools-only with reasons.
-
-Definition of done:
-- Spike note (prototype or throwaway branch, context-cost comparison,
-  recommendation). No capability change without a follow-up implement task.
-- If adopted: implement behind the same storage paths, red/green
-  `resources/read` tests mirroring `read_file` (confinement, caps, versions).
-- Suggested branch: `spike/mcp-file-resources`.
-
----
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
