@@ -212,6 +212,37 @@ export function unionBox(boxes: Box[]): Box {
   return { x, y, width: right - x, height: bottom - y };
 }
 
+// Expands `box` outward by `margin` on the left/right/bottom and by
+// `topMargin` on top (defaults to `margin`, mirroring clampWithin's
+// symmetry). This is the inverse of clampWithin's inset: a newly placed
+// parent surrounds its already-placed descendants with the same padding
+// children are later clamped to, so the follow-up reclampChildren is a
+// no-op instead of squishing them into a default-sized box.
+export function expandBox(
+  box: Box,
+  margin: number,
+  topMargin: number = margin,
+): Box {
+  return {
+    x: box.x - margin,
+    y: box.y - topMargin,
+    width: box.width + margin * 2,
+    height: box.height + margin + topMargin,
+  };
+}
+
+// Bounding box enclosing every box in `boxes`, padded outward for use as a
+// newly placed parent's box (full descendant union, not just direct
+// children). Throws on an empty array like unionBox does — callers guard
+// with a length check and fall back to the viewport-center placement.
+export function surroundingBox(
+  boxes: Box[],
+  margin: number,
+  topMargin: number = margin,
+): Box {
+  return expandBox(unionBox(boxes), margin, topMargin);
+}
+
 export interface VisibleConnection<T> {
   conn: T;
   a: { x: number; y: number };
