@@ -113,16 +113,6 @@ pub enum ModelOp {
     /// never the definition.
     #[serde(rename = "delete_system")]
     DeleteSystem { path: String },
-    /// Add a connection inside a scope. Both endpoints name port paths
-    /// (`comp/port` or a relative path ending in a port).
-    #[serde(rename = "add_connection")]
-    #[serde(rename_all = "camelCase")]
-    AddConnection {
-        scope_path: String,
-        label: String,
-        from: String,
-        to: String,
-    },
     /// Create a connection together with the ports it ends on, and
     /// optionally a stub protocol for them, as one atomic op.
     ///
@@ -163,8 +153,7 @@ pub enum ModelOp {
         #[serde(default)]
         ports: Option<Vec<String>>,
     },
-    /// Patch a connection's attributes, addressed like `add_connection`
-    /// (`scope_path` + `label`).
+    /// Patch a connection's attributes, addressed by `scope_path` + `label`.
     ///
     /// An instance path redirects to the definition the connection is
     /// declared in, so editing a connection of a reusable definition changes
@@ -413,15 +402,6 @@ pub enum LoggedAction {
     UpdateSystem {
         path: String,
         patch: SystemPatchJson,
-    },
-    /// A connection was added.
-    #[serde(rename = "add_connection")]
-    #[serde(rename_all = "camelCase")]
-    AddConnection {
-        scope_path: String,
-        label: String,
-        from: String,
-        to: String,
     },
     /// A connection was created together with its ports (and optionally a
     /// stub protocol). Logged as the single gesture it was, in the op's own
@@ -799,12 +779,6 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
         ModelOp::UpdateSystem { path, patch } => Ok(update_system(raw, path, patch)),
         ModelOp::Delete { path } => delete(raw, path),
         ModelOp::DeleteSystem { path } => Ok(delete_system(raw, path)),
-        ModelOp::AddConnection {
-            scope_path,
-            label,
-            from,
-            to,
-        } => add_connection(raw, scope_path, label, from, to),
         ModelOp::ConnectComponents {
             scope_path,
             label,
@@ -1687,60 +1661,6 @@ fn delete_system(raw: &mut RawFile, path: &str) -> ApplyOutcome {
     }])
 }
 
-/// Endpoints name port paths (`comp/port` or a relative path ending in a
-/// port). A single-segment value cannot name a port, so it is refused here;
-/// longer values that still resolve to a component without a port are
-/// refused by the resolver as E003.
-fn require_port_path(label: &str, field: &str, value: &str) -> Result<(), MutationError> {
-    let segments: Vec<&str> = value.split('/').filter(|s| !s.is_empty()).collect();
-    let port_like = segments.len() >= 2
-        && segments
-            .last()
-            .is_none_or(|last| *last != "." && *last != "..");
-    if port_like {
-        return Ok(());
-    }
-    Err(MutationError::InvalidInput(format!(
-        "connection `{label}` requires a port path in '{field}' (e.g. `comp/port`)"
-    )))
-}
-
-fn add_connection(
-    raw: &mut RawFile,
-    scope_path: &str,
-    label: &str,
-    from: &str,
-    to: &str,
-) -> Result<ApplyOutcome, MutationError> {
-    require_port_path(label, "from", from)?;
-    require_port_path(label, "to", to)?;
-    let Some(scope) = resolve_scope_or_idle(raw, scope_path) else {
-        return Ok(idle());
-    };
-    let connections = scope_connections_mut(raw, scope)?;
-    if connections.iter().any(|c| c.label == label) {
-        return Ok(applied_none());
-    }
-    connections.push(Labeled {
-        label: label.to_owned(),
-        inner: RawConnection {
-            from: non_empty(from),
-            to: non_empty(to),
-            ..Default::default()
-        },
-    });
-    Ok(ApplyOutcome {
-        applied: true,
-        path: None,
-        actions: vec![LoggedAction::AddConnection {
-            scope_path: scope_path.to_owned(),
-            label: label.to_owned(),
-            from: from.to_owned(),
-            to: to.to_owned(),
-        }],
-    })
-}
-
 /// The scope that declares `label` (systems first, then definitions, matching
 /// the dispatcher's search order) and that scope's label.
 fn find_connection(raw: &RawFile, label: &str) -> Option<(Scope, String)> {
@@ -2159,7 +2079,6 @@ mod tests {
             r#"{"kind":"update_system","path":"demo","patch":{"full_name":"x"}}"#,
             r#"{"kind":"delete_component","path":"demo/a"}"#,
             r#"{"kind":"delete_system","path":"demo"}"#,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"l","from":"a/out","to":"b/in"}"#,
             r#"{"kind":"connect_components","scopePath":"demo","label":"l","createProtocol":"spi","from":{"component":"a","port":{"new":{"label":"p","protocol":"spi","role":"provider","external":false,"required":true}}},"to":{"component":"b","port":{"existing":"q"}}}"#,
             r#"{"kind":"delete_connection_by_label","label":"l"}"#,
             r#"{"kind":"delete_connection_by_label","label":"l","removePorts":true,"ports":["a/out"]}"#,
@@ -2280,7 +2199,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a/p","to":"b/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"demo","label":"link","from":{"component":"a","port":{"existing":"p"}},"to":{"component":"b","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2306,8 +2225,10 @@ mod tests {
     #[test]
     fn rename_rewrites_to_side_and_absolute_and_dotslash() {
         // Table-driven: same setup, different `from` spellings + renaming the
-        // `to` side. Serialization is always absolute, so assertions check the
-        // absolute form.
+        // `to` side. Connections are seeded as raw HCL so absolute and
+        // `./` spellings (legacy files, no longer creatable via any op) are
+        // still covered. Serialization is always absolute, so assertions check
+        // the absolute form.
         let cases = [
             ("a/p", "b/p", "demo/a", "z", "/demo/z/p", "/demo/b/p"),
             (
@@ -2322,40 +2243,9 @@ mod tests {
             ("a/p", "b/p", "demo/b", "y", "/demo/a/p", "/demo/y/p"),
         ];
         for (from, to, path, new_label, expect_from, expect_to) in cases {
-            let hcl = mutate(
-                "",
-                r#"{"kind":"add_component_definition","label":"cpu","options":{"leaf":true,"ports":[{"label":"p"}]}}"#,
-            )
-            .expect("ok")
-            .hcl
-            .expect("hcl");
-            let hcl = mutate(&hcl, r#"{"kind":"add_system","label":"demo"}"#)
-                .expect("ok")
-                .hcl
-                .expect("hcl");
-            let hcl = mutate(
-                &hcl,
-                r#"{"kind":"add_instance","parentPath":"demo","label":"a","source":"cpu"}"#,
-            )
-            .expect("ok")
-            .hcl
-            .expect("hcl");
-            let hcl = mutate(
-                &hcl,
-                r#"{"kind":"add_instance","parentPath":"demo","label":"b","source":"cpu"}"#,
-            )
-            .expect("ok")
-            .hcl
-            .expect("hcl");
-            let hcl = mutate(
-                &hcl,
-                &format!(
-                    r#"{{"kind":"add_connection","scopePath":"demo","label":"link","from":"{from}","to":"{to}"}}"#
-                ),
-            )
-            .expect("ok")
-            .hcl
-            .expect("hcl");
+            let hcl = format!(
+                "component \"cpu\" {{\n  leaf = true\n  port \"p\" {{}}\n}}\nsystem \"demo\" {{\n  instance \"a\" {{ source = \"cpu\" }}\n  instance \"b\" {{ source = \"cpu\" }}\n  connection \"link\" {{\n    from = \"{from}\"\n    to = \"{to}\"\n  }}\n}}\n"
+            );
 
             let renamed = mutate(
                 &hcl,
@@ -2416,7 +2306,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"outer/inner/p","to":"other/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"demo","label":"link","from":{"component":"outer/inner","port":{"existing":"p"}},"to":{"component":"other","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2467,7 +2357,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"outer-def","label":"sub","from":"x/p","to":"y/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"outer-def","label":"sub","from":{"component":"x","port":{"existing":"p"}},"to":{"component":"y","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2499,7 +2389,7 @@ mod tests {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"top","from":"a/p","to":"b/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"demo","label":"top","from":{"component":"a","port":{"existing":"p"}},"to":{"component":"b","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2715,7 +2605,7 @@ component "svc" {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"demo","label":"link","from":"a/p","to":"b/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"demo","label":"link","from":{"component":"a","port":{"existing":"p"}},"to":{"component":"b","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2944,7 +2834,7 @@ component "svc" {
         .expect("hcl");
         let hcl = mutate(
             &hcl,
-            r#"{"kind":"add_connection","scopePath":"bus","label":"link","from":"x/p","to":"x/p"}"#,
+            r#"{"kind":"connect_components","scopePath":"bus","label":"link","from":{"component":"x","port":{"existing":"p"}},"to":{"component":"x","port":{"existing":"p"}}}"#,
         )
         .expect("ok")
         .hcl
@@ -2966,26 +2856,6 @@ component "svc" {
         )
         .expect("ok");
         assert!(!missing.applied);
-    }
-
-    #[test]
-    fn add_connection_refuses_endpoints_without_port_path() {
-        for (from, to, field) in [
-            ("a", "b/in", "from"),
-            ("a/out", "b", "to"),
-            ("a", "b", "from"),
-        ] {
-            let json = format!(
-                r#"{{"kind":"add_connection","scopePath":"demo","label":"l","from":"{from}","to":"{to}"}}"#
-            );
-            let diagnostics = mutate("", &json).expect_err("must refuse");
-            assert!(
-                diagnostics.iter().any(|d| d.code == DiagnosticCode::E000
-                    && d.message.contains("requires a port path")
-                    && d.message.contains(field)),
-                "expected E000 port-path refusal for {from}/{to}, got: {diagnostics:?}"
-            );
-        }
     }
 
     const LINKED: &str = r#"
