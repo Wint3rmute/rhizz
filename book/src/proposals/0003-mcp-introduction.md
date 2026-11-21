@@ -123,8 +123,8 @@ one tool per op, with the op's name and parameters.
 
 > **Superseded:** the docs-only `create_doc` / `edit_documentation` tools
 > described below are replaced by generic `create_file` + `edit_file` file
-> tools (all paths, with model/view validation). `overwrite_model` and all
-> `ModelOp` tools stay untouched.
+> tools (all paths, with model/view validation). All `ModelOp` tools stay
+> untouched.
 
 Docs (`docs/**.md`) are plain Markdown, not HCL, so they are edited through a
 text-oriented interface rather than `ModelOp`s. The tools were:
@@ -166,7 +166,7 @@ text-oriented interface rather than `ModelOp`s. The tools were:
   ops. Replaced by generic `create_file` (whole-file create/overwrite, Zed
   `write_file` shape) + `edit_file` (granular `edits` array, Zed `edit_file`
   shape) covering every confined path: `.hcl` model files go through a full
-  compile (zero errors required, same gate as `overwrite_model`);
+  compile (zero errors required);
   `views/**.hcl` goes through `parse_views` + resolution (`E016`/`E006`/parse
   errors refuse, warnings pass through); all other paths skip validation.
   CAS stays mandatory (`version` required on overwrite/edit, ignored for
