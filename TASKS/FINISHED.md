@@ -4,6 +4,20 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — [Spike] `add_connection` vs `connect_components`: keep only `connect_components`
+
+- **Spike (caller matrix):** web prod (`newConnection.ts:430,460`) already `connect_components`-only; `WorkspaceHarness` `add-connection` test-only; e2e has no `add_connection`; MCP/core/history/actionLog tests mechanical. `connect_components` with `{existing}`/`{existing}` fully covers the bare path (reuse, `./port` delegation via `""`, `convertOuterToProxy`); `add_connection` adds nothing except a silent duplicate no-op (`applied_none`) vs `connect_components` refusal.
+- **Recommendation:** keep `connect_components`, full wipe of `add_connection` — no compat shim, no alias, breaking by design. Migration: `add_connection(scope,label,from="a/p",to="b/p")` -> `connect_components(scope,label,from={component:"a",port:{existing:"p"}},to={component:"b",port:{existing:"p"}})`.
+- **Core (`mutation.rs`, `connect.rs`, `model.rs`):** removed `ModelOp::AddConnection`, `LoggedAction::AddConnection`, dispatcher arm, `add_connection` + `require_port_path` + unused `applied_none`; migrated rename/contract tests to `connect_components` existing; legacy absolute/`./` endpoint spellings now seeded as raw HCL.
+- **MCP (`mcp.rs`):** removed `AddConnectionParams` + tool (23 -> 22 tools), updated `connect_components` description (`{existing}` path, no `add_connection` ref), `tool_name_for_op` arm, `every_model_op` (16 -> 15 mapped), `tools/list` gates, sibling disambiguation; deleted 3 bare-path tests, migrated 2 setup callers to `existing`/`existing`.
+- **TDD (red->green):** new `tools_call_connect_components_with_existing_ports_covers_delegation` + `tools_call_connect_components_with_unknown_existing_port_is_refused` pass before and after the wipe; existing `tools_call_connect_components_creates_connection_and_ports` already covered bare wiring. Core `mutation` 88 passed, server `mcp` 64 passed.
+- **Web (`actionLog.ts`, `applyMutation.ts`, `WorkspaceHarness.ts`, `simulation.test.ts`, `applyMutation.test.ts`, `actionLog.test.ts`):** removed `add_connection` op/action/harness type, migrated seeds to `connect_components` existing, dropped simulation `connect` generation.
+- **Docs:** `book/src/proposals/0003-mcp-introduction.md` table + connection-path + open-questions updated.
+- `cargo test -p rhizz-core -p rhizz-server` green, `web npm run test` green (1352 passed on re-run; one flaky simulation failure on first pass), `clippy`/`eslint`/`svelte-check` green, `just format` clean. Full `just test`/`lint`/`build` via CICD.
+- Branch: `spike/mcp-single-connection-tool`.
+
+---
+
 ## Task <N> — [Spike] Shorten MCP `version` hashes (16-char prefix, not 8)
 
 - **Spike:** 8-char truncate-and-compare is unsafe — per-write false-accept 2^-32 (~2.3e-10), birthday among ~100k distinct contents ~1% (examples today: 6 projects / 47 files; realistic servers <1000 projects x <100 files). Display-shortening (compare full 64, transmit 8) needs a version-history DB the stateless server doesn't have (breaks after restart/outside git edit). 16-char (64-bit) keeps 75% of the saving (64 -> 16) with negligible risk: per-write 2^-64 (~5.4e-20), birthday 100k ~2.7e-10, 1M trees ~2.7e-8. Recommendation: 16-char truncate-and-compare.

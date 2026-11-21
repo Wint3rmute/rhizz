@@ -16,33 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [Spike] `add_connection` vs `connect_components`: keep only one
-
-Audit finding (`tool-design.md` 15–30 band): two ways to create a connection.
-`add_connection` (bare `from`/`to` strings, ports must pre-exist) vs
-`connect_components` (structured ends, creates ports + stub protocol
-atomically). Keeping both doubles the schema tokens and forces the model to
-choose with no guidance.
-
-Scope (spike first):
-- Compare callers: web frontend, e2e, MCP tests — does anything need the bare
-  path that the atomic op cannot cover (e.g. wiring pre-existing ports without
-  touching them is already `{existing: label}` — confirm no gap)?
-- Recommendation: keep `connect_components` (+ optional convenience?) and
-  remove `add_connection`, or vice versa with a migration note. Deleting a
-  tool is breaking for MCP clients — check the MCP tests + book/proposals for
-  references first.
-
-Definition of done:
-- Spike note (caller matrix, recommendation, breaking-change surface).
-- If consolidated: remove the tool, its params struct, and tests; update
-  descriptions that reference it; red/green RPC tests proving the kept path
-  covers the removed one's cases.
-- `just test`, `just lint`, `just build` green.
-- Suggested branch: `spike/mcp-single-connection-tool`.
-
----
-
 ## Task <N> — [Spike] `overwrite_model` vs `create_file` on `system.hcl`: keep or split
 
 Audit finding: two whole-file write paths to the same primary file with
