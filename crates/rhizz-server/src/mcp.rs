@@ -518,7 +518,7 @@ struct OverwriteModelParams {
     /// `main.hcl`). It is parsed and resolved; on resolver errors nothing is
     /// written.
     content: String,
-    /// The content-hash `version` `read_file` returned for the primary file.
+    /// The short content-hash `version` `read_file` returned for the primary file.
     /// Required when the file already exists (compare-and-swap overwrite);
     /// ignored when no primary file exists yet.
     version: Option<String>,
@@ -534,7 +534,7 @@ struct CreateFileParams {
     path: String,
     /// The whole file content to write.
     content: String,
-    /// The content-hash `version` `read_file` returned for the file. Required
+    /// The short content-hash `version` `read_file` returned for the file. Required
     /// when the file already exists (compare-and-swap overwrite); ignored
     /// when creating a new file.
     version: Option<String>,
@@ -558,7 +558,7 @@ struct EditFileParams {
     path: String,
     /// Granular edits applied sequentially in order.
     edits: Vec<FileEditJson>,
-    /// The content-hash `version` `read_file` returned for the file.
+    /// The short content-hash `version` `read_file` returned for the file.
     version: String,
 }
 
@@ -572,7 +572,7 @@ impl RhizzMcp {
         name = "fetch_projects",
         title = "List projects",
         annotations(title = "List projects", read_only_hint = true),
-        description = "List Rhizz projects on this server (id, name, createdAt, updatedAt), most recently updated first, 10 per page. Pass the 1-based `page` to request a specific page (omitted means page 1). The result reports `page`, `pageSize`, `totalProjects`, and `totalPages`. Every entry also carries the content-hash `version` and the lock holder (`lockedBy`, if any), so an AI loop sees staleness without another call."
+        description = "List Rhizz projects on this server (id, name, createdAt, updatedAt), most recently updated first, 10 per page. Pass the 1-based `page` to request a specific page (omitted means page 1). The result reports `page`, `pageSize`, `totalProjects`, and `totalPages`. Every entry also carries the short content-hash `version` and the lock holder (`lockedBy`, if any), so an AI loop sees staleness without another call."
     )]
     async fn fetch_projects(
         &self,
@@ -695,7 +695,7 @@ impl RhizzMcp {
         name = "list_files",
         title = "List project files",
         annotations(title = "List project files", read_only_hint = true),
-        description = "List the files of one Rhizz project: pass the project id from fetch_projects. Returns `files` as JSON objects with `path` and `kind` (\"file\" or \"directory\"); files also carry the mtime-based `revision` and a content-hash `version`. The result also carries the project-level content-hash `version` and the lock holder (`lockedBy`, if any). An unknown project is reported as a tool error."
+        description = "List the files of one Rhizz project: pass the project id from fetch_projects. Returns `files` as JSON objects with `path` and `kind` (\"file\" or \"directory\"); files also carry the mtime-based `revision` and a short content-hash `version`. The result also carries the project-level short content-hash `version` and the lock holder (`lockedBy`, if any). An unknown project is reported as a tool error."
     )]
     async fn list_files(
         &self,
@@ -782,7 +782,7 @@ impl RhizzMcp {
         name = "read_file",
         title = "Read project file",
         annotations(title = "Read project file", read_only_hint = true),
-        description = "Read a window of lines of a file in a Rhizz project: pass the project id, a path relative to the project root, a 0-based `offset` (default 0) and a `limit` (default 100, maximum 500). Returns the lines, `totalLines`, and a content-hash `version` that changes whenever the file changes. Reading a directory or a missing path is a tool error."
+        description = "Read a window of lines of a file in a Rhizz project: pass the project id, a path relative to the project root, a 0-based `offset` (default 0) and a `limit` (default 100, maximum 500). Returns the lines, `totalLines`, and a short content-hash `version` that changes whenever the file changes. Reading a directory or a missing path is a tool error."
     )]
     async fn read_file(
         &self,
@@ -858,7 +858,7 @@ impl RhizzMcp {
         name = "check_project",
         title = "Check project",
         annotations(title = "Check project", read_only_hint = true),
-        description = "Compile one Rhizz project (as `rhizz check` would) and return its `diagnostics` (code, severity, file, line, message) and the completion `score` when the model resolved. Pass the project id from fetch_projects. The result also carries the project-level content-hash `version` and the lock holder (`lockedBy`, if any)."
+        description = "Compile one Rhizz project (as `rhizz check` would) and return its `diagnostics` (code, severity, file, line, message) and the completion `score` when the model resolved. Pass the project id from fetch_projects. The result also carries the project-level short content-hash `version` and the lock holder (`lockedBy`, if any)."
     )]
     async fn check_project(
         &self,
@@ -1873,7 +1873,7 @@ fn log_tool_call(
 }
 
 /// The lock/version tail appended to read-tool payloads so an AI loop sees
-/// staleness without another call: the content-hash `version` plus who holds
+/// staleness without another call: the short content-hash `version` plus who holds
 /// the lock (`lockedBy`, and `lockExpiresAt` when held).
 fn lock_state(
     locks: &crate::locks::LockManager,
@@ -2595,7 +2595,7 @@ mod tests {
             .unwrap();
         assert_eq!(system["kind"], json!("file"));
         assert!(system["revision"].is_u64());
-        assert_eq!(system["version"].as_str().unwrap().len(), 64);
+        assert_eq!(system["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
 
         let views = files.iter().find(|f| f["path"] == json!("views")).unwrap();
         assert_eq!(views["kind"], json!("directory"));
@@ -2639,7 +2639,7 @@ mod tests {
         assert_eq!(result["totalLines"], json!(4));
         assert_eq!(result["lines"], json!(["line two", "line three"]));
         let version = result["version"].as_str().unwrap().to_owned();
-        assert_eq!(version.len(), 64);
+        assert_eq!(version.len(), crate::storage::VERSION_LEN);
 
         // The version stays equal while content is unchanged and flips with it.
         let again = call_tool(
@@ -3179,7 +3179,7 @@ mod tests {
         let state: Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(state["lockedBy"], json!("AI"));
         assert!(state["lockExpiresAt"].as_str().is_some());
-        assert_eq!(state["version"].as_str().unwrap().len(), 64);
+        assert_eq!(state["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
     }
 
     #[tokio::test]
@@ -4105,7 +4105,7 @@ mod tests {
             .unwrap();
     }
 
-    /// Reads a file's content-hash `version` through the `read_file` tool, the
+    /// Reads a file's short content-hash `version` through the `read_file` tool, the
     /// same value `create_file`/`edit_file` require.
     async fn read_file_version(app: &Router, session: &str, id: i64, path: &str) -> String {
         let payload = call_tool(
@@ -4150,7 +4150,7 @@ mod tests {
         let content = std::fs::read_to_string(tmp.path().join("demo/docs/note.md")).unwrap();
         assert_eq!(content, "# Note\n\nALPHA\n\nbeta\n");
         assert_eq!(result["totalLines"], json!(content.lines().count()));
-        assert_eq!(result["version"].as_str().unwrap().len(), 64);
+        assert_eq!(result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
         assert_ne!(result["version"], json!(version));
         assert!(result.get("warnings").is_some());
     }
@@ -4499,7 +4499,7 @@ mod tests {
         assert_ne!(created["result"]["isError"], json!(true), "{created}");
         let created_result = result_value(&created);
         assert_eq!(created_result["totalLines"], json!(3));
-        assert_eq!(created_result["version"].as_str().unwrap().len(), 64);
+        assert_eq!(created_result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
 
         let path = tmp.path().join("demo/docs/guides/getting-started.md");
         let content = std::fs::read_to_string(&path).unwrap();
@@ -4900,7 +4900,7 @@ mod tests {
         );
     }
 
-    /// Reads the primary model file's content-hash `version` through the
+    /// Reads the primary model file's short content-hash `version` through the
     /// `read_file` tool, the same value `overwrite_model` requires.
     async fn read_model_version(app: &Router, session: &str, id: i64) -> String {
         let payload = call_tool(
@@ -4944,7 +4944,7 @@ mod tests {
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         assert_eq!(result["applied"], json!(true));
-        assert_eq!(result["version"].as_str().unwrap().len(), 64);
+        assert_eq!(result["version"].as_str().unwrap().len(), crate::storage::VERSION_LEN);
 
         let stored = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
         assert!(

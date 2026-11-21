@@ -476,13 +476,13 @@ pub enum ProjectEntry {
     /// A regular file in the project.
     ///
     /// Carries the same mtime-derived `revision` the VFS uses plus a
-    /// content-hash `version`.
+    /// short content-hash `version`.
     File {
         /// The project-relative path of the file.
         path: String,
         /// The mtime-derived revision, the same value the VFS reports.
         revision: u64,
-        /// The content-hash version (see [`file_version`]).
+        /// The short content-hash version (see [`file_version`]).
         version: String,
     },
 }
@@ -633,6 +633,19 @@ pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, Co
     Ok(resolved)
 }
 
+/// Length of every wire `version` string: 16 hex chars, i.e. a 64-bit prefix
+/// of SHA-256.
+///
+/// 8 chars (32-bit, like short git hashes) is collision-prone at scale:
+/// a per-write false-accept rate of 2^-32 (~2.3e-10) and a birthday
+/// collision among ~100k distinct contents with ~1% probability. 16 chars
+/// keeps 75% of the payload saving (64 -> 16) while making collisions
+/// cryptographically negligible: per-write 2^-64 (~5.4e-20), birthday among
+/// 100k contents ~2.7e-10, among 1M historic trees ~2.7e-8. The server is
+/// stateless (no version-history DB for re-expansion), so truncate-and-compare
+/// on 64 bits is the safe wire format.
+pub const VERSION_LEN: usize = 16;
+
 /// Hex-encodes a SHA-256 digest (64 lowercase chars).
 fn hex_digest(digest: &[u8]) -> String {
     const HEX: [u8; 16] = *b"0123456789abcdef";
@@ -646,20 +659,22 @@ fn hex_digest(digest: &[u8]) -> String {
     out
 }
 
-/// The MCP file `version`: hex SHA-256 of the file's content.
+/// The MCP file `version`: 16-char prefix of hex SHA-256 of the file's content.
 ///
 /// Step 3's compare-and-swap edits key off this value, so it is deliberately
 /// not the mtime-based `revision` the VFS uses — a rewrite that preserves
-/// content leaves it unchanged, and any content change flips it.
+/// content leaves it unchanged, and any content change flips it (up to a
+/// 2^-64 prefix collision, negligible at this scale — see [`VERSION_LEN`]).
 #[must_use]
 pub fn file_version(content: &str) -> String {
     use sha2::{Digest, Sha256};
 
-    hex_digest(&Sha256::digest(content.as_bytes()))
+    let full = hex_digest(&Sha256::digest(content.as_bytes()));
+    full[..VERSION_LEN].to_owned()
 }
 
-/// Hashes walked entries into the project version: SHA-256 over every
-/// file's project-relative path and content, sorted by path.
+/// Hashes walked entries into the project version: 16-char prefix of SHA-256
+/// over every file's project-relative path and content, sorted by path.
 fn hash_found_entries(project_id: &str, found: &[Found]) -> String {
     use sha2::{Digest, Sha256};
 
@@ -681,11 +696,12 @@ fn hash_found_entries(project_id: &str, found: &[Found]) -> String {
         hasher.update(content.as_bytes());
         hasher.update([0u8]);
     }
-    hex_digest(&hasher.finalize())
+    let full = hex_digest(&hasher.finalize());
+    full[..VERSION_LEN].to_owned()
 }
 
-/// The content-hash version of a whole project: SHA-256 over every file's
-/// project-relative path and content, sorted by path.
+/// The content-hash version of a whole project: 16-char prefix of SHA-256
+/// over every file's project-relative path and content, sorted by path.
 ///
 /// Watchers poll this to follow the editor: any outside edit (git, a text
 /// editor on the data dir) flips it, while a content-preserving rewrite
@@ -3054,10 +3070,116 @@ mod tests {
     #[test]
     fn file_version_is_stable_and_content_sensitive() {
         let version = file_version("system \"s\" {}\n");
-        assert_eq!(version.len(), 64, "hex SHA-256 is 64 chars");
+        assert_eq!(version.len(), VERSION_LEN, "short SHA-256 prefix is 16 chars");
         assert_eq!(file_version("system \"s\" {}\n"), version);
         assert_ne!(file_version("system \"s\" {}"), version);
         assert_ne!(file_version(""), version);
+    }
+
+    #[test]
+    fn file_version_is_the_sha256_prefix() {
+        // Empty string has a well-known SHA-256; the wire version must be its
+        // first 16 hex chars. Guards against accidentally returning a hash of
+        // something else (e.g. path + content) from `file_version`.
+        assert_eq!(file_version(""), "e3b0c44298fc1c14");
+    }
+
+    #[test]
+    fn short_versions_refuse_an_8char_prefix_collision() {
+        use sha2::{Digest, Sha256};
+        use std::collections::HashMap;
+
+        fn full_sha256_hex(content: &str) -> String {
+            const HEX: [u8; 16] = *b"0123456789abcdef";
+            let digest = Sha256::digest(content.as_bytes());
+            let mut out = String::with_capacity(64);
+            for byte in digest {
+                out.push(char::from(HEX[usize::from(byte >> 4)]));
+                out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+            }
+            out
+        }
+
+        // Find two distinct contents whose first 8 hex chars collide but whose
+        // full SHA-256 differs: an 8-char wire format would let a stale write
+        // through here, a 16-char one must still refuse.
+        let mut seen: HashMap<String, (usize, String)> = HashMap::new();
+        let mut pair: Option<(String, String)> = None;
+        for i in 0..200_000usize {
+            let content = format!("collision-probe-{i}\n");
+            let full = full_sha256_hex(&content);
+            let short8 = full[..8].to_owned();
+            if let Some((prev_i, prev_full)) = seen.get(&short8) {
+                if *prev_full != full {
+                    let prev_content = format!("collision-probe-{prev_i}\n");
+                    pair = Some((prev_content, content));
+                    break;
+                }
+            } else {
+                seen.insert(short8, (i, full));
+            }
+        }
+        let (first_content, second_content) =
+            pair.expect("must find an 8-char SHA-256 collision within 200k probes");
+        let first_full = full_sha256_hex(&first_content);
+        let second_full = full_sha256_hex(&second_content);
+        assert_eq!(
+            &first_full[..8],
+            &second_full[..8],
+            "test setup: 8-char prefixes must collide"
+        );
+        assert_ne!(
+            first_full, second_full,
+            "test setup: full hashes must differ"
+        );
+        let first_version = file_version(&first_content);
+        let second_version = file_version(&second_content);
+        assert_eq!(
+            first_version.len(),
+            VERSION_LEN,
+            "wire versions are {VERSION_LEN} chars"
+        );
+        assert_ne!(
+            first_version, second_version,
+            "test setup: 16-char wire versions must differ on an 8-char collision"
+        );
+
+        // Stale write with the first version after the file moved to the
+        // second content must be refused byte-identical.
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/docs/collide.md"),
+            &first_content,
+        );
+        assert_eq!(
+            file_version(&first_content),
+            first_version,
+            "fixture content must hash to the probed version"
+        );
+        // Outside edit (git, editor) flips the file without going through CAS.
+        write_file(
+            &dir.path().join("drone/docs/collide.md"),
+            &second_content,
+        );
+        let locks = crate::locks::LockManager::new();
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/collide.md",
+            "v3\n",
+            Some(&first_version),
+        );
+        assert!(
+            matches!(refused, Err(FileWriteError::Refused(_))),
+            "8-char-colliding stale version must still be refused: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/collide.md")).unwrap(),
+            second_content,
+            "refused writes must not touch the file"
+        );
     }
 
     #[test]
@@ -3065,7 +3187,7 @@ mod tests {
         let dir = data_dir_with_drone();
         let first = project_version(dir.path(), "drone").unwrap();
         let second = project_version(dir.path(), "drone").unwrap();
-        assert_eq!(first.len(), 64, "hex SHA-256 is 64 chars");
+        assert_eq!(first.len(), VERSION_LEN, "short SHA-256 prefix is 16 chars");
         assert_eq!(first, second);
     }
 
@@ -3135,8 +3257,8 @@ mod tests {
 
         let notes = project_version(dir.path(), "notes").unwrap();
         let empty = project_version(dir.path(), "empty").unwrap();
-        assert_eq!(notes.len(), 64);
-        assert_eq!(empty.len(), 64);
+        assert_eq!(notes.len(), VERSION_LEN);
+        assert_eq!(empty.len(), VERSION_LEN);
         assert_ne!(notes, empty);
         assert_ne!(empty, project_version(dir.path(), "drone").unwrap());
     }
@@ -3170,7 +3292,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(version.len(), 64);
+        assert_eq!(version.len(), VERSION_LEN);
         assert_eq!(version, project_version(dir.path(), "drone").unwrap());
         assert_eq!(
             fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
@@ -3607,7 +3729,7 @@ mod tests {
         let result = overwrite_model(dir.path(), &locks, "drone", "alice", fixed, Some(&version))
             .expect("valid content must apply");
         let stored = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
-        assert_eq!(result.version.len(), 64);
+        assert_eq!(result.version.len(), VERSION_LEN);
         assert_eq!(result.total_lines, stored.lines().count());
         assert!(
             stored.contains("full_name"),
@@ -3686,7 +3808,7 @@ mod tests {
             &version,
         )
         .expect("the holder's edit must apply");
-        assert_eq!(applied.version.len(), 64);
+        assert_eq!(applied.version.len(), VERSION_LEN);
         assert_eq!(
             locks.get("drone").expect("lock must be held").holder,
             "alice"
@@ -3709,7 +3831,7 @@ mod tests {
         )
         .expect("new file must be created");
         assert_eq!(created.total_lines, 3);
-        assert_eq!(created.version.len(), 64);
+        assert_eq!(created.version.len(), VERSION_LEN);
 
         let extended = edit_file(
             dir.path(),
@@ -3760,7 +3882,7 @@ mod tests {
                 "alice",
                 "docs/plan.md",
                 "v2\n",
-                Some("0".repeat(64).as_str())
+                Some("0".repeat(VERSION_LEN).as_str())
             ),
             Err(FileWriteError::Refused(_))
         ));
@@ -3775,7 +3897,7 @@ mod tests {
                     old_text: "v1".to_owned(),
                     new_text: "v2".to_owned(),
                 }],
-                "0".repeat(64).as_str()
+                "0".repeat(VERSION_LEN).as_str()
             ),
             Err(FileWriteError::Refused(_))
         ));
@@ -3922,7 +4044,7 @@ mod tests {
             Some(&view_version),
         )
         .expect("valid view must apply");
-        assert_eq!(applied.version.len(), 64);
+        assert_eq!(applied.version.len(), VERSION_LEN);
 
         // Non-HCL writes skip validation entirely.
         let applied = create_file(
@@ -3996,7 +4118,7 @@ mod tests {
                 "drone",
                 "alice",
                 fixed,
-                Some("0".repeat(64).as_str())
+                Some("0".repeat(VERSION_LEN).as_str())
             ),
             Err(OverwriteModelError::Refused(_))
         ));

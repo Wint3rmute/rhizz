@@ -350,7 +350,7 @@ fn lock_expiry_response(expires_at: std::time::SystemTime) -> Value {
     )))
 }
 
-/// Handles `GET /api/projects/{id}/state`: the project's content-hash
+/// Handles `GET /api/projects/{id}/state`: the project's short content-hash
 /// version plus who holds its lock, if anyone. Watchers poll this to follow
 /// the editor; edits made outside the web app (git, a text editor on the
 /// data dir) show up as a version change.
