@@ -1,7 +1,12 @@
 ## Unreleased
 
+### BREAKING CHANGE
+
+- overwrite_model removed; use create_file with path system.hcl or main.hcl instead
+
 ### Feat
 
+- **mcp**: remove overwrite_model, keep create_file as single whole-file write
 - **server**: shorten MCP versions to 16-char SHA-256 prefix
 - **server**: add title and safety hints to MCP tools
 - set external on delegation conversion in the same dialog
