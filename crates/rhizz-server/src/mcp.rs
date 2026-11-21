@@ -3,12 +3,14 @@
 //! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
 //! `read_file`, `check_project`, the step-2 structural mutation tools, and
-//! the generic `create_file` + `edit_file` file tools. Reads only touch the
-//! data dir; mutations load the project's single primary file (`system.hcl`),
-//! apply one `rhizz_core::ModelOp` through `mutate_to_hcl`, and write the
-//! canonical HCL back atomically. File writes replace whole files or exact
-//! spans under a compare-and-swap version guard, with compile validation for
-//! `.hcl` paths. A refused op leaves the file untouched.
+//! the generic `create_file` + `edit_file` file tools, plus read-only
+//! resources (`file://{project}/{path}` for file contents,
+//! `project://{project}/version` for the project CAS version). Reads only
+//! touch the data dir; mutations load the project's single primary file
+//! (`system.hcl`), apply one `rhizz_core::ModelOp` through `mutate_to_hcl`,
+//! and write the canonical HCL back atomically. File writes replace whole
+//! files or exact spans under a compare-and-swap version guard, with compile
+//! validation for `.hcl` paths. A refused op leaves the file untouched.
 //!
 //! This is a POC: there is no authentication. Writes take the project lock
 //! as the hardcoded `AI` user (proposal 0004): a project held by a human is
@@ -23,8 +25,11 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CacheScope, ContentBlock,
+    Implementation, ListResourceTemplatesResult, ListResourcesResult, ListToolsResult,
+    MetaObject, PaginatedRequestParams, ReadResourceRequestParams, ReadResourceResponse,
+    ReadResourceResult, ResourceContents, ResourceTemplate, ServerCapabilities, ServerConfig,
+    Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, tool, tool_router};
@@ -1928,13 +1933,167 @@ fn score_json(report: &rhizz_core::ScoreReport) -> Value {
     })
 }
 
+/// URI template for whole-file reads: `file://{project}/{path}` (also
+/// accepted as `file:///{project}/{path}` with an empty host).
+const FILE_RESOURCE_TEMPLATE: &str = "file://{project}/{path}";
+
+/// URI template for the project CAS version: `project://{project}/version`.
+const VERSION_RESOURCE_TEMPLATE: &str = "project://{project}/version";
+
+/// `resources/read` freshness: files flip on every write, so results are
+/// immediately stale and must be revalidated; private because versions are
+/// per-project loop state, not shared public data.
+const RESOURCE_TTL_MS: u64 = 0;
+
+/// Split `file://{project}/{path}` (or `file:///{project}/{path}`) into
+/// `(project, path)`. Query (`?…`) and fragment (`#…`) are stripped: resource
+/// reads are whole-file, windowing stays on `read_file`.
+fn parse_file_uri(uri: &str) -> Option<(String, String)> {
+    let rest = uri.strip_prefix("file://")?;
+    let rest = rest.split('#').next().unwrap_or("").split('?').next().unwrap_or("");
+    let rest = rest.trim_start_matches('/');
+    let (project, path) = rest.split_once('/')?;
+    if project.is_empty() || path.is_empty() {
+        return None;
+    }
+    Some((project.to_owned(), path.to_owned()))
+}
+
+/// Split `project://{project}/version` into the project id.
+fn parse_version_uri(uri: &str) -> Option<String> {
+    let rest = uri.strip_prefix("project://")?;
+    let rest = rest.split('#').next().unwrap_or("").split('?').next().unwrap_or("");
+    let rest = rest.trim_start_matches('/');
+    let (project, tail) = rest.split_once('/')?;
+    if project.is_empty() || tail != "version" {
+        return None;
+    }
+    Some(project.to_owned())
+}
+
+/// `_meta` map carrying the quotable CAS `version` (plus extras) so a model
+/// can round-trip a resource read into the next tool write.
+fn version_meta(version: &str, extra: &[(&str, Value)]) -> MetaObject {
+    let mut map = serde_json::Map::new();
+    map.insert("version".to_owned(), Value::String(version.to_owned()));
+    for (key, value) in extra {
+        map.insert((*key).to_owned(), value.clone());
+    }
+    MetaObject(map)
+}
+
+/// Whole-file read behind `file://{project}/{path}`: same storage gates as
+/// the `read_file` tool (confined path, hidden/symlink exclusions, regular
+/// file only, 4MB cap), full content, MIME guessed from the path.
+fn read_file_resource(
+    data_dir: &std::path::Path,
+    uri: &str,
+    project: &str,
+    rel: &str,
+) -> Result<ReadResourceResult, ErrorData> {
+    let not_found = |msg: String| ErrorData::resource_not_found(msg, None);
+    let root = match storage::resolve_project(data_dir, project) {
+        Ok(root) => root,
+        Err(storage::ProjectError::Unknown(id)) => {
+            return Err(not_found(format!("unknown project `{id}`")));
+        }
+        Err(storage::ProjectError::Io(_)) => {
+            return Err(ErrorData::internal_error("failed to read project", None));
+        }
+    };
+    let absolute = storage::resolve_confined_path(&root, std::path::Path::new(rel))
+        .map_err(|err| not_found(err.to_string()))?;
+    let Ok(metadata) = std::fs::symlink_metadata(&absolute) else {
+        return Err(not_found("cannot read path".to_owned()));
+    };
+    if !metadata.is_file() {
+        return Err(not_found("path is not a regular file".to_owned()));
+    }
+    if metadata.len() > READ_FILE_MAX_BYTES {
+        return Err(not_found(format!(
+            "file is {} bytes, over the {READ_FILE_MAX_BYTES}-byte read limit",
+            metadata.len()
+        )));
+    }
+    let Ok(content) = std::fs::read_to_string(&absolute) else {
+        return Err(not_found("cannot read path".to_owned()));
+    };
+    let version = storage::file_version(&content);
+    let total_lines = content.lines().count();
+    let mime_type = mime_guess::from_path(rel).first_or_octet_stream().to_string();
+    let meta = version_meta(
+        &version,
+        &[("totalLines", Value::from(total_lines))],
+    );
+    let contents = ResourceContents::TextResourceContents {
+        uri: uri.to_owned(),
+        mime_type: Some(mime_type),
+        text: content,
+        meta: Some(meta),
+    };
+    Ok(ReadResourceResult::new(vec![contents])
+        .with_ttl_ms(RESOURCE_TTL_MS)
+        .with_cache_scope(CacheScope::Private))
+}
+
+/// Project-version read behind `project://{project}/version`: the same short
+/// content-hash `project_version` the tools echo, plus the lock holder, as
+/// JSON text so it stays quotable even where clients hide `_meta`.
+fn read_version_resource(
+    data_dir: &std::path::Path,
+    locks: &crate::locks::LockManager,
+    uri: &str,
+    project: &str,
+) -> Result<ReadResourceResult, ErrorData> {
+    let not_found = |msg: String| ErrorData::resource_not_found(msg, None);
+    let version = match storage::project_version(data_dir, project) {
+        Ok(version) => version,
+        Err(storage::ProjectError::Unknown(id)) => {
+            return Err(not_found(format!("unknown project `{id}`")));
+        }
+        Err(storage::ProjectError::Io(_)) => {
+            return Err(ErrorData::internal_error("failed to read project", None));
+        }
+    };
+    let mut payload = serde_json::Map::new();
+    payload.extend(lock_state(locks, project, version.clone()));
+    let text = serde_json::to_string(&Value::Object(payload)).map_err(|_| {
+        ErrorData::internal_error("failed to encode version", None)
+    })?;
+    let meta = version_meta(&version, &[]);
+    let contents = ResourceContents::TextResourceContents {
+        uri: uri.to_owned(),
+        mime_type: Some("application/json".to_owned()),
+        text,
+        meta: Some(meta),
+    };
+    Ok(ReadResourceResult::new(vec![contents])
+        .with_ttl_ms(RESOURCE_TTL_MS)
+        .with_cache_scope(CacheScope::Private))
+}
+
 /// Hand-written rather than `#[tool_handler]`: the macro generates `async`
 /// trait methods without `.await`, which trips `clippy::unused_async`. The
 /// methods return futures directly, matching the trait signatures.
+///
+/// Resources (spike `spike/mcp-file-resources`): `file://{project}/{path}`
+/// serves a whole project file (same confinement/4MB-cap rules as
+/// `read_file`, full content, no windowing), and
+/// `project://{project}/version` serves the project CAS version as JSON.
+/// Both carry the quotable short content-hash `version` in `_meta` so a
+/// model can round-trip it into the next tool write; `read_file` remains
+/// the canonical CAS source (version in-band, windowed, reliably quoted).
+/// `resources/list` is intentionally empty (files are dynamic, templates
+/// cover reads); `resources/templates/list` advertises the two templates.
 impl ServerHandler for RhizzMcp {
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("rhizz", env!("CARGO_PKG_VERSION")))
+        ServerConfig::new(
+            ServerCapabilities::builder()
+                .enable_tools()
+                .enable_resources()
+                .build(),
+        )
+        .with_server_info(Implementation::new("rhizz", env!("CARGO_PKG_VERSION")))
     }
 
     fn call_tool(
@@ -1968,6 +2127,78 @@ impl ServerHandler for RhizzMcp {
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
         self.tool_router.get(name).cloned()
+    }
+
+    fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListResourcesResult, ErrorData>> + MaybeSendFuture + '_ {
+        // No concrete enumeration: project files are dynamic, and the two
+        // templates below cover reads. Keeps `resources/list` cheap.
+        std::future::ready(Ok(ListResourcesResult::with_all_items(vec![])
+            .with_ttl_ms(RESOURCE_TTL_MS)
+            .with_cache_scope(CacheScope::Private)))
+    }
+
+    fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ListResourceTemplatesResult, ErrorData>> + MaybeSendFuture + '_
+    {
+        let files = ResourceTemplate::new(FILE_RESOURCE_TEMPLATE, "project-file")
+            .with_title("Project file")
+            .with_description(
+                "Read a whole project file (same confinement/hidden/symlink/4MB-cap rules as read_file; no windowing, full content up to the cap; quotable short content-hash version in _meta).",
+            );
+        let version = ResourceTemplate::new(VERSION_RESOURCE_TEMPLATE, "project-version")
+            .with_title("Project version")
+            .with_description(
+                "Project-level short content-hash version plus lock holder as JSON (same version the tools echo; use for staleness checks).",
+            )
+            .with_mime_type("application/json");
+        std::future::ready(Ok(
+            ListResourceTemplatesResult::with_all_items(vec![files, version])
+                .with_ttl_ms(RESOURCE_TTL_MS)
+                .with_cache_scope(CacheScope::Private),
+        ))
+    }
+
+    fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<ReadResourceResponse, ErrorData>> + MaybeSendFuture + '_ {
+        let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
+        let uri = request.uri;
+        async move {
+            // Spawn blocking I/O off the async runtime, like the tools do.
+            let data_dir_inner = data_dir.clone();
+            let locks_inner = locks.clone();
+            let uri_inner = uri.clone();
+            let loaded = tokio::task::spawn_blocking(move || {
+                if let Some((project, path)) = parse_file_uri(&uri_inner) {
+                    return read_file_resource(&data_dir_inner, &uri_inner, &project, &path);
+                }
+                if let Some(project) = parse_version_uri(&uri_inner) {
+                    return read_version_resource(&data_dir_inner, &locks_inner, &uri_inner, &project);
+                }
+                Err(ErrorData::resource_not_found(
+                    format!("unknown resource `{uri_inner}`"),
+                    None,
+                ))
+            })
+            .await;
+            match loaded {
+                Ok(result) => result.map(ReadResourceResponse::Complete),
+                Err(err) => {
+                    tracing::error!(?err, "read_resource: loader task failed");
+                    Err(ErrorData::internal_error("failed to read resource", None))
+                }
+            }
+        }
     }
 }
 
@@ -5147,5 +5378,211 @@ mod tests {
             std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap(),
             before
         );
+    }
+
+    /// Calls `resources/read` and returns the full JSON-RPC payload.
+    async fn call_read_resource(app: &Router, session: &str, id: i64, uri: &str) -> Value {
+        let call = json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "method": "resources/read",
+            "params": { "uri": uri }
+        });
+        let (status, _, payload) = post_rpc(app, &call, Some(session)).await;
+        assert_eq!(status, StatusCode::OK);
+        payload.expect("resources/read must reply")
+    }
+
+    #[tokio::test]
+    async fn resources_templates_list_advertises_file_and_version() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let list = json!({ "jsonrpc": "2.0", "id": 600, "method": "resources/templates/list" });
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("templates/list must reply");
+        let templates = payload["result"]["resourceTemplates"].as_array().unwrap();
+        let mut names: Vec<&str> = templates
+            .iter()
+            .filter_map(|t| t["name"].as_str())
+            .collect();
+        names.sort_unstable();
+        assert_eq!(names, vec!["project-file", "project-version"]);
+
+        let by_name = |name: &str| {
+            templates
+                .iter()
+                .find(|t| t["name"] == json!(name))
+                .unwrap_or_else(|| panic!("template `{name}` must be listed"))
+        };
+        let files = by_name("project-file");
+        assert_eq!(files["uriTemplate"], json!("file://{project}/{path}"));
+        assert!(files["description"].as_str().unwrap().contains("read_file"));
+
+        let version = by_name("project-version");
+        assert_eq!(version["uriTemplate"], json!("project://{project}/version"));
+        assert_eq!(version["mimeType"], json!("application/json"));
+    }
+
+    #[tokio::test]
+    async fn resources_list_is_empty_but_enabled() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_drone_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let list = json!({ "jsonrpc": "2.0", "id": 601, "method": "resources/list" });
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
+        assert_eq!(status, StatusCode::OK);
+        let payload = payload.expect("resources/list must reply");
+        // No concrete enumeration: templates cover reads, listing stays cheap.
+        assert_eq!(payload["result"]["resources"], json!([]));
+    }
+
+    #[tokio::test]
+    async fn resources_read_file_returns_full_content_with_version_meta() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_read_resource(&app, &session, 602, "file://drone/system.hcl").await;
+        assert!(payload.get("error").is_none(), "{payload}");
+        let contents = payload["result"]["contents"].as_array().unwrap();
+        assert_eq!(contents.len(), 1);
+        let first = &contents[0];
+        assert_eq!(first["uri"], json!("file://drone/system.hcl"));
+        assert!(first["text"].as_str().unwrap().contains("line one"));
+        assert!(first["mimeType"].as_str().is_some(), "{first}");
+
+        let meta = &first["_meta"];
+        let version = meta["version"].as_str().unwrap().to_owned();
+        assert_eq!(version.len(), crate::storage::VERSION_LEN);
+        assert_eq!(meta["totalLines"], json!(4));
+
+        // Same version the tool reports, both flip on write.
+        let tool = call_tool(
+            &app,
+            &session,
+            603,
+            "read_file",
+            json!({ "project": "drone", "path": "system.hcl" }),
+        )
+        .await;
+        assert_eq!(result_value(&tool)["version"], json!(version));
+
+        // Triple-slash form with an empty host reads the same file.
+        let triple =
+            call_read_resource(&app, &session, 604, "file:///drone/system.hcl").await;
+        assert!(triple.get("error").is_none(), "{triple}");
+        assert_eq!(
+            triple["result"]["contents"][0]["_meta"]["version"],
+            json!(version)
+        );
+    }
+
+    #[tokio::test]
+    async fn resources_read_file_refuses_confinement_caps_and_missing() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        let big = vec![b'a'; usize::try_from(READ_FILE_MAX_BYTES).unwrap() + 1];
+        std::fs::write(tmp.path().join("drone/big.hcl"), big).unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        for (i, uri) in [
+            "file://drone/../outside",
+            "file://drone/.hidden",
+            "file://drone/linked.hcl",
+            "file://drone/views",
+            "file://drone/no-such-file.hcl",
+            "file://ghost/system.hcl",
+            "file://notes/scratch.md",
+            "file://drone/big.hcl",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let id = 610 + i64::try_from(i).unwrap();
+            let payload = call_read_resource(&app, &session, id, uri).await;
+            assert!(
+                payload.get("error").is_some(),
+                "{uri} must be a protocol error, not a result: {payload}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn resources_read_version_returns_project_version_and_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_full_project(tmp.path());
+        std::fs::create_dir_all(tmp.path().join("notes")).unwrap();
+        std::fs::write(tmp.path().join("notes/scratch.md"), "# scratch\n").unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_read_resource(&app, &session, 620, "project://drone/version").await;
+        assert!(payload.get("error").is_none(), "{payload}");
+        let first = &payload["result"]["contents"][0];
+        assert_eq!(first["uri"], json!("project://drone/version"));
+        assert_eq!(first["mimeType"], json!("application/json"));
+
+        let meta_version = first["_meta"]["version"].as_str().unwrap().to_owned();
+        assert_eq!(meta_version.len(), crate::storage::VERSION_LEN);
+
+        // The text body carries the same version plus the lock holder.
+        let body: Value = serde_json::from_str(first["text"].as_str().unwrap()).unwrap();
+        assert_eq!(body["version"], json!(meta_version));
+
+        // Same version the tools echo via list_files.
+        let listed = call_tool(
+            &app,
+            &session,
+            621,
+            "list_files",
+            json!({ "project": "drone" }),
+        )
+        .await;
+        assert_eq!(result_value(&listed)["version"], json!(meta_version));
+
+        // Unknown projects are protocol errors, not results.
+        let ghost = call_read_resource(&app, &session, 622, "project://ghost/version").await;
+        assert!(ghost.get("error").is_some(), "{ghost}");
+    }
+
+    #[tokio::test]
+    async fn resources_read_file_version_chains_into_edit_file() {
+        // The resource `_meta` version must be quotable for the next tool
+        // write: read via resources, edit via tools, same CAS.
+        let tmp = tempfile::tempdir().unwrap();
+        write_docs_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload =
+            call_read_resource(&app, &session, 630, "file://demo/docs/note.md").await;
+        assert!(payload.get("error").is_none(), "{payload}");
+        let version = payload["result"]["contents"][0]["_meta"]["version"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+
+        let edited = call_tool(
+            &app,
+            &session,
+            631,
+            "edit_file",
+            json!({
+                "project": "demo",
+                "path": "docs/note.md",
+                "edits": [{ "old_text": "alpha", "new_text": "hi" }],
+                "version": version,
+            }),
+        )
+        .await;
+        assert_ne!(edited["result"]["isError"], json!(true), "{edited}");
     }
 }
