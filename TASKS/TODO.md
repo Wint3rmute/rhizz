@@ -16,31 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — [Spike] `overwrite_model` vs `create_file` on `system.hcl`: keep or split
-
-Audit finding: two whole-file write paths to the same primary file with
-near-identical CAS semantics (`overwrite_model`: model-only, `create_file`:
-any path incl. `system.hcl` with the same model gate). Models must read two
-~1k-char descriptions to choose.
-
-Scope (spike first):
-- Compare gates side by side (model-only compile vs per-path validation,
-  version-required-when-exists in both, warnings shape) — is `overwrite_model`
-  fully subsumed by `create_file(path="system.hcl")`, including the
-  "no primary file yet → version ignored" edge and repair-hatch use (broken
-  model refuses `ModelOp`s)?
-- Recommendation: remove `overwrite_model` (breaking — survey callers/tests),
-  or keep it as the documented repair hatch and say so in both descriptions
-  ("use `create_file` for normal writes; `overwrite_model` only to …").
-
-Definition of done:
-- Spike note (gate matrix, caller survey, recommendation).
-- If consolidated/disambiguated: code + description updates + red/green tests.
-- `just test`, `just lint`, `just build` green.
-- Suggested branch: `spike/mcp-single-model-write`.
-
----
-
 ## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
 
 Schemas (`crates/rhizz-server/src/mcp.rs:74-560`, via `schemars::JsonSchema`)
