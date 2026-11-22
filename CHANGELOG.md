@@ -6,6 +6,7 @@
 
 ### Feat
 
+- **modeling**: draw delegation arrows by flow direction
 - **modeling**: surround placed descendants when showing a parent
 - **mcp**: migrate to modern-only 2026-07-28 stateless transport
 - **mcp**: tighten input schemas to match runtime validation
