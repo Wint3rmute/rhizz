@@ -60,8 +60,14 @@ just test     # run all tests (Rust + Vitest)
 just build    # build release binaries, WASM package, and web frontend
 ```
 
-**Do not directly call `cargo` or `npm` commands**; use `just` instead. It comes
-with a predefined set of correct commands for the project.
+Nix is required. Each `just` recipe runs a runnable script defined in
+`nix/tasks.nix` via `nix run .#<task>` — every script declares exactly the
+binaries it needs, so e.g. a Rust lint never pulls Node/browsers/mdbook.
+(`wasm` / `web-build` use `nix build`, same as CI.)
+
+**Do not directly call `cargo` or `npm` commands**; use `just` instead. If a
+new recipe is needed, add a script in `nix/tasks.nix` (mirroring the recipe
+name) rather than entering a devshell.
 
 **NEVER USE `npx`.** Use `npm run <script>` (or `npm ci`) inside `web/`. Do not
 use `npx`, `pnpm`, or `yarn`, so the lockfile stays the single source of truth.
