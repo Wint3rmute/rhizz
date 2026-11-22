@@ -17,6 +17,7 @@
 
 ### Fix
 
+- **web**: stop seeding docs/.gitkeep in new projects
 - **web**: surface server error body in VFS failure messages
 - **server**: avoid string-slice clippy lints in short versions
 - keep connection label weight stable when selected
