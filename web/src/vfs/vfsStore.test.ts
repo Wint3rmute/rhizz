@@ -585,6 +585,39 @@ describe("ServerProjectStore HTTP behavior", () => {
     await expect(store.createProject("x")).rejects.toThrow(/500/);
   });
 
+  it("includes the server message in save failures", async () => {
+    const detail = "path `docs/.gitkeep` traverses a hidden entry or symlink";
+    const fetch = (
+      input: RequestInfo | URL,
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+      if (url.endsWith("/state")) {
+        return Promise.resolve(
+          new Response("unknown project", { status: 404 }),
+        );
+      }
+      if (init?.method === "PUT") {
+        return Promise.resolve(new Response(detail, { status: 400 }));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ version: 1, projects: [], nodes: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+    };
+    const store = new ServerProjectStore("http://rhizz-server", {
+      fetch,
+    });
+    await expect(store.createProject("x")).rejects.toThrow(detail);
+  });
+
   it("persists across store instances via the same server blob", async () => {
     // Two stores sharing one fake fetch share the fake server's blob,
     // just like two browser tabs would share the real server's data dir.
