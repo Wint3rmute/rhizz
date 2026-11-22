@@ -136,6 +136,7 @@
   import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
   import { isPlacedInSystem } from "./connectionVisibility";
   import {
+    delegationArrowDirection,
     isProjectionDrawn,
     normalizeEndpointRef,
     projectedPortDots,
@@ -3961,8 +3962,26 @@
         // (original or projected `<rel-path>/<port>` dots from above).
         if (conn.fromPort !== undefined) edge.fromPort = conn.fromPort;
         if (conn.toPort !== undefined) edge.toPort = conn.toPort;
-        // Delegation segments (§6.9) draw as plain lines without arrowheads.
-        if (conn.isDelegation === true) edge.noArrow = true;
+        // Delegation segments (§6.9) carry an arrowhead showing flow direction:
+        // inner provider flows outward, inner consumer flows inward. Use the
+        // raw role: an omitted role stays arrowless, an explicit `peer`
+        // draws both heads.
+        if (conn.isDelegation === true) {
+          const arrow = delegationArrowDirection({
+            from: conn.from,
+            to: conn.to,
+            fromPort: conn.fromPort,
+            toPort: conn.toPort,
+            parentOf,
+            roleOf: (componentIndex: number, portLabel: string | undefined) =>
+              componentData
+                .get(getComponentKey(componentIndex))
+                ?.ports.find((port) => port.label === portLabel)?.roleRaw,
+          });
+          if (arrow === "none") edge.noArrow = true;
+          else if (arrow === "backward") edge.reverseArrow = true;
+          else if (arrow === "both") edge.doubleArrow = true;
+        }
         return edge;
       });
     return buildEditorScene({

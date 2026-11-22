@@ -203,7 +203,7 @@ export const TakenName: Story = {
 
 // Dragging from the scope's own port dot into a child: the dialog switches to
 // the delegation variant — the outer port inherits its type, so it offers no
-// protocol or role fields, and the preview draws no arrowhead.
+// protocol or role fields, and the untyped preview draws no arrowhead.
 export const DelegationVariant: Story = {
   args: {
     request: {
@@ -239,7 +239,7 @@ export const DelegationVariant: Story = {
     await expect(
       modal.getByTestId("new-connection-to-role"),
     ).toBeInTheDocument();
-    // No arrowhead on the preview: delegation has no direction.
+    // No arrowhead on the untyped preview: the inner role is still blank.
     await expect(
       modal.getByTestId("new-connection-preview-line"),
     ).not.toHaveAttribute("marker-end");

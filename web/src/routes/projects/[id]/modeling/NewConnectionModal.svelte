@@ -15,6 +15,7 @@
     buildConnectOp,
     connectionDirection,
     delegationOuterSide,
+    delegationPreviewDirection,
     initialDraft,
     needsOuterConversion,
     orderProtocols,
@@ -317,10 +318,19 @@
   let toPort = $derived(toEnd?.existingPort ?? (draft?.to.name.trim() || "…"));
   let connectionName = $derived(draft?.label.trim() || "…");
   let direction = $derived(
-    connectionDirection(
-      fromEnd?.existingPort === undefined ? (draft?.from.role ?? "") : "",
-      toEnd?.existingPort === undefined ? (draft?.to.role ?? "") : "",
-    ),
+    delegationSide !== null
+      ? delegationPreviewDirection(
+          delegationSide,
+          innerEnd?.existingPort !== undefined
+            ? (innerEnd.existingPortRole ?? "")
+            : ((delegationSide === "from"
+                ? draft?.to.role
+                : draft?.from.role) ?? ""),
+        )
+      : connectionDirection(
+          fromEnd?.existingPort === undefined ? (draft?.from.role ?? "") : "",
+          toEnd?.existingPort === undefined ? (draft?.to.role ?? "") : "",
+        ),
   );
 </script>
 
@@ -420,12 +430,20 @@
             stroke-dasharray="6 4"
             class="new-connection-flow"
             data-testid="new-connection-preview-line"
-            marker-end={direction === "backward" || isDelegation
-              ? undefined
-              : "url(#new-conn-arrow)"}
-            marker-start={direction === "backward" && !isDelegation
-              ? "url(#new-conn-arrow)"
-              : undefined}
+            marker-end={isDelegation
+              ? direction === "forward" || direction === "both"
+                ? "url(#new-conn-arrow)"
+                : undefined
+              : direction === "backward"
+                ? undefined
+                : "url(#new-conn-arrow)"}
+            marker-start={isDelegation
+              ? direction === "backward" || direction === "both"
+                ? "url(#new-conn-arrow)"
+                : undefined
+              : direction === "backward"
+                ? "url(#new-conn-arrow)"
+                : undefined}
           />
           <text
             x="182"

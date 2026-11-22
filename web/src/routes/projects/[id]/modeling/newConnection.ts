@@ -481,6 +481,22 @@ export function connectionDirection(
   return "none";
 }
 
+/**
+ * Preview direction for a delegation edge: the outer port inherits, so only
+ * the inner role matters. `provider` inner supplies outward, `consumer` inner
+ * sinks inward, `peer` is bidirectional.
+ */
+export function delegationPreviewDirection(
+  outerSide: "from" | "to",
+  innerRole: string,
+): "forward" | "backward" | "both" | "none" {
+  const role = innerRole.toLowerCase();
+  if (role === "provider") return outerSide === "from" ? "backward" : "forward";
+  if (role === "consumer") return outerSide === "from" ? "forward" : "backward";
+  if (role === "peer") return "both";
+  return "none";
+}
+
 // ── Protocol picker ──────────────────────────────────────────────────────────
 
 const MAX_RECENT = 8;

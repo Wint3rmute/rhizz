@@ -16,7 +16,9 @@ export interface ProjectionEndpointRef {
   fromPort?: string | undefined;
   toPort?: string | undefined;
   /** Delegation edge (SPEC.md §6.9): draws only when both ends are directly
-   * placed, never projects, and ignores the view `hidden` flag. */
+   * placed, never projects, and ignores the view `hidden` flag. Its arrowhead
+   * shows flow direction (see `delegationArrowDirection`); it is arrowless
+   * only when the inner role is untyped. */
   isDelegation?: boolean | undefined;
 }
 
@@ -235,6 +237,53 @@ export function normalizeEndpointRef(
     toPort: conn.toPort ?? conn.to_port ?? undefined,
     isDelegation: conn.isDelegation ?? conn.is_delegation ?? undefined,
   };
+}
+
+/** Which way a delegation segment flows, for its arrowhead.
+ *
+ * Delegation ends share one role by inheritance (SPEC.md §2.6), so the normal
+ * `provider -> consumer` pair rule (`connectionDirection`) always yields
+ * `none`. Instead orient by topology + the inner port's role:
+ * - `provider` inner supplies outward: flow is inner -> outer.
+ * - `consumer` inner sinks inward: flow is outer -> inner.
+ * - `peer` is bidirectional: `both`.
+ * - unknown/untyped role: `none` (stay arrowless, as before).
+ *
+ * `forward`/`backward` are relative to the declared `from`/`to` order;
+ * `both`/`none` are order-independent. Callers map `backward` to a
+ * start-arrow and `both` to two arrowheads.
+ */
+export type DelegationArrow = "forward" | "backward" | "both" | "none";
+
+export function delegationArrowDirection(opts: {
+  from: number;
+  to: number;
+  fromPort?: string | undefined;
+  toPort?: string | undefined;
+  parentOf: (index: number) => number | undefined;
+  roleOf: (
+    componentIndex: number,
+    portLabel: string | undefined,
+  ) => string | undefined;
+}): DelegationArrow {
+  const { from, to, fromPort, toPort, parentOf, roleOf } = opts;
+  const fromIsAncestor = isAncestorOf(from, to, parentOf);
+  const toIsAncestor = isAncestorOf(to, from, parentOf);
+  if (fromIsAncestor === toIsAncestor) return "none";
+  const outer = fromIsAncestor ? from : to;
+  const inner = fromIsAncestor ? to : from;
+  const innerPort = fromIsAncestor ? toPort : fromPort;
+  const role = roleOf(inner, innerPort)?.toLowerCase();
+  if (role === "provider") {
+    // Inner supplies outward: inner -> outer.
+    return outer === from ? "backward" : "forward";
+  }
+  if (role === "consumer") {
+    // Inner sinks inward: outer -> inner.
+    return outer === from ? "forward" : "backward";
+  }
+  if (role === "peer") return "both";
+  return "none";
 }
 
 /** Drawn means resolved (not omitted) and not hidden — mirrors `isConnectionDrawn`. */

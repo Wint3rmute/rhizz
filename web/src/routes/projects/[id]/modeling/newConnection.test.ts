@@ -8,6 +8,7 @@ import {
   defaultConnectionLabel,
   defaultPortName,
   delegationOuterSide,
+  delegationPreviewDirection,
   initialDraft,
   isDelegationRequest,
   isExternalEnd,
@@ -460,6 +461,24 @@ describe("connectionDirection", () => {
     expect(connectionDirection("provider", "provider")).toBe("none");
     expect(connectionDirection("peer", "provider")).toBe("none");
     expect(connectionDirection("master", "slave")).toBe("none");
+  });
+});
+
+describe("delegationPreviewDirection", () => {
+  it("provider inner supplies outward", () => {
+    expect(delegationPreviewDirection("from", "provider")).toBe("backward");
+    expect(delegationPreviewDirection("to", "provider")).toBe("forward");
+  });
+
+  it("consumer inner sinks inward", () => {
+    expect(delegationPreviewDirection("from", "consumer")).toBe("forward");
+    expect(delegationPreviewDirection("to", "consumer")).toBe("backward");
+  });
+
+  it("peer inner is bidirectional, untyped is none", () => {
+    expect(delegationPreviewDirection("from", "peer")).toBe("both");
+    expect(delegationPreviewDirection("to", "peer")).toBe("both");
+    expect(delegationPreviewDirection("from", "")).toBe("none");
   });
 });
 
