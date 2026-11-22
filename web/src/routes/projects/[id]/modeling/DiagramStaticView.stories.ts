@@ -650,3 +650,129 @@ export const DelegationOpenBox: Story = {
     );
   },
 };
+
+// All four delegation arrow cases in one canvas (SPEC.md §6.1, §6.9): inner
+// provider flows outward (arrow at the owner), inner consumer flows inward
+// (arrow at the child), explicit peer draws both heads, and an untyped inner
+// stays arrowless. Outer ports are proxy-untyped (`roleRaw: undefined`) with
+// the normalized `role` kept only for dot placement.
+const delegationDirectionComponents = [
+  {
+    label: "svc-prov",
+    ports: [{ label: "api", role: "provider" as const, roleRaw: undefined }],
+  },
+  {
+    label: "child-prov",
+    parent_component_index: 0,
+    ports: [{ label: "http", role: "provider" as const, roleRaw: "provider" }],
+  },
+  {
+    label: "svc-cons",
+    ports: [{ label: "api", role: "consumer" as const, roleRaw: undefined }],
+  },
+  {
+    label: "child-cons",
+    parent_component_index: 2,
+    ports: [{ label: "http", role: "consumer" as const, roleRaw: "consumer" }],
+  },
+  {
+    label: "svc-peer",
+    ports: [{ label: "api", role: "peer" as const, roleRaw: undefined }],
+  },
+  {
+    label: "child-peer",
+    parent_component_index: 4,
+    ports: [{ label: "http", role: "peer" as const, roleRaw: "peer" }],
+  },
+  {
+    label: "svc-untyped",
+    ports: [{ label: "api", role: "peer" as const, roleRaw: undefined }],
+  },
+  {
+    label: "child-untyped",
+    parent_component_index: 6,
+    ports: [{ label: "http", role: "peer" as const, roleRaw: undefined }],
+  },
+];
+const delegationDirectionConnections = [
+  {
+    from: 0,
+    to: 1,
+    label: "prov-delegation",
+    fromPort: "api",
+    toPort: "http",
+    isDelegation: true,
+  },
+  {
+    from: 2,
+    to: 3,
+    label: "cons-delegation",
+    fromPort: "api",
+    toPort: "http",
+    isDelegation: true,
+  },
+  {
+    from: 4,
+    to: 5,
+    label: "peer-delegation",
+    fromPort: "api",
+    toPort: "http",
+    isDelegation: true,
+  },
+  {
+    from: 6,
+    to: 7,
+    label: "untyped-delegation",
+    fromPort: "api",
+    toPort: "http",
+    isDelegation: true,
+  },
+];
+
+export const DelegationArrowDirections: Story = {
+  args: {
+    components: delegationDirectionComponents,
+    connections: delegationDirectionConnections,
+    boxes: {
+      0: { x: 0, y: 0, width: 200, height: 140 },
+      1: { x: 20, y: 70, width: 110, height: 50 },
+      2: { x: 240, y: 0, width: 200, height: 140 },
+      3: { x: 260, y: 70, width: 110, height: 50 },
+      4: { x: 480, y: 0, width: 200, height: 140 },
+      5: { x: 500, y: 70, width: 110, height: 50 },
+      6: { x: 720, y: 0, width: 200, height: 140 },
+      7: { x: 740, y: 70, width: 110, height: 50 },
+    },
+    portsByIndex: {},
+  },
+  play: async ({ canvasElement }) => {
+    const edges = Array.from(
+      canvasElement.querySelectorAll("[data-testid='diagram-edge']"),
+    );
+    await expect(edges.length).toBe(4);
+    const byLabel = new Map(
+      edges.map((edge) => [
+        edge.querySelector("text")?.textContent ?? "",
+        edge,
+      ]),
+    );
+    // Provider outward, consumer inward: one head each. Peer: both heads.
+    // Untyped: none.
+    await expect(
+      byLabel.get("prov-delegation")?.querySelectorAll("polygon").length,
+    ).toBe(1);
+    await expect(
+      byLabel.get("cons-delegation")?.querySelectorAll("polygon").length,
+    ).toBe(1);
+    await expect(
+      byLabel.get("peer-delegation")?.querySelectorAll("polygon").length,
+    ).toBe(2);
+    await expect(
+      byLabel.get("untyped-delegation")?.querySelectorAll("polygon").length,
+    ).toBe(0);
+    await expect(
+      canvasElement.querySelectorAll("[data-testid='diagram-edge'] polygon")
+        .length,
+    ).toBe(4);
+  },
+};
