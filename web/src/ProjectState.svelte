@@ -106,8 +106,9 @@
   // file — the interim "one editable file per project" convention until
   // Task 58 adds a real file-tree UI. Kept here rather than duplicated at
   // each call site (the /projects page's "new project" and "new from
-  // example" actions). Also seeds an empty `docs/` folder (via `.gitkeep`,
-  // so the directory persists in the VFS) alongside the model file.
+  // example" actions). Also seeds an empty `docs/` folder alongside the
+  // model file (a `Wanted::Dir` entry persists in the VFS, no `.gitkeep`
+  // needed — the server rejects hidden entries with 400).
   //
   // Rejects when the name's slug is taken or unusable (see vfs/slug) — callers
   // in the UI are expected to surface that rather than let it escape.
@@ -119,7 +120,6 @@
     const fs = openProjectFs(projectStore, project.id);
     await fs.writeFile("main.hcl", content);
     await fs.mkdir("docs", { recursive: true });
-    await fs.writeFile("docs/.gitkeep", "");
     return project;
   }
 
