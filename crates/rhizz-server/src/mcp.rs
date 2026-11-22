@@ -1,4 +1,4 @@
-//! Model Context Protocol (MCP) endpoint (`2026-07-28`).
+//! Proof-of-concept Model Context Protocol (MCP) endpoint.
 //!
 //! Exposes tools over the MCP Streamable HTTP transport, mounted at
 //! `/mcp` by [`crate::server::app`]: `fetch_projects`, `list_files`,
@@ -9,9 +9,6 @@
 //! canonical HCL back atomically. File writes replace whole files or exact
 //! spans under a compare-and-swap version guard, with compile validation for
 //! `.hcl` paths. A refused op leaves the file untouched.
-//!
-//! `server/discover` with per-request `_meta`; no `initialize`, no session.
-//! `tools/list` carries `ttlMs`/`cacheScope`.
 //!
 //! This is a POC: there is no authentication. Writes take the project lock
 //! as the hardcoded `AI` user (proposal 0004): a project held by a human is
@@ -26,9 +23,8 @@ use rmcp::handler::server::router::tool::ToolRouter;
 use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{
-    CacheScope, CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock,
-    DiscoverResult, Implementation, ListToolsResult, PaginatedRequestParams, ProtocolVersion,
-    ServerCapabilities, ServerConfig, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{MaybeSendFuture, RequestContext, RoleServer};
 use rmcp::{ErrorData, ServerHandler, tool, tool_router};
@@ -1756,7 +1752,7 @@ fn mutation_not_applied() -> CallToolResult {
 }
 
 /// A tool-level failure: reported to the client as `isError`, not as a
-/// protocol error, so the model can see it.
+/// protocol error, so the model can see it and the session stays usable.
 fn tool_error(message: impl Into<String>) -> CallToolResult {
     CallToolResult::error(vec![ContentBlock::text(message.into())])
 }
@@ -1939,28 +1935,6 @@ impl ServerHandler for RhizzMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("rhizz", env!("CARGO_PKG_VERSION")))
-            .with_protocol_version(ProtocolVersion::V_2026_07_28)
-            .with_instructions(
-                "Rhizz code-first MBSE server. Reads via fetch_projects/list_files/read_file/check_project; mutations via ModelOp tools; file edits via create_file/edit_file with version CAS.",
-            )
-    }
-
-    fn supported_protocol_versions(&self) -> std::borrow::Cow<'static, [ProtocolVersion]> {
-        std::borrow::Cow::Borrowed(&[ProtocolVersion::V_2026_07_28])
-    }
-
-    fn discover(
-        &self,
-        context: RequestContext<RoleServer>,
-    ) -> impl Future<Output = Result<DiscoverResult, ErrorData>> + MaybeSendFuture + '_ {
-        let result = DiscoverResult::from_server_info(
-            self.supported_protocol_versions().into_owned(),
-            self.get_info(),
-        )
-        .with_ttl_ms(60_000)
-        .with_cache_scope(CacheScope::Public);
-        let _ = context;
-        std::future::ready(Ok(result))
     }
 
     fn call_tool(
@@ -1989,9 +1963,7 @@ impl ServerHandler for RhizzMcp {
     ) -> impl Future<Output = Result<ListToolsResult, ErrorData>> + MaybeSendFuture + '_ {
         std::future::ready(Ok(ListToolsResult::with_all_items(
             self.tool_router.list_all(),
-        )
-        .with_ttl_ms(60_000)
-        .with_cache_scope(CacheScope::Public)))
+        )))
     }
 
     fn get_tool(&self, name: &str) -> Option<Tool> {
@@ -2010,64 +1982,38 @@ mod tests {
 
     use crate::server::app;
 
-    const PROTOCOL_VERSION: &str = "2026-07-28";
+    const MCP_SESSION_ID: &str = "mcp-session-id";
 
-    fn request_meta() -> Value {
-        json!({
-            "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
-            "io.modelcontextprotocol/clientCapabilities": {},
-            "io.modelcontextprotocol/clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
-        })
-    }
-
-    /// Inserts request `_meta` when missing.
-    fn with_request_meta(message: &Value) -> Value {
-        let mut msg = message.clone();
-        if msg.get("method").and_then(|m| m.as_str()).is_some() {
-            let meta = request_meta();
-            if let Some(params) = msg.get_mut("params") {
-                if let Some(obj) = params.as_object_mut() {
-                    obj.entry("_meta").or_insert(meta);
-                }
-            } else if let Some(obj) = msg.as_object_mut() {
-                obj.insert("params".to_owned(), json!({ "_meta": meta }));
-            }
-        }
-        msg
-    }
-
-    /// Sends one JSON-RPC message to `/mcp`; returns status and parsed payload.
-    async fn post_rpc(app: &Router, message: &Value) -> (StatusCode, Option<Value>) {
-        let message = with_request_meta(message);
-        let method = message.get("method").and_then(|m| m.as_str()).unwrap_or("");
-        let name = message
-            .get("params")
-            .and_then(|p| p.get("name"))
-            .and_then(|n| n.as_str())
-            .map(ToOwned::to_owned);
+    /// Sends one JSON-RPC message to `/mcp` and returns the status, the
+    /// session id header (if any) and the parsed JSON-RPC payload (if any).
+    async fn post_rpc(
+        app: &Router,
+        message: &Value,
+        session: Option<&str>,
+    ) -> (StatusCode, Option<String>, Option<Value>) {
         let mut builder = Request::builder()
             .method("POST")
             .uri("/mcp")
             .header(header::HOST, "localhost")
             .header(header::CONTENT_TYPE, "application/json")
-            .header(header::ACCEPT, "application/json, text/event-stream")
-            .header("MCP-Protocol-Version", PROTOCOL_VERSION)
-            .header("Mcp-Method", method);
-        if let Some(name) = name
-            && method == "tools/call"
-        {
-            builder = builder.header("Mcp-Name", name);
+            .header(header::ACCEPT, "application/json, text/event-stream");
+        if let Some(session) = session {
+            builder = builder.header(MCP_SESSION_ID, session);
         }
         let request = builder.body(Body::from(message.to_string())).unwrap();
         let response = app.clone().oneshot(request).await.unwrap();
 
         let status = response.status();
+        let session_id = response
+            .headers()
+            .get(MCP_SESSION_ID)
+            .map(|value| value.to_str().unwrap().to_owned());
         let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
             .await
             .unwrap();
         let text = String::from_utf8(bytes.to_vec()).unwrap();
         let payload = parse_payload(&text);
-        (status, payload)
+        (status, session_id, payload)
     }
 
     /// The reply is either a bare JSON object or a server-sent-events stream
@@ -2088,29 +2034,31 @@ mod tests {
             .map(|data| serde_json::from_str(data).unwrap())
     }
 
-    fn discover_request() -> Value {
+    fn initialize_request() -> Value {
         json!({
             "jsonrpc": "2.0",
             "id": 1,
-            "method": "server/discover",
-            "params": { "_meta": {
-                "io.modelcontextprotocol/protocolVersion": PROTOCOL_VERSION,
-                "io.modelcontextprotocol/clientCapabilities": {},
-                "io.modelcontextprotocol/clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
-            } }
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
+            }
         })
     }
 
-    /// Runs `server/discover` and asserts the advertised version.
-    async fn discover(app: &Router) {
-        let (status, payload) = post_rpc(app, &discover_request()).await;
+    /// Runs the `initialize` handshake and returns the session id to reuse.
+    /// The session lives in the router's session manager, so every request of
+    /// a test must go through the same router (as the real server does).
+    async fn handshake(app: &Router) -> String {
+        let (status, session, _) = post_rpc(app, &initialize_request(), None).await;
         assert_eq!(status, StatusCode::OK);
-        let payload = payload.expect("server/discover must reply");
-        assert_eq!(
-            payload["result"]["supportedVersions"],
-            json!(["2026-07-28"]),
-            "{payload}"
-        );
+        let session = session.expect("initialize must return a session id");
+
+        let initialized = json!({ "jsonrpc": "2.0", "method": "notifications/initialized" });
+        let (status, _, _) = post_rpc(app, &initialized, Some(&session)).await;
+        assert_eq!(status, StatusCode::ACCEPTED);
+        session
     }
 
     fn write_drone_project(data_dir: &std::path::Path) {
@@ -2170,7 +2118,7 @@ mod tests {
 
     /// Calls `fetch_projects` (with an optional `page`) and returns the parsed
     /// text content of the successful result.
-    async fn call_fetch_projects(app: &Router, id: i64, page: Option<i64>) -> Value {
+    async fn call_fetch_projects(app: &Router, session: &str, id: i64, page: Option<i64>) -> Value {
         let arguments = page.map_or_else(|| json!({}), |page| json!({ "page": page }));
         let call = json!({
             "jsonrpc": "2.0",
@@ -2178,7 +2126,7 @@ mod tests {
             "method": "tools/call",
             "params": { "name": "fetch_projects", "arguments": arguments }
         });
-        let (status, payload) = post_rpc(app, &call).await;
+        let (status, _, payload) = post_rpc(app, &call, Some(session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/call must reply");
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
@@ -2188,14 +2136,20 @@ mod tests {
 
     /// Calls a tool by name with `arguments` and returns the full JSON-RPC
     /// payload.
-    async fn call_tool(app: &Router, id: i64, name: &str, arguments: Value) -> Value {
+    async fn call_tool(
+        app: &Router,
+        session: &str,
+        id: i64,
+        name: &str,
+        arguments: Value,
+    ) -> Value {
         let call = json!({
             "jsonrpc": "2.0",
             "id": id,
             "method": "tools/call",
             "params": { "name": name, "arguments": arguments }
         });
-        let (status, payload) = post_rpc(app, &call).await;
+        let (status, _, payload) = post_rpc(app, &call, Some(session)).await;
         assert_eq!(status, StatusCode::OK);
         payload.expect("tools/call must reply")
     }
@@ -2210,10 +2164,10 @@ mod tests {
     async fn tools_list_exposes_the_four_read_only_tools() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
 
         let payload = payload.expect("tools/list must reply");
@@ -2273,10 +2227,10 @@ mod tests {
         // for writes) so hosts can auto-approve reads and confirm destructives.
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
@@ -2343,10 +2297,10 @@ mod tests {
         // Red-first: fails on the old ~12.5k lock boilerplate.
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
@@ -2445,7 +2399,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_drone_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let call = json!({
             "jsonrpc": "2.0",
@@ -2453,7 +2407,7 @@ mod tests {
             "method": "tools/call",
             "params": { "name": "fetch_projects", "arguments": {} }
         });
-        let (status, payload) = post_rpc(&app, &call).await;
+        let (status, _, payload) = post_rpc(&app, &call, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
 
         let payload = payload.expect("tools/call must reply");
@@ -2475,7 +2429,7 @@ mod tests {
     async fn tools_call_fetch_projects_on_empty_data_dir_returns_empty_list() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let call = json!({
             "jsonrpc": "2.0",
@@ -2483,7 +2437,7 @@ mod tests {
             "method": "tools/call",
             "params": { "name": "fetch_projects", "arguments": {} }
         });
-        let (status, payload) = post_rpc(&app, &call).await;
+        let (status, _, payload) = post_rpc(&app, &call, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
 
         let payload = payload.expect("tools/call must reply");
@@ -2501,9 +2455,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_many_projects(tmp.path(), 23);
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let first = call_fetch_projects(&app, 10, None).await;
+        let first = call_fetch_projects(&app, &session, 10, None).await;
         assert_eq!(first["page"], json!(1), "omitted page defaults to 1");
         assert_eq!(first["pageSize"], json!(10));
         assert_eq!(first["totalProjects"], json!(23));
@@ -2513,7 +2467,7 @@ mod tests {
         assert_eq!(items[0]["id"], json!("p22"), "most recently updated first");
         assert_eq!(items[9]["id"], json!("p13"));
 
-        let second = call_fetch_projects(&app, 11, Some(2)).await;
+        let second = call_fetch_projects(&app, &session, 11, Some(2)).await;
         assert_eq!(second["page"], json!(2));
         assert_eq!(second["totalProjects"], json!(23));
         assert_eq!(second["totalPages"], json!(3));
@@ -2522,14 +2476,14 @@ mod tests {
         assert_eq!(items[0]["id"], json!("p12"));
         assert_eq!(items[9]["id"], json!("p03"));
 
-        let third = call_fetch_projects(&app, 12, Some(3)).await;
+        let third = call_fetch_projects(&app, &session, 12, Some(3)).await;
         assert_eq!(third["page"], json!(3));
         let items = third["projects"].as_array().unwrap();
         assert_eq!(items.len(), 3, "final partial page holds the remainder");
         assert_eq!(items[0]["id"], json!("p02"));
         assert_eq!(items[2]["id"], json!("p00"));
 
-        let past = call_fetch_projects(&app, 13, Some(4)).await;
+        let past = call_fetch_projects(&app, &session, 13, Some(4)).await;
         assert_eq!(past["page"], json!(4));
         assert_eq!(
             past["projects"],
@@ -2545,7 +2499,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_drone_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let call = json!({
             "jsonrpc": "2.0",
@@ -2553,14 +2507,14 @@ mod tests {
             "method": "tools/call",
             "params": { "name": "fetch_projects", "arguments": { "page": 0 } }
         });
-        let (status, payload) = post_rpc(&app, &call).await;
+        let (status, _, payload) = post_rpc(&app, &call, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/call must reply");
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
     #[tokio::test]
-    async fn discover_accepts_the_public_hostname() {
+    async fn initialize_accepts_the_public_hostname() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
 
@@ -2570,121 +2524,10 @@ mod tests {
             .header(header::HOST, "rhizz.fly.dev")
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::ACCEPT, "application/json, text/event-stream")
-            .header("MCP-Protocol-Version", PROTOCOL_VERSION)
-            .header("Mcp-Method", "server/discover")
-            .body(Body::from(discover_request().to_string()))
+            .body(Body::from(initialize_request().to_string()))
             .unwrap();
         let response = app.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
-    }
-
-    #[tokio::test]
-    async fn discover_advertises_version_with_cache_hints() {
-        let tmp = tempfile::tempdir().unwrap();
-        let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
-
-        let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
-        assert_eq!(status, StatusCode::OK);
-        let payload = payload.expect("tools/list must reply");
-        assert_eq!(payload["result"]["resultType"], json!("complete"));
-        assert!(payload["result"]["ttlMs"].is_number());
-        assert!(payload["result"]["cacheScope"].is_string());
-    }
-
-    #[tokio::test]
-    async fn initialize_is_rejected_as_unsupported() {
-        let tmp = tempfile::tempdir().unwrap();
-        let app = app(tmp.path().to_path_buf());
-        let init = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "initialize",
-            "params": {
-                "protocolVersion": "2025-06-18",
-                "capabilities": {},
-                "clientInfo": { "name": "rhizz-test", "version": "0.0.0" }
-            }
-        });
-        let request = Request::builder()
-            .method("POST")
-            .uri("/mcp")
-            .header(header::HOST, "localhost")
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::ACCEPT, "application/json, text/event-stream")
-            .header("MCP-Protocol-Version", "2025-06-18")
-            .header("Mcp-Method", "initialize")
-            .body(Body::from(init.to_string()))
-            .unwrap();
-        let response = app.oneshot(request).await.unwrap();
-        let status = response.status();
-        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .unwrap();
-        let text = String::from_utf8(bytes.to_vec()).unwrap();
-        assert!(
-            text.contains("-32022"),
-            "initialize must be rejected with -32022, got {status}: {text}"
-        );
-    }
-
-    #[tokio::test]
-    async fn header_mismatch_is_rejected() {
-        let tmp = tempfile::tempdir().unwrap();
-        let app = app(tmp.path().to_path_buf());
-        let mut list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        list["params"] = json!({ "_meta": request_meta() });
-        let request = Request::builder()
-            .method("POST")
-            .uri("/mcp")
-            .header(header::HOST, "localhost")
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::ACCEPT, "application/json, text/event-stream")
-            .header("MCP-Protocol-Version", PROTOCOL_VERSION)
-            .header("Mcp-Method", "tools/call")
-            .body(Body::from(list.to_string()))
-            .unwrap();
-        let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        let bytes = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-            .await
-            .unwrap();
-        let text = String::from_utf8(bytes.to_vec()).unwrap();
-        assert!(text.contains("-32020"), "{text}");
-    }
-
-    #[tokio::test]
-    async fn missing_metadata_is_rejected() {
-        let tmp = tempfile::tempdir().unwrap();
-        let app = app(tmp.path().to_path_buf());
-        let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
-        let request = Request::builder()
-            .method("POST")
-            .uri("/mcp")
-            .header(header::HOST, "localhost")
-            .header(header::CONTENT_TYPE, "application/json")
-            .header(header::ACCEPT, "application/json, text/event-stream")
-            .header("Mcp-Method", "tools/list")
-            .body(Body::from(list.to_string()))
-            .unwrap();
-        let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn get_on_mcp_is_method_not_allowed() {
-        let tmp = tempfile::tempdir().unwrap();
-        let app = app(tmp.path().to_path_buf());
-        let request = Request::builder()
-            .method("GET")
-            .uri("/mcp")
-            .header(header::HOST, "localhost")
-            .header(header::ACCEPT, "text/event-stream")
-            .body(Body::empty())
-            .unwrap();
-        let response = app.oneshot(request).await.unwrap();
-        assert_eq!(response.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
     #[tokio::test]
@@ -2692,9 +2535,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let payload = call_tool(&app, 30, "list_files", json!({ "project": "drone" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            30,
+            "list_files",
+            json!({ "project": "drone" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let files = result_value(&payload)["files"].as_array().unwrap().clone();
 
@@ -2725,9 +2575,16 @@ mod tests {
     async fn tools_call_list_files_on_unknown_project_is_a_tool_error() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let payload = call_tool(&app, 31, "list_files", json!({ "project": "ghost" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            31,
+            "list_files",
+            json!({ "project": "ghost" }),
+        )
+        .await;
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
@@ -2736,10 +2593,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             32,
             "read_file",
             json!({ "project": "drone", "path": "system.hcl", "offset": 1, "limit": 2 }),
@@ -2755,6 +2613,7 @@ mod tests {
         // The version stays equal while content is unchanged and flips with it.
         let again = call_tool(
             &app,
+            &session,
             33,
             "read_file",
             json!({ "project": "drone", "path": "system.hcl" }),
@@ -2765,6 +2624,7 @@ mod tests {
         std::fs::write(tmp.path().join("drone/system.hcl"), "system \"other\" {}\n").unwrap();
         let changed = call_tool(
             &app,
+            &session,
             34,
             "read_file",
             json!({ "project": "drone", "path": "system.hcl" }),
@@ -2779,10 +2639,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             35,
             "read_file",
             json!({ "project": "drone", "path": "system.hcl", "offset": 100 }),
@@ -2799,7 +2660,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         for (i, bad) in [
             "../outside",
@@ -2814,6 +2675,7 @@ mod tests {
             let id = 40 + i64::try_from(i).unwrap();
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "read_file",
                 json!({ "project": "drone", "path": bad }),
@@ -2832,12 +2694,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         for (i, bad) in ["views", "no-such-file.hcl"].iter().enumerate() {
             let id = 50 + i64::try_from(i).unwrap();
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "read_file",
                 json!({ "project": "drone", "path": bad }),
@@ -2856,9 +2719,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_broken_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let payload = call_tool(&app, 60, "check_project", json!({ "project": "broken" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            60,
+            "check_project",
+            json!({ "project": "broken" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         let diagnostics = result["diagnostics"].as_array().unwrap();
@@ -2881,9 +2751,16 @@ mod tests {
             return; // examples/ is not part of a published crate
         }
         let app = app(examples);
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let payload = call_tool(&app, 61, "check_project", json!({ "project": "drone" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            61,
+            "check_project",
+            json!({ "project": "drone" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let result = result_value(&payload);
         let diagnostics = result["diagnostics"].as_array().unwrap();
@@ -2905,10 +2782,11 @@ mod tests {
         std::fs::create_dir_all(tmp.path().join("notes")).unwrap();
         std::fs::write(tmp.path().join("notes/scratch.md"), "# scratch\n").unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             70,
             "read_file",
             json!({ "project": "notes", "path": "scratch.md" }),
@@ -2928,12 +2806,13 @@ mod tests {
             .unwrap();
         assert!(status.success(), "mkfifo failed");
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = tokio::time::timeout(
             std::time::Duration::from_secs(5),
             call_tool(
                 &app,
+                &session,
                 71,
                 "read_file",
                 json!({ "project": "drone", "path": "pipe.hcl" }),
@@ -2951,10 +2830,11 @@ mod tests {
         let big = vec![b'a'; usize::try_from(READ_FILE_MAX_BYTES).unwrap() + 1];
         std::fs::write(tmp.path().join("drone/big.hcl"), big).unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             72,
             "read_file",
             json!({ "project": "drone", "path": "big.hcl" }),
@@ -2967,9 +2847,16 @@ mod tests {
     async fn tools_call_check_project_on_unknown_project_is_a_tool_error() {
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let payload = call_tool(&app, 62, "check_project", json!({ "project": "ghost" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            62,
+            "check_project",
+            json!({ "project": "ghost" }),
+        )
+        .await;
         assert_eq!(payload["result"]["isError"], json!(true), "{payload}");
     }
 
@@ -2998,10 +2885,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             80,
             "add_instance",
             json!({
@@ -3023,7 +2911,14 @@ mod tests {
             "canonical rewrite must contain the instance: {rewritten}"
         );
 
-        let check = call_tool(&app, 81, "check_project", json!({ "project": "demo" })).await;
+        let check = call_tool(
+            &app,
+            &session,
+            81,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
         assert_ne!(check["result"]["isError"], json!(true), "{check}");
         let check_result = result_value(&check);
         let diagnostics = check_result["diagnostics"].as_array().unwrap();
@@ -3038,12 +2933,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         // `source` names no top-level component, so the resolver refuses with E014.
         let payload = call_tool(
             &app,
+            &session,
             82,
             "add_instance",
             json!({
@@ -3066,11 +2962,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         let payload = call_tool(
             &app,
+            &session,
             83,
             "rename_component",
             json!({
@@ -3092,11 +2989,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         let payload = call_tool(
             &app,
+            &session,
             84,
             "reparent_component",
             json!({
@@ -3121,10 +3019,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             85,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3135,6 +3034,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             86,
             "add_component_definition",
             json!({ "project": "demo", "label": "gpu", "options": { "leaf": true } }),
@@ -3156,7 +3056,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         let lock = Request::builder()
@@ -3170,6 +3070,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             200,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3194,10 +3095,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             201,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3217,10 +3119,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             202,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3259,7 +3162,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let model_before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
         let doc_before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
 
@@ -3301,7 +3204,7 @@ mod tests {
                 }),
             ),
         ] {
-            let payload = call_tool(&app, id, name, arguments).await;
+            let payload = call_tool(&app, &session, id, name, arguments).await;
             let text = tool_error_text(&payload);
             assert!(
                 text.contains("alice"),
@@ -3327,7 +3230,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let lock = Request::builder()
             .method("POST")
@@ -3340,6 +3243,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             206,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3354,6 +3258,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             207,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3373,22 +3278,36 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let expected = crate::storage::project_version(tmp.path(), "demo").unwrap();
 
-        let payload = call_tool(&app, 208, "list_files", json!({ "project": "demo" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            208,
+            "list_files",
+            json!({ "project": "demo" }),
+        )
+        .await;
         let result = result_value(&payload);
         assert_eq!(result["version"], json!(expected));
         assert_eq!(result["lockedBy"], json!(null));
         assert!(result.get("lockExpiresAt").is_none());
 
-        let payload = call_tool(&app, 209, "check_project", json!({ "project": "demo" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            209,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
         let result = result_value(&payload);
         assert_eq!(result["version"], json!(expected));
         assert_eq!(result["lockedBy"], json!(null));
 
-        let payload = call_tool(&app, 210, "fetch_projects", json!({})).await;
+        let payload = call_tool(&app, &session, 210, "fetch_projects", json!({})).await;
         let result = result_value(&payload);
         let entries = result["projects"].as_array().unwrap();
         assert_eq!(entries.len(), 1);
@@ -3405,13 +3324,20 @@ mod tests {
         let response = app.clone().oneshot(lock).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
 
-        let payload = call_tool(&app, 211, "list_files", json!({ "project": "demo" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            211,
+            "list_files",
+            json!({ "project": "demo" }),
+        )
+        .await;
         let result = result_value(&payload);
         assert_eq!(result["version"], json!(expected));
         assert_eq!(result["lockedBy"], json!("alice"));
         assert!(result["lockExpiresAt"].as_str().is_some());
 
-        let payload = call_tool(&app, 212, "fetch_projects", json!({})).await;
+        let payload = call_tool(&app, &session, 212, "fetch_projects", json!({})).await;
         let entries = result_value(&payload)["projects"]
             .as_array()
             .unwrap()
@@ -3436,10 +3362,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             90,
             "update_component",
             json!({ "project": "demo", "path": "cpu", "patch": { "full_name": "Central chip" } }),
@@ -3457,10 +3384,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             91,
             "update_system",
             json!({ "project": "demo", "path": "demo", "patch": { "full_name": "Demo rig" } }),
@@ -3478,10 +3406,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             92,
             "delete_component",
             json!({ "project": "demo", "path": "demo/b" }),
@@ -3500,11 +3429,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_mutation_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // A second system so the project still has a model source afterwards.
         let created = call_tool(
             &app,
+            &session,
             93,
             "add_system",
             json!({ "project": "demo", "label": "other" }),
@@ -3514,6 +3444,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             94,
             "delete_system",
             json!({ "project": "demo", "path": "other" }),
@@ -3532,10 +3463,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let created = call_tool(
             &app,
+            &session,
             96,
             "connect_components",
             json!({
@@ -3551,6 +3483,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             97,
             "delete_connection_by_label",
             json!({ "project": "demo", "label": "link" }),
@@ -3568,12 +3501,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         // `cpu` is still instanced as `demo/a`, so the resolver refuses with E014.
         let payload = call_tool(
             &app,
+            &session,
             98,
             "delete_component",
             json!({ "project": "demo", "path": "cpu" }),
@@ -3597,11 +3531,12 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // `out` is still used by `two`, so it is kept while `in` is removed.
         let payload = call_tool(
             &app,
+            &session,
             100,
             "delete_connection_by_label",
             json!({ "project": "demo", "label": "one", "removePorts": true }),
@@ -3620,10 +3555,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             110,
             "connect_components",
             json!({
@@ -3660,10 +3596,11 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             112,
             "connect_components",
             json!({
@@ -3691,7 +3628,14 @@ mod tests {
         assert!(!api_block.contains("role"), "{api_block}");
 
         // The model resolves with no errors: the proxy inherits `rest`.
-        let payload = call_tool(&app, 113, "check_project", json!({ "project": "demo" })).await;
+        let payload = call_tool(
+            &app,
+            &session,
+            113,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
         assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
         let diagnostics = result_value(&payload)["diagnostics"]
             .as_array()
@@ -3717,10 +3661,11 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             114,
             "connect_components",
             json!({
@@ -3761,10 +3706,11 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             98,
             "connect_components",
             json!({
@@ -3789,11 +3735,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         let payload = call_tool(
             &app,
+            &session,
             99,
             "connect_components",
             json!({
@@ -3826,12 +3773,13 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
 
         // `spi` is still referenced by a port, so the delete is refused.
         let payload = call_tool(
             &app,
+            &session,
             111,
             "delete_protocol",
             json!({ "project": "demo", "path": "spi" }),
@@ -3849,10 +3797,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             112,
             "add_protocol",
             json!({ "project": "demo", "label": "spi", "options": { "leaf": true } }),
@@ -3863,6 +3812,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             113,
             "update_protocol",
             json!({ "project": "demo", "path": "spi", "patch": { "full_name": "Serial bus" } }),
@@ -3881,10 +3831,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let created = call_tool(
             &app,
+            &session,
             114,
             "connect_components",
             json!({
@@ -3900,6 +3851,7 @@ mod tests {
 
         let payload = call_tool(
             &app,
+            &session,
             115,
             "update_connection",
             json!({
@@ -4030,9 +3982,9 @@ mod tests {
         // And every mapped name must actually be served on `/mcp`.
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let list = json!({ "jsonrpc": "2.0", "id": 200, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
@@ -4095,9 +4047,10 @@ mod tests {
 
     /// Reads a file's short content-hash `version` through the `read_file` tool, the
     /// same value `create_file`/`edit_file` require.
-    async fn read_file_version(app: &Router, id: i64, path: &str) -> String {
+    async fn read_file_version(app: &Router, session: &str, id: i64, path: &str) -> String {
         let payload = call_tool(
             app,
+            session,
             id,
             "read_file",
             json!({ "project": "demo", "path": path }),
@@ -4115,11 +4068,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let version = read_file_version(&app, 300, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 300, "docs/note.md").await;
         let payload = call_tool(
             &app,
+            &session,
             301,
             "edit_file",
             json!({
@@ -4149,9 +4103,9 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let version = read_file_version(&app, 302, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 302, "docs/note.md").await;
         let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
 
         // Zero matches, several matches (`a` occurs three times), and an
@@ -4159,6 +4113,7 @@ mod tests {
         for (id, old) in [(303, "missing"), (304, "a"), (305, "")] {
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "edit_file",
                 json!({
@@ -4179,6 +4134,7 @@ mod tests {
         // An empty edit list is refused without touching the file.
         let payload = call_tool(
             &app,
+            &session,
             306,
             "edit_file",
             json!({
@@ -4204,11 +4160,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let stale = read_file_version(&app, 306, "docs/note.md").await;
+        let stale = read_file_version(&app, &session, 306, "docs/note.md").await;
         let applied = call_tool(
             &app,
+            &session,
             307,
             "edit_file",
             json!({
@@ -4229,6 +4186,7 @@ mod tests {
         // message tells the client to re-read.
         let refused = call_tool(
             &app,
+            &session,
             308,
             "edit_file",
             json!({
@@ -4248,6 +4206,7 @@ mod tests {
         // The same edit with the fresh version succeeds.
         let retried = call_tool(
             &app,
+            &session,
             309,
             "edit_file",
             json!({
@@ -4269,7 +4228,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/docs/note.md")).unwrap();
 
         for (id, bad) in [
@@ -4281,6 +4240,7 @@ mod tests {
         ] {
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "edit_file",
                 json!({
@@ -4310,11 +4270,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // A non-HCL file under `docs/` writes through with no validation.
         let created = call_tool(
             &app,
+            &session,
             315,
             "create_file",
             json!({
@@ -4329,6 +4290,7 @@ mod tests {
         // `README.md` writes through with no validation.
         let created = call_tool(
             &app,
+            &session,
             316,
             "create_file",
             json!({
@@ -4350,11 +4312,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let version = read_file_version(&app, 317, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 317, "docs/note.md").await;
         let payload = call_tool(
             &app,
+            &session,
             318,
             "edit_file",
             json!({
@@ -4379,6 +4342,7 @@ mod tests {
             .to_owned();
         let payload = call_tool(
             &app,
+            &session,
             319,
             "edit_file",
             json!({
@@ -4402,11 +4366,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let version = read_file_version(&app, 320, "docs/note.md").await;
+        let version = read_file_version(&app, &session, 320, "docs/note.md").await;
         let edit_alpha = call_tool(
             &app,
+            &session,
             321,
             "edit_file",
             json!({
@@ -4418,6 +4383,7 @@ mod tests {
         );
         let edit_beta = call_tool(
             &app,
+            &session,
             322,
             "edit_file",
             json!({
@@ -4457,12 +4423,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // 1. A new doc (including a nested path whose parents do not exist
         // yet) is created whole, without any version.
         let created = call_tool(
             &app,
+            &session,
             323,
             "create_file",
             json!({
@@ -4489,6 +4456,7 @@ mod tests {
         let version = created_result["version"].as_str().unwrap().to_owned();
         let edited = call_tool(
             &app,
+            &session,
             324,
             "edit_file",
             json!({
@@ -4510,10 +4478,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let created = call_tool(
             &app,
+            &session,
             325,
             "create_file",
             json!({
@@ -4532,6 +4501,7 @@ mod tests {
         // Overwriting without a version is refused: the file already exists.
         let missing = call_tool(
             &app,
+            &session,
             326,
             "create_file",
             json!({
@@ -4546,6 +4516,7 @@ mod tests {
         // Overwriting with a stale version is refused and leaves the file.
         let stale = call_tool(
             &app,
+            &session,
             327,
             "create_file",
             json!({
@@ -4568,6 +4539,7 @@ mod tests {
         // Overwriting with the matching version replaces the file whole.
         let overwritten = call_tool(
             &app,
+            &session,
             328,
             "create_file",
             json!({
@@ -4593,7 +4565,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         for (id, bad) in [
             (329, "../outside.md"),
@@ -4603,6 +4575,7 @@ mod tests {
         ] {
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "create_file",
                 json!({
@@ -4630,11 +4603,12 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // Seed a file, then race two overwrites with the same version.
         let created = call_tool(
             &app,
+            &session,
             333,
             "create_file",
             json!({
@@ -4652,6 +4626,7 @@ mod tests {
 
         let first = call_tool(
             &app,
+            &session,
             334,
             "create_file",
             json!({
@@ -4663,6 +4638,7 @@ mod tests {
         );
         let second = call_tool(
             &app,
+            &session,
             335,
             "create_file",
             json!({
@@ -4692,14 +4668,15 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
-        let version = read_file_version(&app, 336, "system.hcl").await;
+        let version = read_file_version(&app, &session, 336, "system.hcl").await;
 
         // Breaking the model (unknown source `missing` is E014) is refused
         // byte-identical.
         let refused = call_tool(
             &app,
+            &session,
             337,
             "edit_file",
             json!({
@@ -4721,13 +4698,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
-        let version = read_file_version(&app, 338, "system.hcl").await;
+        let version = read_file_version(&app, &session, 338, "system.hcl").await;
 
         let broken = "system \"demo\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
         let refused = call_tool(
             &app,
+            &session,
             339,
             "create_file",
             json!({
@@ -4749,13 +4727,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
         let before = std::fs::read_to_string(tmp.path().join("demo/views/overview.hcl")).unwrap();
-        let version = read_file_version(&app, 340, "views/overview.hcl").await;
+        let version = read_file_version(&app, &session, 340, "views/overview.hcl").await;
 
         // Unknown system is E006: refused, file untouched.
         let refused = call_tool(
             &app,
+            &session,
             341,
             "edit_file",
             json!({
@@ -4777,6 +4756,7 @@ mod tests {
         // A valid view edit applies and `check_project` stays clean.
         let applied = call_tool(
             &app,
+            &session,
             342,
             "edit_file",
             json!({
@@ -4789,7 +4769,14 @@ mod tests {
         .await;
         assert_ne!(applied["result"]["isError"], json!(true), "{applied}");
 
-        let check = call_tool(&app, 343, "check_project", json!({ "project": "demo" })).await;
+        let check = call_tool(
+            &app,
+            &session,
+            343,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
         assert_ne!(check["result"]["isError"], json!(true), "{check}");
         let diagnostics = result_value(&check)["diagnostics"]
             .as_array()
@@ -4806,12 +4793,13 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         // Valid model edit via `edit_file`.
-        let version = read_file_version(&app, 344, "system.hcl").await;
+        let version = read_file_version(&app, &session, 344, "system.hcl").await;
         let edited = call_tool(
             &app,
+            &session,
             345,
             "edit_file",
             json!({
@@ -4827,6 +4815,7 @@ mod tests {
         // Valid doc write via `create_file`.
         let created = call_tool(
             &app,
+            &session,
             346,
             "create_file",
             json!({
@@ -4838,7 +4827,14 @@ mod tests {
         .await;
         assert_ne!(created["result"]["isError"], json!(true), "{created}");
 
-        let check = call_tool(&app, 347, "check_project", json!({ "project": "demo" })).await;
+        let check = call_tool(
+            &app,
+            &session,
+            347,
+            "check_project",
+            json!({ "project": "demo" }),
+        )
+        .await;
         assert_ne!(check["result"]["isError"], json!(true), "{check}");
         let diagnostics = result_value(&check)["diagnostics"]
             .as_array()
@@ -4852,9 +4848,10 @@ mod tests {
 
     /// Reads the primary model file's short content-hash `version` through the
     /// `read_file` tool, the same value `create_file` requires.
-    async fn read_model_version(app: &Router, id: i64) -> String {
+    async fn read_model_version(app: &Router, session: &str, id: i64) -> String {
         let payload = call_tool(
             app,
+            session,
             id,
             "read_file",
             json!({ "project": "demo", "path": "system.hcl" }),
@@ -4878,12 +4875,13 @@ mod tests {
         )
         .unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
-        let version = read_model_version(&app, 400).await;
+        let version = read_model_version(&app, &session, 400).await;
         let fixed = "system \"demo\" {\n  full_name = \"Demo\"\n}\n";
         let payload = call_tool(
             &app,
+            &session,
             401,
             "create_file",
             json!({ "project": "demo", "path": "system.hcl", "content": fixed, "version": version }),
@@ -4910,10 +4908,10 @@ mod tests {
         // schema is one fewer thing that can go wrong (tool-design.md).
         let tmp = tempfile::tempdir().unwrap();
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let list = json!({ "jsonrpc": "2.0", "id": 500, "method": "tools/list" });
-        let (status, payload) = post_rpc(&app, &list).await;
+        let (status, _, payload) = post_rpc(&app, &list, Some(&session)).await;
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
@@ -5032,10 +5030,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_full_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             501,
             "read_file",
             json!({ "project": "drone", "path": "system.hcl", "limit": 501 }),
@@ -5049,10 +5048,11 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_drone_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let payload = call_tool(
             &app,
+            &session,
             502,
             "add_system",
             json!({ "project": "drone", "label": "" }),
@@ -5067,7 +5067,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_connected_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         for (id, port) in [
             (503, json!({ "existing": "out", "new": { "label": "x" } })),
@@ -5075,6 +5075,7 @@ mod tests {
         ] {
             let payload = call_tool(
                 &app,
+                &session,
                 id,
                 "connect_components",
                 json!({
@@ -5099,15 +5100,16 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         write_docs_project(tmp.path());
         let app = app(tmp.path().to_path_buf());
-        discover(&app).await;
+        let session = handshake(&app).await;
 
         let before = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
-        let version = read_model_version(&app, 402).await;
+        let version = read_model_version(&app, &session, 402).await;
 
         // Unresolvable content is refused with diagnostics, file untouched.
         let broken = "system \"demo\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
         let refused = call_tool(
             &app,
+            &session,
             403,
             "create_file",
             json!({ "project": "demo", "path": "system.hcl", "content": broken, "version": version }),
@@ -5124,6 +5126,7 @@ mod tests {
         let fixed = "system \"demo\" {\n  full_name = \"Demo\"\n}\n";
         let missing = call_tool(
             &app,
+            &session,
             404,
             "create_file",
             json!({ "project": "demo", "path": "system.hcl", "content": fixed }),
@@ -5132,6 +5135,7 @@ mod tests {
         assert_eq!(missing["result"]["isError"], json!(true), "{missing}");
         let stale = call_tool(
             &app,
+            &session,
             405,
             "create_file",
             json!({ "project": "demo", "path": "system.hcl", "content": fixed, "version": "deadbeef" }),
