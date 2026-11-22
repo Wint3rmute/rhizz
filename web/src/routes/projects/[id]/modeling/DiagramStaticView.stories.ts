@@ -561,8 +561,9 @@ export const DoubleKnee: Story = {
 };
 
 // Delegation (SPEC.md §6.9): the boundary dot forwards inward with one
-// segment per hop, drawn as a plain line without an arrowhead. Closed box
-// shows only the assembly edge; the open box adds the internal segment.
+// segment per hop, arrowed by flow direction (inner provider = outward).
+// Closed box shows only the assembly edge; the open box adds the internal
+// segment.
 const delegationComponents = [
   {
     label: "user",
@@ -624,12 +625,12 @@ export const DelegationOpenBox: Story = {
       "[data-testid='diagram-edge']",
     );
     await expect(edges.length).toBe(2);
-    // The assembly edge keeps its arrowhead; the delegation segment draws
-    // as a plain line (identity, no direction).
+    // Both edges are arrowed: the assembly edge and the delegation segment
+    // (inner provider flows outward, so its arrow sits at the start).
     const polygons = canvasElement.querySelectorAll(
       "[data-testid='diagram-edge'] polygon",
     );
-    await expect(polygons.length).toBe(1);
+    await expect(polygons.length).toBe(2);
     const labels = Array.from(edges).map(
       (edge) => edge.querySelector("text")?.textContent,
     );
@@ -639,7 +640,7 @@ export const DelegationOpenBox: Story = {
     const delegation = Array.from(edges).find(
       (edge) => edge.querySelector("text")?.textContent === "api-delegation",
     );
-    await expect(delegation?.querySelector("polygon")).toBeNull();
+    await expect(delegation?.querySelector("polygon")).not.toBeNull();
     // Boundary and inner dots both render: the edge names real ports.
     const portLabels = Array.from(
       canvasElement.querySelectorAll("[data-testid='diagram-port'] text"),

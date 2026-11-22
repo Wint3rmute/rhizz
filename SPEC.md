@@ -904,9 +904,12 @@ including via projection (§6.2–§6.8).
 
 Connection direction is inferred from the `role` values of the connected ports.
 For projected connections the roles of the original ports apply unchanged.
-For delegation, §6.1 reads *through* the chain via inherited roles: the
-delegation segment itself is identity and draws without an arrowhead, while the
-external assembly edge keeps its inferred arrow.
+For delegation, §6.1 reads *through* the chain via inherited roles: both ends
+share one role, so the pair rule below cannot apply. Instead the inner port's
+role orients the segment — `provider` inner supplies outward (inner → outer),
+`consumer` inner sinks inward (outer → inner), `peer` is bidirectional. An
+untyped inner stays arrowless. The external assembly edge keeps its own
+inferred arrow, so an open box shows a continuous flow.
 
 | `from` role         | `to` role                | Inferred direction             |
 | ------------------- | ------------------------ | ------------------------------ |
@@ -1190,7 +1193,9 @@ Delegation reuses existing blocks — no view format change.
   they belong to the unplaced interior.
 - **Open box** (owner + children placed): the assembly edge arrives at the
   boundary dot on its outer face; each delegation edge draws one internal segment
-  from the boundary dot to the child dot. No transitive collapsing: two hops draw
+  from the boundary dot to the child dot, arrowed by flow direction (§6.1:
+  provider inner points outward, consumer inner points inward, peer draws both
+  heads, untyped draws none). No transitive collapsing: two hops draw
   two segments. If the proxy dot is on side `S`, external uses `S` outward and
   delegation exits `opposite(S)` inward.
 - **Half-open** (owner + some interior placed): segments to unplaced children are

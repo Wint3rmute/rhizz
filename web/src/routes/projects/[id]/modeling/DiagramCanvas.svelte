@@ -446,13 +446,35 @@
       style={edgeInteractive ? undefined : "pointer-events: none"}
     />
     {#if conn.noArrow !== true}
+      {#if conn.doubleArrow === true}
+        <polygon
+          points={arrowHead(
+            b.x,
+            b.y,
+            endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
+            endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
+          )}
+          fill={conn.selected
+            ? "var(--color-primary)"
+            : "var(--color-base-content)"}
+          fill-opacity={conn.selected ? 1 : 0.5}
+          style="pointer-events: none"
+        />
+      {/if}
       <polygon
-        points={arrowHead(
-          b.x,
-          b.y,
-          endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
-          endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
-        )}
+        points={conn.reverseArrow === true || conn.doubleArrow === true
+          ? arrowHead(
+              a.x,
+              a.y,
+              orientation === "horizontal" ? (a.x >= b.x ? 1 : -1) : 0,
+              orientation === "vertical" ? (a.y >= b.y ? 1 : -1) : 0,
+            )
+          : arrowHead(
+              b.x,
+              b.y,
+              endOrientation === "horizontal" ? (b.x >= a.x ? 1 : -1) : 0,
+              endOrientation === "vertical" ? (b.y >= a.y ? 1 : -1) : 0,
+            )}
         fill={conn.selected
           ? "var(--color-primary)"
           : "var(--color-base-content)"}

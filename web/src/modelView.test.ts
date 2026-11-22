@@ -675,10 +675,11 @@ system "demo" {
       "demo/fc": { out: { side: "top", offset: 0.25 } },
     });
     expect(byIndex.get(index)).toEqual([
-      { label: "in", role: "consumer", protocol: "spi" },
+      { label: "in", role: "consumer", roleRaw: "consumer", protocol: "spi" },
       {
         label: "out",
         role: "provider",
+        roleRaw: "provider",
         protocol: "spi",
         spot: { side: "top", offset: 0.25 },
       },

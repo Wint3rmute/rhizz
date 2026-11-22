@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  delegationArrowDirection,
   isProjectionDrawn,
   normalizeEndpointRef,
   projectedPortDots,
@@ -535,5 +536,135 @@ describe("delegation edges (SPEC.md §6.9)", () => {
     expect(
       projectedPortDots([delegation], ctx([1, 3]), keysOf, () => undefined),
     ).toEqual([]);
+  });
+});
+
+describe("delegationArrowDirection", () => {
+  // Same hierarchy as above: 1:B owns 3:C.
+  const parentOf = (index: number): number | undefined => parents[index];
+  const roles = new Map<string, string>([
+    ["1:api", "provider"],
+    ["3:deep", "provider"],
+    ["1:sink", "consumer"],
+    ["3:in", "consumer"],
+    ["1:both", "peer"],
+    ["3:both", "peer"],
+  ]);
+  const roleOf = (
+    component: number,
+    port: string | undefined,
+  ): string | undefined => roles.get(`${String(component)}:${port ?? ""}`);
+
+  it("provider inner flows outward (to->from when outer is from)", () => {
+    // from=outer(1), to=inner(3), provider inner -> backward (arrow at start).
+    expect(
+      delegationArrowDirection({
+        from: 1,
+        to: 3,
+        fromPort: "api",
+        toPort: "deep",
+        parentOf,
+        roleOf,
+      }),
+    ).toBe("backward");
+  });
+
+  it("provider inner flows outward (from->to when inner is from)", () => {
+    expect(
+      delegationArrowDirection({
+        from: 3,
+        to: 1,
+        fromPort: "deep",
+        toPort: "api",
+        parentOf,
+        roleOf,
+      }),
+    ).toBe("forward");
+  });
+
+  it("consumer inner flows inward (from->to when outer is from)", () => {
+    const consumerRoles = (
+      c: number,
+      p: string | undefined,
+    ): string | undefined =>
+      c === 3 && p === "in" ? "consumer" : roleOf(c, p);
+    expect(
+      delegationArrowDirection({
+        from: 1,
+        to: 3,
+        fromPort: "sink",
+        toPort: "in",
+        parentOf,
+        roleOf: consumerRoles,
+      }),
+    ).toBe("forward");
+  });
+
+  it("consumer inner flows inward (backward when outer is to)", () => {
+    const consumerRoles = (
+      c: number,
+      p: string | undefined,
+    ): string | undefined =>
+      c === 1 && p === "sink" ? "consumer" : "consumer";
+    expect(
+      delegationArrowDirection({
+        from: 1,
+        to: 3,
+        fromPort: "sink",
+        toPort: "in",
+        parentOf,
+        roleOf: consumerRoles,
+      }),
+    ).toBe("forward");
+    expect(
+      delegationArrowDirection({
+        from: 3,
+        to: 1,
+        fromPort: "in",
+        toPort: "sink",
+        parentOf,
+        roleOf: consumerRoles,
+      }),
+    ).toBe("backward");
+  });
+
+  it("peer inner is bidirectional", () => {
+    const peerRoles = (): string | undefined => "peer";
+    expect(
+      delegationArrowDirection({
+        from: 1,
+        to: 3,
+        fromPort: "both",
+        toPort: "both",
+        parentOf,
+        roleOf: peerRoles,
+      }),
+    ).toBe("both");
+  });
+
+  it("untyped inner stays arrowless", () => {
+    expect(
+      delegationArrowDirection({
+        from: 1,
+        to: 3,
+        fromPort: "api",
+        toPort: "missing",
+        parentOf,
+        roleOf: () => undefined,
+      }),
+    ).toBe("none");
+  });
+
+  it("non-parent endpoints stay arrowless", () => {
+    expect(
+      delegationArrowDirection({
+        from: 0,
+        to: 4,
+        fromPort: "a",
+        toPort: "b",
+        parentOf,
+        roleOf: () => "provider",
+      }),
+    ).toBe("none");
   });
 });

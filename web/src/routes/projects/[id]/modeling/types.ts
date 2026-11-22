@@ -3,6 +3,8 @@ import type { Box, PortSpot, TextAlign } from "./geometry";
 export interface DiagramStaticPort {
   label: string;
   role: "provider" | "consumer" | "peer";
+  /** Raw role before normalization (`undefined` when omitted). Drives delegation arrows; placement falls back to `peer`. */
+  roleRaw?: string | undefined;
   protocol?: string;
   /** Per-view outline spot. Absent means the role default applies. */
   spot?: PortSpot;
@@ -29,7 +31,8 @@ export interface DiagramStaticConnection {
   fromPort?: string | undefined;
   /** Port label on the `to` component. Anchors the edge to that dot. */
   toPort?: string | undefined;
-  /** Delegation edge (SPEC.md §6.9): draws without an arrowhead. */
+  /** Delegation edge (SPEC.md §6.9): draws with an arrowhead showing flow
+   * direction, or arrowless when the inner role is untyped. */
   isDelegation?: boolean | undefined;
 }
 

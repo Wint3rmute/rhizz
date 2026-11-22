@@ -18,6 +18,7 @@ import type {
   DiagramStaticConnection,
   DiagramStaticPort,
 } from "./types";
+import { delegationArrowDirection } from "./connectionProjection";
 
 export type DiagramNodeHandles = "none" | "connect" | "resize" | "both";
 
@@ -53,9 +54,15 @@ export interface DiagramEdge {
   toPort?: string | undefined;
   selected: boolean;
   opacity?: number | undefined;
-  /** Delegation segments (SPEC.md §6.9) draw as plain lines: identity, no
-   * direction, hence no arrowhead. */
+  /** Delegation segments (SPEC.md §6.9) carry an arrowhead showing flow
+   * direction (inner provider = outward, inner consumer = inward). `none`
+   * stays arrowless for untyped roles. */
   noArrow?: boolean | undefined;
+  /** Arrowhead at the start (`a`) instead of the end (`b`): delegation flow
+   * runs opposite the declared `from`/`to` order. */
+  reverseArrow?: boolean | undefined;
+  /** Two arrowheads (one at each end): delegation of a `peer` port. */
+  doubleArrow?: boolean | undefined;
 }
 
 export interface DiagramNote {
@@ -278,7 +285,31 @@ export function buildReadOnlyScene(input: {
         conn.isDelegation ??
         (conn as unknown as { is_delegation?: boolean }).is_delegation ??
         false;
-      if (delegation) edge.noArrow = true;
+      if (delegation) {
+        const arrow = delegationArrowDirection({
+          from: conn.from,
+          to: conn.to,
+          fromPort,
+          toPort,
+          parentOf: (index: number) =>
+            input.components[index]?.parent_component_index,
+          roleOf: (componentIndex: number, portLabel: string | undefined) => {
+            const ports =
+              input.components[componentIndex]?.ports ??
+              input.portsByIndex[componentIndex];
+            const port = ports?.find((p) => p.label === portLabel);
+            // Prefer the raw role: omitted roles stay arrowless, while an
+            // explicit `peer` draws both heads. Hand-written stories predate
+            // `roleRaw` and carry only the normalized `role`.
+            return port !== undefined && "roleRaw" in port
+              ? (port.roleRaw ?? undefined)
+              : port?.role;
+          },
+        });
+        if (arrow === "none") edge.noArrow = true;
+        else if (arrow === "backward") edge.reverseArrow = true;
+        else if (arrow === "both") edge.doubleArrow = true;
+      }
       return edge;
     }),
     notes: (input.annotations ?? []).map((ann, index) =>
@@ -311,6 +342,8 @@ export interface EditorSceneEdgeInput {
   fromPort?: string | undefined;
   toPort?: string | undefined;
   noArrow?: boolean | undefined;
+  reverseArrow?: boolean | undefined;
+  doubleArrow?: boolean | undefined;
 }
 
 export function buildEditorScene(input: {
@@ -382,6 +415,8 @@ export function buildEditorScene(input: {
       if (edge.fromPort !== undefined) built.fromPort = edge.fromPort;
       if (edge.toPort !== undefined) built.toPort = edge.toPort;
       if (edge.noArrow === true) built.noArrow = true;
+      if (edge.reverseArrow === true) built.reverseArrow = true;
+      if (edge.doubleArrow === true) built.doubleArrow = true;
       return built;
     }),
     notes: input.notes.map((note, index) =>

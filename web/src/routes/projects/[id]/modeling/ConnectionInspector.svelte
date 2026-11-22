@@ -218,15 +218,16 @@
       {#if connection.isDelegation}
         <span
           class="badge badge-ghost badge-sm ml-2 align-middle"
-          title="Delegation edge: forwards the boundary dot inward to a child port. Draws without an arrowhead and only when both ends are placed."
+          title="Delegation edge: forwards the boundary dot inward to a child port. Draws with an arrowhead showing flow direction and only when both ends are placed."
           >Delegation</span
         >
       {/if}
     </h4>
     {#if connection.isDelegation}
       <p class="text-xs text-base-content/60 mt-1">
-        Forwards a boundary dot inward — identity, no direction. Delegation
-        edges never take <span class="font-mono">realized_by</span> (E019).
+        Forwards a boundary dot inward — arrow shows flow (provider outward,
+        consumer inward). Delegation edges never take
+        <span class="font-mono">realized_by</span> (E019).
       </p>
     {/if}
   </div>

@@ -7,9 +7,9 @@ import {
 } from "./helpers";
 
 // Delegation (SPEC.md §6.9): the boundary dot forwards inward with one segment
-// per hop, drawn as a plain line without an arrowhead. Closed box shows only
-// the assembly edge; opening the box adds the internal segment; hiding the
-// child removes it again. The delegation row is never badged `Projected`.
+// per hop, arrowed by flow direction. Closed box shows only the assembly
+// edge; opening the box adds the internal segment; hiding the child removes
+// it again. The delegation row is never badged `Projected`.
 const MODEL = `protocol "sig" {}
 component "leaf" {
   leaf = true
@@ -43,7 +43,7 @@ system "app" {
 }
 `;
 
-test("delegation draws arrowless only when owner and child are placed", async ({
+test("delegation draws arrowed only when owner and child are placed", async ({
   page,
 }) => {
   const id = await createNewProject(page, "E2E delegation edges");
@@ -81,11 +81,11 @@ test("delegation draws arrowless only when owner and child are placed", async ({
   await expect(delegationRow).toBeVisible();
   await expect(delegationBadge).toHaveCount(0);
 
-  // Open box: the delegation segment draws too, without an arrowhead.
+  // Open box: the delegation segment draws too, with its own arrowhead.
   await tree.getByRole("button", { name: "Expand all" }).click();
   await place("proxy");
   await expect(edges()).toHaveCount(2);
-  await expect(arrows()).toHaveCount(1);
+  await expect(arrows()).toHaveCount(2);
   await expect(edges().filter({ hasText: "forecast" })).toHaveCount(1);
   await expect(edges().filter({ hasText: "api-delegation" })).toHaveCount(1);
   await expect(delegationBadge).toHaveCount(0);
@@ -233,7 +233,7 @@ test("the new-connection dialog offers a delegation variant for the scope itself
   await page.keyboard.press("Enter");
   await expect(dialog).toBeHidden();
 
-  // The delegation edge draws without an arrowhead; the outside edge keeps its.
+  // Untyped delegation stays arrowless; the outside edge keeps its arrow.
   await expect(canvas.getByTestId("diagram-edge")).toHaveCount(2);
   await expect(
     canvas.getByTestId("diagram-edge").locator("polygon"),

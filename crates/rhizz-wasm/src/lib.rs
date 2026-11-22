@@ -417,8 +417,8 @@ impl ConnectionJS {
     }
 
     /// Whether this connection is a delegation edge (exactly one `./port`
-    /// self endpoint): it draws without an arrowhead and only when both
-    /// ends are directly placed (see SPEC.md §6.9).
+    /// self endpoint): it draws with a flow-direction arrowhead and only
+    /// when both ends are directly placed (see SPEC.md §6.9).
     #[wasm_bindgen(getter)]
     #[must_use]
     #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns

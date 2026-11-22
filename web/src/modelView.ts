@@ -28,6 +28,8 @@ export interface PortData {
   full_name?: string;
   protocol?: string;
   role: "provider" | "consumer" | "peer";
+  /** Raw `role` before normalization: `undefined` when omitted (vs explicit `peer`). */
+  roleRaw?: string | undefined;
   external?: boolean | undefined;
   required?: boolean | undefined;
   tags?: string[];
@@ -92,6 +94,7 @@ export function staticPortsByIndex(
       data.ports.map((port) => ({
         label: port.label,
         role: port.role,
+        roleRaw: port.roleRaw,
         ...(port.protocol ? { protocol: port.protocol } : {}),
         ...(spots?.[port.label] !== undefined
           ? { spot: spots[port.label] }
@@ -224,7 +227,7 @@ export interface ConnectionData {
   complete: boolean;
   /** Root cause of an incomplete chain, when there is one. */
   blocking?: ConnectionRef | undefined;
-  /** Delegation edge (SPEC.md §6.9): draws without an arrowhead. */
+  /** Delegation edge (SPEC.md §6.9): draws with an arrowhead showing flow direction. */
   isDelegation?: boolean | undefined;
 }
 
@@ -293,6 +296,7 @@ export function componentDataByKey(
           full_name: port?.full_name ?? "",
           protocol: port?.protocol ?? "",
           role: toRole(port?.role),
+          roleRaw: port?.role ?? undefined,
           external: port?.external,
           required: port?.required ?? true,
           tags: port?.tags ?? [],
