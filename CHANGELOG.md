@@ -18,6 +18,8 @@
 
 ### Fix
 
+- **deps**: bump rmcp to 3.11.0
+- **deps**: bump url to 2.5.9 (RUSTSEC-2026-0592)
 - **web**: stop seeding docs/.gitkeep in new projects
 - **web**: surface server error body in VFS failure messages
 - **server**: avoid string-slice clippy lints in short versions
