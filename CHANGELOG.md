@@ -27,6 +27,7 @@
 
 ### Refactor
 
+- **nix**: runnable task scripts instead of one big devshell
 - **core**: remove unused applied_none after AddConnection wipe
 - **web,docs**: remove add_connection, keep connect_components
 - **server**: remove add_connection tool, keep connect_components

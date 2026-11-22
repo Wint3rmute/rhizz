@@ -1,10 +1,11 @@
 # Common development tasks for the workspace.
-
-has_nix := if shell('command -v nix >/dev/null 2>&1 && { [ -f flake.nix ] || [ -f ../flake.nix ]; } && echo 1 || echo 0') == "1" {
-    "true"
-} else {
-    "false"
-}
+#
+# Nix is required. Every recipe runs a runnable script defined in
+# nix/tasks.nix via `nix run .#<task>` — each script declares exactly the
+# binaries it needs (`{pkgs.cargo}/bin/cargo`, ...), so a Rust lint never
+# pulls Node/browsers/mdbook. Scripts execute in the working tree (dirty
+# edits and incremental `target/` / `node_modules/` keep working).
+# `wasm` / `web-build` use `nix build` (the same derivations CI uses).
 
 alias c := lint-commit
 alias b := build
@@ -16,40 +17,37 @@ alias f := format
 alias fmt := format
 alias bs := book-serve
 
-run := if has_nix == "true" { "nix develop --command" } else { "" }
-
 # Versions come from git tags (version_provider = "scm").
 # Bumps from commits since the last tag, updates CHANGELOG.md, creates the tag.
 # HEADLINE becomes the annotated tag subject, used as the GitHub Release title.
 # Preview first with `just bump "My headline" --dry-run`.
 bump headline *args:
-    {{run}} cz bump --annotated-tag-message "{{headline}}" {{args}}
+    nix run .#bump -- "{{headline}}" {{args}}
 
 # Regenerates CHANGELOG.md.
 changelog *args:
-    {{run}} cz changelog {{args}}
+    nix run .#changelog -- {{args}}
 
 format:
-    {{run}} cargo fmt --all
-    {{run}} sh -c 'cd web && npm run format'
+    nix run .#format
 
 lint: lint-rust lint-frontend lint-commit
 
 lint-rust:
-    {{run}} sh -c 'cargo clippy --all-targets --all-features -- -D warnings && cargo doc --no-deps --all'
+    nix run .#lint-rust
 
 lint-frontend:
-    {{run}} sh -c 'cd web && npm run sync && npm run eslint && npm run check-only'
+    nix run .#lint-frontend
 
 # Validates every commit since BASE. CI runs the same check on PRs.
 # Checks commits since origin/main by default.
 lint-commit base="origin/main":
-    {{run}} sh -c 'if [ -z "$(git rev-list {{base}}..HEAD)" ]; then echo "No commits since {{base}}, nothing to check."; else cz check --rev-range {{base}}..HEAD; fi'
+    nix run .#lint-commit -- {{base}}
 
 test: wasm
-    {{run}} cargo test --quiet --all
-    {{run}} sh -c 'cd web && npm run test'
-    {{run}} sh -c 'cd web && npm run test:e2e'
+    nix run .#test-rust
+    nix run .#test-web
+    nix run .#test-e2e
 
 # Single instrumented coverage pass, mirroring CI: runs all tests (incl.
 # doctests, hence RUSTC_BOOTSTRAP) under llvm-cov, enforces the 80% line
@@ -57,21 +55,17 @@ test: wasm
 # rhizz-wasm is excluded (wasm cdylib, no host tests) and crates/*/tests
 # are not counted as source.
 #
-# TEMPORARY (Rust 1.99 regression, TODO: use `{{run}}` again once nixpkgs
-# Rust emits valid profiles): Rust 1.99.0 generates empty profiles
+# TEMPORARY (Rust 1.99 regression): Rust 1.99.0 generates empty profiles
 # (format version 11, zero counters) and segfaults instrumented build
-# scripts, so coverage runs in the pinned `.#coverage` devshell
-# (Rust 1.98.1, see flake.nix) instead of the default shell.
-# Requires nix; no non-nix fallback (same as `wasm`).
+# scripts, so coverage uses the pinned Rust 1.98.1 toolchain (see
+# nix/tasks.nix `coverage` and the `nixpkgs-coverage` flake input).
 coverage:
-    {{run}} mkdir -p target/coverage
-    nix develop .#coverage --command sh -c 'RUSTC_BOOTSTRAP=1 cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info'
-    nix develop .#coverage --command sh -c 'cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml'
+    nix run .#coverage
 
 # Builds the wasm package via its Nix derivation (nix/wasm.nix) — the same
 # build CI runs — and syncs the result into crates/rhizz-wasm/pkg/, the
-# `file:` dependency of web/. Requires nix; there is no non-nix fallback
-# (the flake pins wasm-pack and a matching wasm-bindgen-cli).
+# `file:` dependency of web/. Requires nix (the flake pins wasm-pack and
+# a matching wasm-bindgen-cli).
 #
 # NOTE: `nix build .#` snapshots the git tree, so edits to already-tracked
 # files are picked up but a brand-new source file must be `git add`ed first.
@@ -85,7 +79,7 @@ wasm:
 # Builds the web app into web/build/ via its Nix derivation (nix/frontend.nix) —
 # the same artifact rhizz-server embeds — so what gets embedded is what
 # production ships. It also makes the build hermetic: it uses the locked
-# dependency graph rather than whatever happens to be in the devshell's
+# dependency graph rather than whatever happens to be in a devshell's
 # node_modules (which is what `npm run build` silently used).
 #
 # The cost is speed: ~28s for a one-line change, against ~6s for
@@ -111,69 +105,56 @@ web-build:
 # written node_modules/$app/tsconfig.json, and the tool reads tsconfig.json
 # before anything syncs.
 build: web-build
-    {{run}} sh -c 'cd web && npm run build-storybook'
-    {{run}} cargo build --release --all-targets
+    nix run .#build
 
 # Builds the mdBook (book/). The preprocessor (crates/rhizz-book) compiles
 # every ```rhizz block in-process and verifies the results against
 # book/book.lock (regenerate with `just book-accept` after intentional
 # changes).
 book:
-    {{run}} cargo build --quiet --bin rhizz-book
-    {{run}} mdbook build book
+    nix run .#book
 
 # Regenerates book/book.lock from the current compiler output.
 # Review the per-block diff it prints before committing.
-# NOTE: plain `sh -c` (not `sh -lc`) — a login shell resets PATH and loses
-# the nix dev shell, where mdbook lives. Same reason the web recipes below
-# avoid `-l`.
 book-accept:
-    {{run}} cargo build --quiet --bin rhizz-book
-    {{run}} env BOOKLOCK_ACCEPT_CHANGES=1 mdbook build book
+    nix run .#book-accept
 
 book-serve:
-    {{run}} mdbook serve book
+    nix run .#book-serve
 
 # Visual regression tests: full-page screenshot of every Storybook story in
 # dark + light, diffed against web/vrt/__screenshots__/. Always writes the
 # gallery to web/vrt-report/index.html (open it straight from disk).
 # Extra args go to Playwright, e.g. `just vrt -g navbar`.
 vrt *args: wasm
-    {{run}} sh -c 'cd web && npm run build-storybook -- --quiet'
-    {{run}} sh -c 'cd web && npm run test:vrt -- {{args}}'
+    nix run .#vrt -- {{args}}
 
 # Same as `vrt`, but skips the wasm + Storybook rebuild.
 vrt-quick *args:
-    {{run}} sh -c 'cd web && npm run test:vrt -- {{args}}'
+    nix run .#vrt-quick -- {{args}}
 
 # Re-baselines every changed/new screenshot (review the gallery first!).
 # Also mirrors derived artifacts into regular files the app/book can bundle
 # (ScrollingBackground sources, README/book landing shot): the VRT baselines
 # themselves live in Git LFS and can't be bundled.
 vrt-accept *args:
-    {{run}} sh -c 'cd web && npm run test:vrt:accept -- {{args}}'
-    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png'
-    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png'
-    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png'
-    {{run}} sh -c 'cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png'
-    {{run}} ./scripts/make-landing.sh
+    nix run .#vrt-accept -- {{args}}
 
 # Cool 3D README/book hero: perspective + drop shadow + gradient background.
 # Regenerates book/src/rhizz_landing.png from the VRT landing screenshot.
 # Pass a custom screenshot to preview with your own capture, e.g.:
 #   just landing my-apollo-shot.png
 landing input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
-    {{run}} ./scripts/make-landing.sh {{input}} assets/landing-gradient.jpg book/src/rhizz_landing.png
+    nix run .#landing -- {{input}}
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
-    {{run}} sh -c 'cd web && npm ci && npm run dev'
+    nix run .#dev
 
 # Starts a storybook server. If you're an AI, never use this. It will just hang forever.
 # Syncs first for the same reason `build` does.
 storybook:
-    {{run}} sh -c 'cd web && npm run sync'
-    {{run}} sh -c 'cd web && npm run storybook'
+    nix run .#storybook
 
 # Serves the UI with examples/ as the server's data dir: each example is a
 # directory of plain HCL, which is exactly what the server persists, so the
@@ -188,5 +169,4 @@ storybook:
 #
 # If you're an AI, never use this. It will just hang forever.
 serve: web-build
-    {{run}} cargo build --release -p rhizz-cli
-    {{run}} env RHIZZ_DATA_DIR=examples cargo run --release -p rhizz-cli -- web
+    nix run .#serve
