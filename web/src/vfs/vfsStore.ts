@@ -141,6 +141,18 @@ export function httpBackend(
   // Last-written file set per project, as canonical JSON. Seeded on read;
   // a backend that never read writes everything once.
   let knownFiles: Map<string, string> | null = null;
+  // Server error bodies carry the reason (e.g. a malformed path), while the
+  // status alone does not — so every failed write/read surfaces the body in
+  // both the toast message and the Sentry log. Truncated: error pages can
+  // be HTML and long, server messages are short plain text.
+  const responseDetail = async (response: Response): Promise<string> => {
+    try {
+      const text = (await response.text()).trim();
+      return text.length > 300 ? `${text.slice(0, 300)}\u2026` : text;
+    } catch {
+      return "";
+    }
+  };
   const snapshotFiles = (data: VfsData): Map<string, string> => {
     const snapshot = new Map<string, string>();
     for (const project of data.projects) {
@@ -161,8 +173,11 @@ export function httpBackend(
     );
     if (response.status === 404) return null;
     if (!response.ok) {
+      const detail = await responseDetail(response);
       throw new Error(
-        `Project version fetch failed: HTTP ${String(response.status)}`,
+        detail
+          ? `Project version fetch failed: HTTP ${String(response.status)} \u2013 ${detail}`
+          : `Project version fetch failed: HTTP ${String(response.status)}`,
       );
     }
     const state = (await response.json()) as { version?: unknown };
@@ -187,16 +202,18 @@ export function httpBackend(
       },
     );
     if (!response.ok) {
+      const detail = await responseDetail(response);
+      const message = detail
+        ? `Project save failed: HTTP ${String(response.status)} \u2013 ${detail}`
+        : `Project save failed: HTTP ${String(response.status)}`;
       // Forwarded to Sentry Logs in prod (see hooks.client.ts): lock and
       // version refusals are otherwise only visible as toasts.
-      console.error(
-        `Project save failed: HTTP ${String(response.status)} for project "${projectId}"`,
-        { projectId, status: response.status },
-      );
-      throw statusError(
-        `Project save failed: HTTP ${String(response.status)}`,
-        response.status,
-      );
+      console.error(`${message} for project "${projectId}"`, {
+        projectId,
+        status: response.status,
+        detail,
+      });
+      throw statusError(message, response.status);
     }
   };
 
@@ -206,15 +223,17 @@ export function httpBackend(
       headers: { ...userHeaders() },
     });
     if (!response.ok) {
+      const detail = await responseDetail(response);
+      const message = detail
+        ? `Project delete failed: HTTP ${String(response.status)} \u2013 ${detail}`
+        : `Project delete failed: HTTP ${String(response.status)}`;
       // Same Sentry treatment as rejected saves (see putProject above).
-      console.error(
-        `Project delete failed: HTTP ${String(response.status)} for project "${projectId}"`,
-        { projectId, status: response.status },
-      );
-      throw statusError(
-        `Project delete failed: HTTP ${String(response.status)}`,
-        response.status,
-      );
+      console.error(`${message} for project "${projectId}"`, {
+        projectId,
+        status: response.status,
+        detail,
+      });
+      throw statusError(message, response.status);
     }
   };
 
@@ -222,7 +241,12 @@ export function httpBackend(
     read: async () => {
       const response = await fetchImpl(`${origin}${VFS_ENDPOINT}`);
       if (!response.ok) {
-        throw new Error(`VFS fetch failed: HTTP ${String(response.status)}`);
+        const detail = await responseDetail(response);
+        throw new Error(
+          detail
+            ? `VFS fetch failed: HTTP ${String(response.status)} \u2013 ${detail}`
+            : `VFS fetch failed: HTTP ${String(response.status)}`,
+        );
       }
       const data = sanitizeVfsData(await response.json());
       knownFiles = snapshotFiles(data);
