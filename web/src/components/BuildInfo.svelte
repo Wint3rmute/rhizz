@@ -1,5 +1,6 @@
 <script lang="ts">
   import { fetchBuildInfo, type BuildInfo } from "../buildInfo";
+  import { trackedFetch } from "../netActivity";
 
   // The commit the running `rhizz web` server was built from, shown as a
   // footer. Only a server build exposes `/api/version`; the browser-only build
@@ -23,7 +24,8 @@
   const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
   let fetched = $state<BuildInfo | null>(null);
   if (serverUrl) {
-    void fetchBuildInfo(serverUrl).then((info) => {
+    // Background noise for the activity widget (`/api/version` never shows).
+    void fetchBuildInfo(serverUrl, trackedFetch).then((info) => {
       fetched = info;
     });
   } else if (import.meta.env.DEV) {

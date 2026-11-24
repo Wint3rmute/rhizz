@@ -18,6 +18,7 @@
   import { ServerProjectStore } from "./vfs/vfsStore";
   import { getOrCreateUsername } from "./collab/identity";
   import { getSafeStorage } from "./safeStorage";
+  import { netActivity, trackedFetch } from "./netActivity";
   import type { ProjectStore } from "./vfs/store";
   import type { Project } from "./vfs/types";
 
@@ -37,6 +38,7 @@
       return new ServerProjectStore(serverUrl, {
         getUser: getOrCreateUsername,
         onPersisted: reportVfsSizeBytes,
+        fetch: trackedFetch,
       });
     }
     // Null when third-party storage is blocked: evaluating
@@ -55,6 +57,15 @@
   // wired here, the one place the production store is built, because size
   // reporting is a browser-only concern the store itself stays free of.
   export const projectStore: ProjectStore = createDefaultStore();
+
+  // Test seam for the network-activity E2E: lets the spec drive a slow or
+  // failing tracked request without needing a real rhizz-server (local
+  // first-run has zero requests, so the widget would otherwise stay hidden).
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    (
+      window as unknown as { __netActivity?: typeof netActivity }
+    ).__netActivity = netActivity;
+  }
 
   /** The rhizz-server origin, or null for local/memory backends. */
   export function getServerBaseUrl(): string | null {

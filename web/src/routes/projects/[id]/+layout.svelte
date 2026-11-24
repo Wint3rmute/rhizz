@@ -12,6 +12,7 @@
     setCurrentProject,
   } from "../../../ProjectState.svelte";
   import { projectLock } from "../../../collab/projectLock.svelte";
+  import { trackedFetch } from "../../../netActivity";
   import { toastState } from "../../../ToastState.svelte";
   import ProjectTour from "../../../tour/ProjectTour.svelte";
   import PaletteHost from "../../../commands/PaletteHost.svelte";
@@ -65,7 +66,7 @@
     });
     // Track this project's lock (a no-op poller for local/memory
     // backends): the badge and every editor's read-only flag follow it.
-    projectLock.start(id, getServerBaseUrl());
+    projectLock.start(id, getServerBaseUrl(), trackedFetch);
   });
 
   // A version that was known and goes missing means the project was
