@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: dock network status at bar far right, hide below sm
 - **web**: ring spinner plus idle Project Saved pill
 - **web**: network activity tracker and bottom-bar widget
 - **web**: move theme toggle and tour entry into settings
