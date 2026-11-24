@@ -13,9 +13,10 @@ concurrency:
 
 # All toolchains come from flake.nix (pinned via flake.lock): every job
 # installs Nix, warms /nix/store from cache, then runs either a Nix derivation
-# or the same `just` recipes and tool commands developers run locally. No
-# per-tool setup actions (rust-toolchain, setup-node, mdbook, wasm-pack
-# installer) remain.
+# or a runnable task script (`nix run .#<task>`, see nix/tasks.nix) — the same
+# scripts `just` runs locally, without entering the devshell. No per-tool
+# setup actions (rust-toolchain, setup-node, mdbook, wasm-pack installer)
+# remain.
 
 jobs:
   # Was `rust` in the old monolithic workflow; renamed to avoid the
@@ -40,15 +41,16 @@ jobs:
           shared-key: "rust"
           cmd-format: nix develop -c {0}
 
-      - run: nix develop --command cargo fmt --all -- --check
-      - run: nix develop --command cargo clippy --all-targets --all-features -- -D warnings
+      # `lint-rust` covers fmt --check + clippy + cargo doc, each with only
+      # the Rust toolchain (no Node/browsers/mdbook).
+      - run: nix run .#lint-rust
       # Single instrumented pass: runs all tests (incl. doctests) + writes
       # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
       # (wasm cdylib, no host tests) and crates/*/tests are not counted as
       # source. --doctests is unstable, hence RUSTC_BOOTSTRAP=1; the cobertura
       # report is generated from the same saved data (no re-test) for when
       # GitHub's native Code Quality upload (beta) becomes available.
-      - run: nix develop --command just coverage
+      - run: nix run .#coverage
 
       # Raw lcov report kept for humans who want the data outside the log.
       - uses: actions/upload-artifact@v7

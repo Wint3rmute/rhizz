@@ -55,11 +55,23 @@ in
 
   lint-rust = write {
     name = "lint-rust";
-    runtimeInputs = with pkgs; [ cargo rustc clippy lld coreutils bash ];
+    runtimeInputs = with pkgs; [ cargo rustc rustfmt clippy lld coreutils bash ];
     text = ''
       set -euo pipefail
+      ${pkgs.cargo}/bin/cargo fmt --all -- --check
       ${pkgs.cargo}/bin/cargo clippy --all-targets --all-features -- -D warnings
       ${pkgs.cargo}/bin/cargo doc --no-deps --all
+    '';
+  };
+
+  # API reference only (`cargo doc`); `lint-rust` also builds docs, plus
+  # fmt + clippy. Used by docs.yml, which uploads target/doc for Pages.
+  doc = write {
+    name = "doc";
+    runtimeInputs = with pkgs; [ cargo rustc lld coreutils bash ];
+    text = ''
+      set -euo pipefail
+      exec ${pkgs.cargo}/bin/cargo doc --no-deps --all
     '';
   };
 
@@ -70,6 +82,7 @@ in
       set -euo pipefail
       cd web || exit 1
       ${pkgs.nodejs}/bin/npm run sync
+      ${pkgs.nodejs}/bin/npm run format:check
       ${pkgs.nodejs}/bin/npm run eslint
       exec ${pkgs.nodejs}/bin/npm run check-only
     '';
@@ -86,6 +99,32 @@ in
       else
         exec ${pkgs.commitizen}/bin/cz check --rev-range "$base"..HEAD
       fi
+    '';
+  };
+
+  # Advisory scan of Cargo.lock (audit.yml): `cargo audit` exits non-zero on
+  # real vulnerabilities but allows informational warnings, which is the
+  # intended gate.
+  audit = write {
+    name = "audit";
+    runtimeInputs = with pkgs; [ cargo cargo-audit coreutils bash ];
+    text = ''
+      set -euo pipefail
+      exec ${pkgs.cargo}/bin/cargo audit
+    '';
+  };
+
+  # Installs web/ dependencies (`npm ci`). CI glue: the other web tasks
+  # assume node_modules exists (locally provided by `just dev`/manual runs),
+  # and `just` itself lives in the devshell, so CI cannot reach `npm` except
+  # through a task script.
+  install-web = write {
+    name = "install-web";
+    runtimeInputs = with pkgs; [ nodejs coreutils bash ];
+    text = ''
+      set -euo pipefail
+      cd web || exit 1
+      exec ${pkgs.nodejs}/bin/npm ci
     '';
   };
 
@@ -110,11 +149,28 @@ in
 
   test-e2e = write {
     name = "test-e2e";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers coreutils bash ];
+    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers python3 coreutils bash ];
     text = ''
       set -euo pipefail
     '' + playwrightEnv + ''
       cd web || exit 1
+      # Fail fast when the installed Playwright driver expects browser
+      # revisions absent from the Nix-provided browsers (see flake.nix).
+      # Catches both a package.json/flake.lock pin mismatch and a stale
+      # web/node_modules resolving an old driver.
+      ${pkgs.python3}/bin/python3 -c '
+      import glob, json, os, sys
+      match = glob.glob("node_modules/playwright-core/browsers.json")
+      expected = set()
+      for path in match:
+          for b in json.load(open(path))["browsers"]:
+              if b["name"] in ("chromium", "chromium-headless-shell"):
+                  expected.add(b["name"].replace("-", "_") + "-" + b["revision"])
+      missing = expected - set(os.listdir(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
+      if missing:
+          sys.exit("playwright/nix browser mismatch, missing: " + ", ".join(sorted(missing)))
+      print("playwright browsers match: " + ", ".join(sorted(expected)))
+      '
       exec ${pkgs.nodejs}/bin/npm run test:e2e
     '';
   };
