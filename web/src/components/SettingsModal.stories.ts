@@ -18,9 +18,3 @@ export const Open: Story = {
     open: true,
   },
 };
-
-export const Closed: Story = {
-  args: {
-    open: false,
-  },
-};
