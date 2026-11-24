@@ -201,16 +201,17 @@ test("the score badge and strictness control live in the bar, not the navbar", a
   // sandwich layout: the toggle is a full-bleed layer *under* the content
   // row, so it spans the bar's whole width (gutters included — a button
   // inside the capped row left them dead), while the badge still starts the
-  // content row and the select still ends it, over the toggle rather than
-  // beside it. The select keeps its own zone: its wrapper is the one
+  // content row and the network status still ends it, over the toggle rather
+  // than beside it. The select keeps its own zone: its wrapper is the one
   // pointer-events-auto hole, so a click on it must not reach the toggle.
-  const [barBox, badgeBox, selectBox, toggleBox] = await Promise.all([
+  const [barBox, badgeBox, selectBox, pillBox, toggleBox] = await Promise.all([
     bar.boundingBox(),
     score.boundingBox(),
     strictness.boundingBox(),
+    bar.getByTestId("net-activity").boundingBox(),
     bar.getByRole("button").boundingBox(),
   ]);
-  if (!barBox || !badgeBox || !selectBox || !toggleBox) {
+  if (!barBox || !badgeBox || !selectBox || !pillBox || !toggleBox) {
     throw new Error("the bar's controls have no bounding boxes");
   }
   // The toggle covers the strip edge to edge…
@@ -220,11 +221,15 @@ test("the score badge and strictness control live in the bar, not the navbar", a
   );
   // …the badge starts the content row (inside the toggle, not left of it)…
   expect(badgeBox.x).toBeGreaterThanOrEqual(toggleBox.x);
-  // …and the select ends the row within the bar's own right padding
-  // (`lg:px-8` at this viewport), so nothing sits between it and the edge.
-  expect(
-    barBox.x + barBox.width - (selectBox.x + selectBox.width),
-  ).toBeLessThan(40);
+  // …and the network status ends the row within the bar's own right padding
+  // (`lg:px-8` at this viewport), docked after the strictness control, so
+  // nothing sits between it and the edge.
+  expect(barBox.x + barBox.width - (pillBox.x + pillBox.width)).toBeLessThan(
+    40,
+  );
+  expect(selectBox.x + selectBox.width).toBeLessThanOrEqual(
+    pillBox.x + pillBox.width,
+  );
   // The select is the toggle's one exclusion: DOM-wise it stays outside the
   // button, so it remains its own control rather than part of the toggle.
   const selectInsideToggle = await bar

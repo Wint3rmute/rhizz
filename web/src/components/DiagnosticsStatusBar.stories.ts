@@ -133,6 +133,11 @@ export const FullStrip: Story = {
     await expect(scoreBadge).toBeInTheDocument();
     await expect(await bar.findByText("1 error")).toBeVisible();
     await expect(bar.getByLabelText("Strictness")).toBeVisible();
+    // Network status docks at the far right, after the select (idle here,
+    // so the saved check).
+    const pill = bar.getByTestId("net-activity");
+    await expect(pill).toBeInTheDocument();
+    await expect(pill).toHaveAttribute("data-state", "saved");
 
     // The strip's toggle is a full-bleed layer *under* the content: the row is
     // capped to the panel's content edges, so a button inside it leaves the
@@ -171,7 +176,9 @@ export const FullStrip: Story = {
 //
 // Only Modeling publishes a score, and a static VRT build never has one, so
 // this is the tightest row the bar really renders: counts on the left,
-// strictness on the right, and the chevron between them.
+// strictness on the right, and the chevron between them. The network status
+// stays hidden down here (like the score badge): phones keep the one line
+// for counts, chevron and strictness.
 export const NarrowStrip: Story = {
   loaders: [resetDiagnosticsBar],
   globals: {
@@ -189,7 +196,10 @@ export const NarrowStrip: Story = {
     // The chevron is the only thing that says the strip expands, so it has
     // to survive being squeezed.
     await expect(bar.getByText("▴")).toBeVisible();
-    // …and nothing spills past the bar's own right edge.
+    // Network status hides below `sm`: nothing may spill past the bar's
+    // own right edge, so the select still ends the row here.
+    const pill = bar.getByTestId("net-activity");
+    await expect(pill).not.toBeVisible();
     const rootBox = canvas
       .getByTestId("diagnostics-status-bar")
       .getBoundingClientRect();
