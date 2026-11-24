@@ -317,7 +317,7 @@ let
       name = "landing";
       runtimeInputs = taskInputs.landing;
       text = ''
-        exec ./scripts/make-landing.sh "$1" assets/landing-gradient.jpg book/src/rhizz_landing.png
+        exec ./scripts/make-landing.sh "$1" web/assets/landing-gradient.jpg book/src/rhizz_landing.png
       '';
     };
 
