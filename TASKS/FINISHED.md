@@ -4,6 +4,17 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Network activity widget in the bottom bar
+
+- **Tracker (`netActivity.ts`, pure):** `trackFetch`-style wrapper (counter + current label, per-endpoint map). `PUT …/files` → `Uploading…`, `GET /api/vfs` → `Syncing…` (initial + follower reloads), `POST …/lock` → `Acquiring lock…`, `POST …/release` → `Releasing lock…`; lock poll (`GET …/state`), heartbeat, `/api/version`, unknown → untracked. `ACTIVITY_INDICATOR_DELAY_MS = 300` (fast ops never flicker), `ACTIVITY_FADE_OUT_MS = 500` with cancel-on-new-request, errors bypass the delay (`Sync failed` etc.), instant hide under `prefers-reduced-motion`.
+- **Widget (`NetActivityIndicator.svelte`):** DaisyUI `loading loading-bars loading-xs` + label, `role="status"`, centered in `DiagnosticsStatusBar` (`pointer-events-none`, unmounted while idle, no landing widget). Static bars mask under reduced-motion so VRT stabilizes (DaisyUI SMIL can't be frozen by `animations: disabled`).
+- **Injection:** `trackedFetch` as `fetchImpl` in `ServerProjectStore` (`ProjectState.svelte`), `projectLock.start` (`+layout.svelte`), `fetchBuildInfo` (`BuildInfo.svelte`) — no logic changes; local-first stays hidden (zero requests). DEV test seam `window.__netActivity` for E2E.
+- **TDD:** `netActivity.test.ts` (11 tests: plumbing, 300ms, fade/cancel, error, wrap, reduced-motion); `net-activity.spec.ts` (idle / slow PUT Uploading + spinner / offline Sync failed); `NetActivityIndicator.stories.ts` Active/Fading/ErrorState + 6 VRT baselines.
+- `just test-web` green (1395 passed), `lint-frontend` green, `test:e2e net-activity` 3 passed, `vrt -g NetActivityIndicator` 6 passed; full CICD green on PR.
+- Branch: `feat/net-activity-widget`.
+
+---
+
 ## Task <N> — Resolve cargo-llvm-cov regression workaround (drop `nixpkgs-coverage`)
 
 - **Root cause (proven empirically, not just changelogs):** rustc 1.99 moved to LLVM 23, so its coverage profiles need LLVM 23 readers — the flake paired it with pinned `llvmPackages_21`, whose `llvm-profdata` rejects the new raw-profile version (and misread 1.99.0 output as empty/zero-counter). Rust 1.99.1 alone does *not* fix it (release notes list only UEFI/FFI/rpath fixes); the LLVM pairing is the fix.

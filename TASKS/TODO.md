@@ -16,54 +16,6 @@ How to work on this file:
 
 ---
 
-## Task <N> — Network activity widget in the bottom bar
-
-Add a small text-based widget showing what network connections the app is
-currently making, wrapping/intercepting all API requests.
-
-- **Interception:** new pure module `netActivity.ts` exposing a
-  `trackFetch`-style `fetch`-compatible wrapper (counter + current label,
-  per-endpoint label map). Inject it as the `fetchImpl` the three network
-  call sites already accept (`vfsStore.ts` `httpBackend`,
-  `projectLock.svelte.ts`, `buildInfo.ts`) — no changes to their logic.
-- **Tracked ops and labels:**
-  - `PUT …/files` → `Uploading…`
-  - `GET /api/vfs` and follower reloads → `Syncing…`
-  - `POST …/lock` → `Acquiring lock…`
-  - `POST …/release` → `Releasing lock…`
-  - Lock poll, heartbeat, and `/api/version` are background noise: never
-    tracked, never displayed.
-- **Duration threshold:** show the indicator only if a request is in flight
-  for longer than `ACTIVITY_INDICATOR_DELAY_MS = 300` (named constant in
-  `netActivity.ts`, easy to tune later). Fast localhost ops never flicker.
-- **Widget UI (DaisyUI):** `loading loading-bars loading-xs` spinner plus
-  the label, `role="status"`. Rendered centered in the
-  `DiagnosticsStatusBar` strip (display-only, `pointer-events-none`, so the
-  diagnostics toggle keeps working). Unmounted while idle — nothing shows
-  when nothing happens. No widget on pages without the bottom bar (landing).
-- **Fade-out:** when the last request settles, keep the final label and
-  fade it via `opacity` transition (~500ms) instead of hiding immediately; a
-  new request cancels the fade. Instant hide under
-  `prefers-reduced-motion`.
-- **Errors:** a failed tracked request shows an error state in the widget
-  (e.g. `Sync failed`, error-styled) with the same fade-out, so simulated
-  network outages are visible.
-- Local-first mode (no server URL) means zero requests — the widget stays
-  hidden without special-casing.
-
-Definition of done:
-
-- Unit tests (fake timers + injected fake `fetch`): counter/label plumbing,
-  300ms threshold, fade timing and cancellation, error state, corrupt-free
-  defaults.
-- E2E: uploading shows `Uploading…` with the loading bar; simulated outage
-  (`context.setOffline`) shows the error state; idle shows nothing.
-- VRT stories for the widget states (active / fading / error) via the
-  settings-free story setup used by other status-bar stories.
-- `just test`, `just lint`, `just build` green.
-
----
-
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
