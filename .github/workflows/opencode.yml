@@ -33,11 +33,12 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      # The Justfile wraps every recipe in `nix develop --command` whenever
-      # Nix is present, so exposing the devshell's PATH is enough: `just`,
-      # `cargo`, `npm`, … resolve, and the shell hook (Playwright browsers,
-      # LLVM tools, VRT fonts) is re-applied per recipe. GITHUB_PATH expects
-      # one path per line, hence the `tr`.
+      # `just` itself lives in the devshell, so exposing the devshell's PATH
+      # is enough: `just`, `cargo`, `npm`, … resolve for the agent, and each
+      # recipe runs its lean task script (`nix run .#<task>`), which carries
+      # its own toolchain and env (Playwright browsers, LLVM tools, VRT
+      # fonts) instead of relying on the shell hook. GITHUB_PATH expects one
+      # path per line, hence the `tr`.
       - name: Put the flake devshell on PATH
         run: nix develop --command bash -c 'echo "$PATH" | tr ":" "\n" >> "$GITHUB_PATH"'
 

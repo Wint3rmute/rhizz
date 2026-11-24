@@ -12,9 +12,10 @@ concurrency:
   cancel-in-progress: true
 
 # All toolchains come from flake.nix (pinned via flake.lock): every job
-# installs Nix, warms /nix/store from cache, then runs the same `just`
-# recipes and tool commands developers run locally. No per-tool setup
-# actions (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
+# installs Nix, warms /nix/store from cache, then runs a runnable task script
+# (`nix run .#<task>`, see nix/tasks.nix) — the same scripts `just` runs
+# locally, without entering the devshell. No per-tool setup actions
+# (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
 
 jobs:
   # Builds the mdBook with the current compiler and verifies that the
@@ -38,7 +39,7 @@ jobs:
           shared-key: "book"
           cmd-format: nix develop -c {0}
 
-      - run: nix develop --command just book
+      - run: nix run .#book
       - run: |
           rm -rf book-artifact
           mkdir -p book-artifact
@@ -71,7 +72,7 @@ jobs:
           shared-key: "docs"
           cmd-format: nix develop -c {0}
 
-      - run: nix develop --command cargo doc --no-deps --all
+      - run: nix run .#doc
       - run: echo '<meta http-equiv="refresh" content="0; url=rhizz_core/index.html">' > target/doc/index.html
 
       - run: |

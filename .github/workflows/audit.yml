@@ -23,11 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Runs cargo-audit from the flake devshell (pinned via flake.lock):
-  # no per-tool setup action, no 3-minute `cargo install` from source,
-  # and no Checks-API reporting — `cargo audit` exits non-zero on real
-  # vulnerabilities but allows informational warnings (unmaintained/
-  # unsound/notice), which is the intended gate.
+  # Runs the `audit` task script (pinned via flake.lock): no per-tool setup
+  # action, no 3-minute `cargo install` from source, and no Checks-API
+  # reporting — `cargo audit` exits non-zero on real vulnerabilities but
+  # allows informational warnings (unmaintained/unsound/notice), which is
+  # the intended gate.
   cargo-audit:
     runs-on: ubuntu-latest
     steps:
@@ -41,7 +41,7 @@ jobs:
           # unaffected.
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
-      - run: nix develop --command cargo audit
+      - run: nix run .#audit
 
 permissions:
   contents: read

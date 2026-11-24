@@ -27,11 +27,11 @@ jobs:
         with:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
-      - run: nix develop --command just lint-commit "origin/${{ github.base_ref }}"
+      - run: nix run .#lint-commit -- "origin/${{ github.base_ref }}"
 
       # CHANGELOG.md must match what `cz changelog` generates from the PR's
       # commits. Regenerate in place, then fail if the file changed.
-      - run: nix develop --command just changelog
+      - run: nix run .#changelog
       - name: CHANGELOG.md is up to date
         run: |
           # `git status --porcelain` also catches a missing (untracked) file.

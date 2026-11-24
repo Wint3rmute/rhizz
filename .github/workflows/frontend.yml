@@ -12,26 +12,28 @@ concurrency:
   cancel-in-progress: true
 
 # Toolchains come from flake.nix (pinned via flake.lock): jobs install Nix,
-# warm /nix/store from cache, then run either a Nix derivation or the same
-# `just` recipes developers run locally. No per-tool setup actions
+# warm /nix/store from cache, then run either a Nix derivation or a runnable
+# task script (`nix run .#<task>`, see nix/tasks.nix) — the same scripts `just`
+# runs locally, without entering the devshell. No per-tool setup actions
 # (rust-toolchain, setup-node, mdbook, wasm-pack installer) remain.
 #
 # The two build jobs (`wasm`, `build`) call `nix build` on their derivation
-# directly rather than `nix develop --command just ...`: their recipes need no
-# toolchain, so entering the devshell would only realize its ~2.7 GiB of
-# Playwright browsers, clippy, rustfmt and mdbook to obtain `just`. The
-# remaining jobs genuinely need the devshell.
+# directly: their recipes need no toolchain, so entering the devshell (or even
+# realizing a task closure just to obtain `just`) would only realize its
+# ~2.7 GiB of Playwright browsers, clippy, rustfmt and mdbook. The remaining
+# jobs use the task scripts, each realizing only the toolchain it needs
+# (Node without Rust, and vice versa).
 
 jobs:
   # Build the wasm package once, hand it to every job that needs it.
   #
-  # The derivation only — deliberately no devshell. `just wasm` would work
-  # too, but `nix develop --command just wasm` realizes the whole shared
-  # devshell first: measured at 1191 paths / ~2.7 GiB more than this
-  # derivation needs (Playwright browsers, clippy, rustfmt, mdbook — none of
-  # which the wasm build touches). The only devshell-provided thing the
-  # recipe actually uses is `just` itself; every command below is base-image
-  # coreutils. The same numbers apply to the `build` job.
+  # The derivation only — deliberately neither devshell nor `just` wrapper.
+  # `just wasm` would work too (it runs the same `nix build` plus the copy
+  # tail below), but `just` itself lives in the devshell, so reaching it
+  # realizes the whole shared shell first: measured at 1191 paths / ~2.7 GiB
+  # more than this derivation needs (Playwright browsers, clippy, rustfmt,
+  # mdbook — none of which the wasm build touches). Every command below is
+  # base-image coreutils. The same numbers apply to the `build` job.
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -114,8 +116,7 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command npm ci
-        working-directory: ./web
+      - run: nix run .#install-web
 
       # web/.eslintcache (written by `npm run lint`) is pure derived state:
       # a function of file contents + eslint config + version. It is only
@@ -133,14 +134,9 @@ jobs:
           key: eslint-${{ runner.os }}-${{ hashFiles('web/eslint.config.js', 'web/package-lock.json', 'web/package.json') }}
           restore-keys: eslint-${{ runner.os }}-
 
-      - run: nix develop --command npm run format:check
-        working-directory: ./web
-
-      - run: nix develop --command npm run lint
-        working-directory: ./web
-
-      - run: nix develop --command npm run check
-        working-directory: ./web
+      # `lint-frontend` covers sync + format:check + eslint + svelte-check,
+      # with only the Node toolchain.
+      - run: nix run .#lint-frontend
 
   # Vitest suite (`npm run test`, incl. the Storybook browser project).
   # Split out of `lint` so the long test run doesn't block lint/typecheck.
@@ -164,11 +160,9 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command npm ci
-        working-directory: ./web
+      - run: nix run .#install-web
 
-      - run: nix develop --command npm run test
-        working-directory: ./web
+      - run: nix run .#test-web
 
   # Full-app browser tests via @playwright/test (web/e2e). Chromium comes
   # from the flake (PLAYWRIGHT_BROWSERS_PATH); the HTML report + traces are
@@ -192,31 +186,12 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command npm ci
-        working-directory: ./web
+      - run: nix run .#install-web
 
-      # Fail fast when the installed Playwright driver expects browser
-      # revisions absent from the Nix-provided browsers (see flake.nix).
-      # Catches both a package.json/flake.lock pin mismatch and a stale
-      # web/node_modules resolving an old driver.
-      - run: |
-          nix develop --command python3 -c '
-          import glob, json, os, sys
-          match = glob.glob("node_modules/playwright-core/browsers.json")
-          expected = set()
-          for path in match:
-              for b in json.load(open(path))["browsers"]:
-                  if b["name"] in ("chromium", "chromium-headless-shell"):
-                      expected.add(b["name"].replace("-", "_") + "-" + b["revision"])
-          missing = expected - set(os.listdir(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
-          if missing:
-              sys.exit("playwright/nix browser mismatch, missing: " + ", ".join(sorted(missing)))
-          print("playwright browsers match: " + ", ".join(sorted(expected)))
-          '
-        working-directory: ./web
-
-      - run: nix develop --command npm run test:e2e
-        working-directory: ./web
+      # `test-e2e` starts with a browser-revision preflight (fail fast on a
+      # package.json/flake.lock pin mismatch or a stale node_modules), then
+      # runs the full @playwright/test suite.
+      - run: nix run .#test-e2e
 
       - uses: actions/upload-artifact@v7
         if: always()
@@ -250,16 +225,12 @@ jobs:
           name: rhizz-wasm
           path: crates/rhizz-wasm/pkg/
 
-      - run: nix develop --command npm ci
-        working-directory: ./web
+      - run: nix run .#install-web
 
-      # The wasm pkg comes from the artifact above, so only Storybook is built
-      # here (`vrt-quick` skips the wasm rebuild). No app build: VRT serves
+      # The wasm pkg comes from the artifact above. `vrt` builds Storybook
+      # itself, then runs every story screenshot. No app build: VRT serves
       # storybook-static/ alone (see vrt/serve.ts).
-      - run: nix develop --command npm run build-storybook
-        working-directory: ./web
-
-      - run: nix develop --command just vrt-quick
+      - run: nix run .#vrt
 
       # Static diff gallery: download, unzip, open index.html.
       - uses: actions/upload-artifact@v7

@@ -44,6 +44,19 @@ lint-frontend:
 lint-commit base="origin/main":
     nix run .#lint-commit -- {{base}}
 
+# Advisory scan of Cargo.lock. CI runs the same check on main.
+audit:
+    nix run .#audit
+
+# API reference (`cargo doc`). Also built as part of lint-rust.
+doc:
+    nix run .#doc
+
+# Installs web/ dependencies. CI glue (the web tasks assume node_modules
+# exists); locally `just dev` covers this.
+install-web:
+    nix run .#install-web
+
 test: wasm
     nix run .#test-rust
     nix run .#test-web
