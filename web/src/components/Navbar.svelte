@@ -35,8 +35,9 @@
   let activeProjectId = $derived(getCurrentProjectId());
   let activeProject = $derived(getCurrentProject());
 
-  // Magnifier for the command palette button.
+  // Magnifier for the command palette button, gear for the settings button.
   let searchIcon = $derived(resolveIcon("magnifying-glass"));
+  let settingsIcon = $derived(resolveIcon("gear"));
 
   function toggleMenu() {
     isOpen = !isOpen;
@@ -156,7 +157,15 @@
           aria-label="Open settings"
           type="button"
         >
-          <span class="text-base leading-none" aria-hidden="true">⚙️</span>
+          {#if settingsIcon}
+            <svg
+              viewBox={`0 0 ${settingsIcon.width} ${settingsIcon.height}`}
+              class="w-4 h-4 fill-current"
+              aria-hidden="true"
+            >
+              <path d={settingsIcon.svgPath} />
+            </svg>
+          {/if}
         </button>
       </div>
 
@@ -209,7 +218,16 @@
           settingsOpen = true;
         }}
       >
-        ⚙️ Settings
+        {#if settingsIcon}
+          <svg
+            viewBox={`0 0 ${settingsIcon.width} ${settingsIcon.height}`}
+            class="w-4 h-4 fill-current shrink-0"
+            aria-hidden="true"
+          >
+            <path d={settingsIcon.svgPath} />
+          </svg>
+        {/if}
+        Settings
       </button>
     </nav>
   {/if}
