@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: ring spinner plus idle Project Saved pill
 - **web**: network activity tracker and bottom-bar widget
 - **web**: move theme toggle and tour entry into settings
 - **web**: add global settings modal with theme, warning level and transition
