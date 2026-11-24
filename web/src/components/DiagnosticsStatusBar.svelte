@@ -1,9 +1,11 @@
 <script lang="ts">
   import type { DiagnosticJS } from "rhizz";
   import DiagnosticRow from "./DiagnosticRow.svelte";
+  import NetActivityIndicator from "./NetActivityIndicator.svelte";
   import ScoreBadge from "./ScoreBadge.svelte";
   import WarningLevelSelect from "./WarningLevelSelect.svelte";
   import Splitter from "./modular_ui/Splitter.svelte";
+  import { netActivity } from "../netActivity";
   import {
     BOTTOM_BAR_HEIGHT_FRACTION,
     viewportCap,
@@ -83,6 +85,18 @@
   // blocks used to hardcode, as one list so both severities render identical
   // row markup.
   let rows = $derived([...errors, ...warnings]);
+
+  // Live network activity: the shared tracker every API call site reports
+  // to (see netActivity.ts). Display-only — the strip stays
+  // `pointer-events-none` so the toggle underneath keeps working.
+  let activity = $state(netActivity.snapshot());
+
+  $effect(() => {
+    const unsubscribe = netActivity.subscribe(() => {
+      activity = netActivity.snapshot();
+    });
+    return unsubscribe;
+  });
 </script>
 
 <div
@@ -235,5 +249,19 @@
         <WarningLevelSelect />
       </div>
     </div>
+    {#if activity.visible && activity.label !== null}
+      <!-- Network activity: centered over the strip, display-only so the
+           full-bleed toggle underneath keeps receiving clicks. Unmounted
+           while idle, so local-first (zero requests) shows nothing. -->
+      <div
+        class="pointer-events-none absolute inset-0 flex items-center justify-center"
+      >
+        <NetActivityIndicator
+          label={activity.label}
+          error={activity.error}
+          fading={activity.fading}
+        />
+      </div>
+    {/if}
   </div>
 </div>
