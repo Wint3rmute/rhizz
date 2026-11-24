@@ -31,7 +31,7 @@
 >
   {#if !isError}
     <span
-      class="loading loading-bars loading-xs net-activity-spinner"
+      class="loading loading-ring loading-xs net-activity-spinner"
       aria-hidden="true"
     ></span>
   {:else}
@@ -41,16 +41,16 @@
 </span>
 
 <style>
-  /* DaisyUI's `loading-bars` animates via SMIL inside its mask-image, which
+  /* DaisyUI's `loading-ring` animates via SMIL inside its mask-image, which
      Playwright's `animations: disabled` cannot freeze (and which still runs,
      only slower, under `prefers-reduced-motion: reduce`). VRT runs with
      reduced motion, so without this the Active story never takes two
      identical screenshots. Under reduced motion swap the animated mask for
-     a static three-bars mask: calm for motion-sensitive users and stable
-     for screenshots, while everyone else keeps the animated bars. */
+     a static ring mask: calm for motion-sensitive users and stable
+     for screenshots, while everyone else keeps the animated ring. */
   @media (prefers-reduced-motion: reduce) {
     .net-activity-spinner {
-      mask-image: url("data:image/svg+xml,%3Csvg width='24' height='24' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Crect x='1' y='4' width='6' height='16'/%3E%3Crect x='9' y='1' width='6' height='22'/%3E%3Crect x='17' y='4' width='6' height='16'/%3E%3C/svg%3E") !important;
+      mask-image: url("data:image/svg+xml,%3Csvg width='44' height='44' viewBox='0 0 44 44' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='22' cy='22' r='20' fill='none' stroke='black' stroke-width='3'/%3E%3C/svg%3E") !important;
     }
   }
 </style>
