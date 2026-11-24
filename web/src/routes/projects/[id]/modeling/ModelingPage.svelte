@@ -4069,7 +4069,7 @@
   // Fraction of the viewport the diagram's bounding box should fill (in
   // whichever axis is more constraining, so it fits fully in both) when
   // "Zoom to Fill" is used.
-  const ZOOM_TO_FILL_FRACTION = 0.8;
+  const ZOOM_TO_FILL_FRACTION = 0.95;
 
   // Zooms and pans so every currently-placed node's AND annotation's combined
   // bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
