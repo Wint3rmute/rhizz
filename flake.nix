@@ -112,19 +112,9 @@
               # The task runner itself (`just <recipe>` delegates to
               # `nix run .#<task>`); the toolchains come from shellInputs.
               just
-              # cargo-llvm-cov's own test suite shells out to cargo against
-              # fresh registries and fails in the sandbox (no network) as of
-              # the f9a75f4 nixpkgs bump — 14 integration tests red while the
-              # binary itself builds fine. Only needed for manual coverage
-              # experiments here (`just coverage` uses the pinned toolchain
-              # via its task script), so skip its self-tests.
-              (cargo-llvm-cov.overrideAttrs (_old: { doCheck = false; }))
-              # LLVM tools matching rustc's LLVM (21.1.8), for the same manual
-              # coverage experiments (NixOS equivalent of rustup's
-              # llvm-tools-preview component).
-              llvmPackages_21.llvm
-              # Helpers with no task equivalent.
-              wasm-pack
+              # Interactive-only helpers with no task equivalent (`wasm-pack`
+              # lives in nix/wasm.nix, coverage LLVM in the `coverage`
+              # shell below — nothing else here needs a toolchain).
               flyctl
               gh
 
@@ -136,11 +126,10 @@
               # podman
             ]);
 
-            # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
-            # at the Nix-provided browsers instead of ~/.cache/ms-playwright.
+            # Point Playwright at the Nix-provided browsers instead of
+            # ~/.cache/ms-playwright (for manual `npm run` invocations; the
+            # task scripts carry their own env).
             shellHook = ''
-              export LLVM_COV="${pkgs.llvmPackages_21.llvm}/bin/llvm-cov"
-              export LLVM_PROFDATA="${pkgs.llvmPackages_21.llvm}/bin/llvm-profdata"
               export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
               export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
               export RHIZZ_VRT_FONTCONFIG_FILE="${vrtFontsConf}"
