@@ -6,14 +6,16 @@ import { createNewProject } from "./helpers";
 // `reducedMotion: reduce`, which skips the fade entirely.
 test.use({ reducedMotion: "no-preference" });
 
-test("idle shows no network activity", async ({ page }) => {
+test("idle shows Project Saved", async ({ page }) => {
   const id = await createNewProject(page, "E2E net idle");
   await page.goto(`/projects/${id}/overview`);
   await expect(page.getByTestId("diagnostics-status-bar")).toBeVisible();
-  await expect(page.getByTestId("net-activity")).toHaveCount(0);
+  const pill = page.getByTestId("net-activity");
+  await expect(pill).toContainText("Project Saved");
+  await expect(pill).toHaveAttribute("data-state", "saved");
 });
 
-test("slow upload shows Uploading with the loading bar", async ({ page }) => {
+test("slow upload shows Uploading with the loading ring", async ({ page }) => {
   const id = await createNewProject(page, "E2E net uploading");
   await page.goto(`/projects/${id}/overview`);
   await expect(page.getByTestId("diagnostics-status-bar")).toBeVisible();
@@ -39,7 +41,7 @@ test("slow upload shows Uploading with the loading bar", async ({ page }) => {
 
   await expect(page.getByTestId("net-activity")).toContainText("Uploading…");
   await expect(
-    page.locator('[data-testid="net-activity"] .loading-bars'),
+    page.locator('[data-testid="net-activity"] .loading-ring'),
   ).toBeVisible();
   await expect(page.getByTestId("net-activity")).toHaveAttribute(
     "role",
@@ -54,7 +56,7 @@ test("slow upload shows Uploading with the loading bar", async ({ page }) => {
     };
     activity.reset();
   });
-  await expect(page.getByTestId("net-activity")).toHaveCount(0);
+  await expect(page.getByTestId("net-activity")).toContainText("Project Saved");
 });
 
 test("simulated outage shows the error state", async ({ page, context }) => {
@@ -87,6 +89,7 @@ test("simulated outage shows the error state", async ({ page, context }) => {
     await context.setOffline(false);
   }
 
-  // The error carries the same fade-out as a success.
-  await expect(page.getByTestId("net-activity")).toHaveCount(0);
+  // The error carries the same fade-out as a success, then falls back
+  // to Project Saved once idle.
+  await expect(page.getByTestId("net-activity")).toContainText("Project Saved");
 });

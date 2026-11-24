@@ -29,8 +29,8 @@ export const Active: Story = {
     await expect(pill).toHaveTextContent("Uploading…");
     await expect(pill).toHaveAttribute("role", "status");
     await expect(pill).toHaveAttribute("data-error", "false");
-    // DaisyUI loading bars spinner is present while active.
-    await expect(pill.querySelector(".loading-bars")).not.toBeNull();
+    // DaisyUI loading ring spinner is present while active.
+    await expect(pill.querySelector(".loading-ring")).not.toBeNull();
   },
 };
 
@@ -58,6 +58,6 @@ export const ErrorState: Story = {
     await expect(pill).toBeInTheDocument();
     await expect(pill).toHaveTextContent("Sync failed");
     await expect(pill).toHaveAttribute("data-error", "true");
-    await expect(pill.querySelector(".loading-bars")).toBeNull();
+    await expect(pill.querySelector(".loading-ring")).toBeNull();
   },
 };

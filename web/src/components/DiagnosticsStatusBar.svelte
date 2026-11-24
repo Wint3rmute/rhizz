@@ -251,8 +251,9 @@
     </div>
     {#if activity.visible && activity.label !== null}
       <!-- Network activity: centered over the strip, display-only so the
-           full-bleed toggle underneath keeps receiving clicks. Unmounted
-           while idle, so local-first (zero requests) shows nothing. -->
+           full-bleed toggle underneath keeps receiving clicks. While a
+           tracked request is in flight (or fading out) this shows its label;
+           idle it falls through to Project Saved below. -->
       <div
         class="pointer-events-none absolute inset-0 flex items-center justify-center"
       >
@@ -261,6 +262,21 @@
           error={activity.error}
           fading={activity.fading}
         />
+      </div>
+    {:else}
+      <!-- Idle: nothing in flight, so the last write is safely persisted. -->
+      <div
+        class="pointer-events-none absolute inset-0 flex items-center justify-center"
+      >
+        <span
+          role="status"
+          data-testid="net-activity"
+          data-state="saved"
+          class="inline-flex items-center gap-1.5 text-xs text-base-content/60"
+        >
+          <span aria-hidden="true" class="text-success">✓</span>
+          <span>Project Saved</span>
+        </span>
       </div>
     {/if}
   </div>
