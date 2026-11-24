@@ -247,37 +247,35 @@
         class="flex items-center gap-2 py-2 pl-2 sm:pl-3 pr-4 sm:pr-6 lg:pr-8 pointer-events-auto"
       >
         <WarningLevelSelect />
+        {#if activity.visible && activity.label !== null}
+          <!-- Network status docks at the bar's far right, after the
+               strictness control: display-only, so it never joins the
+               toggle hole the select needs. While a tracked request is in
+               flight (or fading out) this shows its label; idle it falls
+               through to Project Saved below. Hidden below `sm` like the
+               score badge: phones keep the one line for counts, chevron
+               and strictness. -->
+          <span class="hidden sm:inline-flex shrink-0 pointer-events-none">
+            <NetActivityIndicator
+              label={activity.label}
+              error={activity.error}
+              fading={activity.fading}
+            />
+          </span>
+        {:else}
+          <!-- Idle: nothing in flight, so the last write is safely
+               persisted. -->
+          <span
+            role="status"
+            data-testid="net-activity"
+            data-state="saved"
+            class="hidden sm:inline-flex shrink-0 items-center gap-1.5 text-xs text-base-content/60 pointer-events-none"
+          >
+            <span aria-hidden="true" class="text-success">✓</span>
+            <span>Project Saved</span>
+          </span>
+        {/if}
       </div>
     </div>
-    {#if activity.visible && activity.label !== null}
-      <!-- Network activity: centered over the strip, display-only so the
-           full-bleed toggle underneath keeps receiving clicks. While a
-           tracked request is in flight (or fading out) this shows its label;
-           idle it falls through to Project Saved below. -->
-      <div
-        class="pointer-events-none absolute inset-0 flex items-center justify-center"
-      >
-        <NetActivityIndicator
-          label={activity.label}
-          error={activity.error}
-          fading={activity.fading}
-        />
-      </div>
-    {:else}
-      <!-- Idle: nothing in flight, so the last write is safely persisted. -->
-      <div
-        class="pointer-events-none absolute inset-0 flex items-center justify-center"
-      >
-        <span
-          role="status"
-          data-testid="net-activity"
-          data-state="saved"
-          class="inline-flex items-center gap-1.5 text-xs text-base-content/60"
-        >
-          <span aria-hidden="true" class="text-success">✓</span>
-          <span>Project Saved</span>
-        </span>
-      </div>
-    {/if}
   </div>
 </div>
