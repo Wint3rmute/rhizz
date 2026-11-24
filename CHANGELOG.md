@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Fix
+
+- **nix**: drop pinned coverage toolchain, Rust 1.99.1 with LLVM 23 tools
+
 ### Refactor
 
 - **nix**: drop vestigial coverage and wasm tooling from default devshell

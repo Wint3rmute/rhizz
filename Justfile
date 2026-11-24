@@ -68,10 +68,8 @@ test: wasm
 # rhizz-wasm is excluded (wasm cdylib, no host tests) and crates/*/tests
 # are not counted as source.
 #
-# TEMPORARY (Rust 1.99 regression): Rust 1.99.0 generates empty profiles
-# (format version 11, zero counters) and segfaults instrumented build
-# scripts, so coverage uses the pinned Rust 1.98.1 toolchain (see
-# nix/tasks.nix `coverage` and the `nixpkgs-coverage` flake input).
+# NOTE: rustc's coverage profiles require matching LLVM tools (see
+# nix/tasks.nix `coverage`); keep the two in step on toolchain bumps.
 coverage:
     nix run .#coverage
 

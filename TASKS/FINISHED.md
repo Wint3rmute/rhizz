@@ -4,6 +4,16 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Resolve cargo-llvm-cov regression workaround (drop `nixpkgs-coverage`)
+
+- **Root cause (proven empirically, not just changelogs):** rustc 1.99 moved to LLVM 23, so its coverage profiles need LLVM 23 readers — the flake paired it with pinned `llvmPackages_21`, whose `llvm-profdata` rejects the new raw-profile version (and misread 1.99.0 output as empty/zero-counter). Rust 1.99.1 alone does *not* fix it (release notes list only UEFI/FFI/rpath fixes); the LLVM pairing is the fix.
+- **Probe (scratch worktree, real tree untouched):** scoped `cargo llvm-cov -p rhizz-core` with new-nixpkgs rustc 1.99.1 + LLVM 21 tools failed at merge ("update this tool to version in the raw profile"); same probe with LLVM 23 tools produced a full valid report (12,813 lines found, 12,189 hit).
+- **Change:** `nix flake update nixpkgs` (0bb8272 → 2786a2a, Rust 1.99.1); `coverage` task uses main `pkgs` + `llvmPackages_23` (single-sourced via `taskInputs`, so the devshell follows automatically); deleted the `nixpkgs-coverage` input (lock node pruned), the `coverage` devshell, and `pkgsCoverage`/`writeOld` plumbing; TEMPORARY comments in `flake.nix`/`tasks.nix`/`Justfile` replaced with an LLVM-pairing NOTE.
+- **Validation:** `nix flake show` green, no `pkgsCoverage`/`llvmPackages_21` refs left (only pre-existing `doCheck=false` in `wasm.nix`/`backend.nix`); `just lint` green on the new toolchain; full `just coverage` green (80% gate held, lcov + cobertura written).
+- Branch: `unpin-coverage-toolchain`.
+
+---
+
 ## Task <N> — [P1] Tighten MCP input schemas to match runtime validation
 
 - **Schemas (`mcp.rs`):** `fetch_projects.page` `range(min=1)`; `read_file.limit` `range(min=0,max=500)` with runtime refusal (was silent `.min()` clamp), `offset` `range(min=0)`; `label`/`path`/`project`/`scope_path`/`source`/`new_label` `length(min=1)` everywhere except `ConnectEndJson.component` (empty `""` is `./port` delegation, documented); `create_protocol`/`version`/`existing` also `minLength:1` when present.

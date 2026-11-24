@@ -2,16 +2,7 @@
   description = "rhizz dev environment";
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
-  # TEMPORARY (Rust 1.99 regression, TODO: drop this input and the
-  # `coverage` devShell below once nixpkgs Rust emits valid profiles
-  # again): Rust 1.99.0 generates empty coverage profiles (format
-  # version 11, zero counters) and segfaults instrumented build scripts,
-  # so `just coverage` cannot use the main toolchain. Pinned to the
-  # pre-bump rev (fe13242...) whose Rust 1.98.1 was green on main.
-  # Pinned by rev, not branch, so `nix flake update` leaves it alone.
-  inputs.nixpkgs-coverage.url = "github:nixos/nixpkgs/fe13242281a67641c0102cdb1087f0ebe586c7df";
-
-  outputs = { self, nixpkgs, nixpkgs-coverage }:
+  outputs = { self, nixpkgs }:
     let
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f system);
@@ -79,10 +70,7 @@
           # declares exactly the binaries it needs, so `nix run .#lint-rust`
           # realizes only the Rust toolchain. See nix/tasks.nix. `shellInputs`
           # is the union of all task toolchains, for the devshell below.
-          tasks = import ./nix/tasks.nix {
-            inherit pkgs;
-            pkgsCoverage = nixpkgs-coverage.legacyPackages.${system};
-          };
+          tasks = import ./nix/tasks.nix { inherit pkgs; };
         in
         {
           inherit rhizz-wasm-pkg rhizz-frontend rhizz-server;
@@ -101,10 +89,7 @@
           # Union of every task script's toolchain (see `taskInputs` in
           # nix/tasks.nix): the single source of truth for shared packages.
           # Only devshell-only extras (no task uses them) are listed below.
-          tasks = import ./nix/tasks.nix {
-            inherit pkgs;
-            pkgsCoverage = nixpkgs-coverage.legacyPackages.${system};
-          };
+          tasks = import ./nix/tasks.nix { inherit pkgs; };
         in
         {
           default = pkgs.mkShell {
@@ -135,34 +120,6 @@
               export RHIZZ_VRT_FONTCONFIG_FILE="${vrtFontsConf}"
             '';
           };
-
-          # Pinned coverage toolchain, see the `nixpkgs-coverage` input
-          # above. Minimal on purpose: only what `just coverage` needs
-          # (rustc, cargo, cargo-llvm-cov, LLVM tools). Everything else
-          # keeps using the main toolchain via the default shell.
-          coverage =
-            let
-              pkgsOld = nixpkgs-coverage.legacyPackages.${system};
-            in
-            pkgsOld.mkShell {
-              packages = with pkgsOld; [
-                rustc
-                cargo
-                # No `doCheck = false` override needed here: unlike the
-                # current rev, this cargo-llvm-cov's self-tests passed in
-                # the sandbox (main was green on this rev).
-                cargo-llvm-cov
-                # LLVM tools matching this Rust's LLVM, same role as in
-                # the default shell (NixOS equivalent of rustup's
-                # llvm-tools-preview component).
-                llvmPackages_21.llvm
-              ];
-
-              shellHook = ''
-                export LLVM_COV="${pkgsOld.llvmPackages_21.llvm}/bin/llvm-cov"
-                export LLVM_PROFDATA="${pkgsOld.llvmPackages_21.llvm}/bin/llvm-profdata"
-              '';
-            };
         });
     };
 }
