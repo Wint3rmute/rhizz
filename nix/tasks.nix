@@ -12,11 +12,10 @@
 # `shellInputs` for the interactive devshell in flake.nix (which adds only
 # devshell-only extras like `just`, `gh`, `flyctl`). When adding a task, add
 # its inputs to `taskInputs` — never inline a new `runtimeInputs` list.
-{ pkgs, pkgsCoverage }:
+{ pkgs }:
 
 let
   write = pkgs.writeShellApplication;
-  writeOld = pkgsCoverage.writeShellApplication;
   browsers = pkgs.playwright-driver.browsers;
   fontsConf = pkgs.callPackage ./vrt-fonts.nix { };
   # Browser-mode web tasks (vitest browser project, e2e, VRT) need Nix's
@@ -29,9 +28,7 @@ let
     export RHIZZ_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
 
-  # Single source of truth for toolchain packages (see header). The `coverage`
-  # task is excluded: it uses the pinned `pkgsCoverage` toolchain, which has
-  # its own `coverage` devshell.
+  # Single source of truth for toolchain packages (see header).
   taskInputs = with pkgs; {
     bump = [ commitizen git coreutils bash ];
     changelog = [ commitizen git coreutils bash ];
@@ -45,6 +42,7 @@ let
     "test-rust" = [ cargo rustc lld coreutils bash ];
     "test-web" = [ nodejs playwright-driver.browsers coreutils bash ];
     "test-e2e" = [ nodejs playwright-driver.browsers python3 coreutils bash ];
+    coverage = [ rustc cargo cargo-llvm-cov llvmPackages_23.llvm coreutils bash ];
     build = [ cargo rustc lld nodejs coreutils bash ];
     book = [ cargo rustc mdbook lld coreutils bash ];
     "book-accept" = [ cargo rustc mdbook lld coreutils bash ];
@@ -210,20 +208,21 @@ let
       '';
     };
 
-    # TEMPORARY (Rust 1.99 regression, see flake.nix): Rust 1.99.0 generates
-    # empty coverage profiles and segfaults instrumented build scripts, so
-    # coverage uses the pinned Rust 1.98.1 toolchain instead of the main one.
-    coverage = writeOld {
+    # NOTE: rustc's coverage profiles require matching LLVM tools — rustc 1.99
+    # links LLVM 23, so this pairs it with `llvmPackages_23` (an older llvm-cov
+    # cannot read the new profile format). Keep the two in step on toolchain
+    # bumps.
+    coverage = write {
       name = "coverage";
-      runtimeInputs = with pkgsCoverage; [ rustc cargo cargo-llvm-cov llvmPackages_21.llvm coreutils bash ];
+      runtimeInputs = taskInputs.coverage;
       text = ''
         set -euo pipefail
         mkdir -p target/coverage
         export RUSTC_BOOTSTRAP=1
-        export LLVM_COV="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-cov"
-        export LLVM_PROFDATA="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-profdata"
-        ${pkgsCoverage.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
-        exec ${pkgsCoverage.cargo}/bin/cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
+        export LLVM_COV="${pkgs.llvmPackages_23.llvm}/bin/llvm-cov"
+        export LLVM_PROFDATA="${pkgs.llvmPackages_23.llvm}/bin/llvm-profdata"
+        ${pkgs.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
+        exec ${pkgs.cargo}/bin/cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
       '';
     };
 
