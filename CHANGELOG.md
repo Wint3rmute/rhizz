@@ -2,6 +2,7 @@
 
 ### Refactor
 
+- **nix**: single-source task toolchains for scripts and devshell
 - **nix**: point CI at runnable task scripts instead of the devshell
 - **nix**: runnable task scripts instead of one big devshell
 
