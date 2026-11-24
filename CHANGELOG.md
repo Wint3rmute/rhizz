@@ -1,7 +1,13 @@
 ## Unreleased
 
+### Feat
+
+- **web**: move theme toggle and tour entry into settings
+- **web**: add global settings modal with theme, warning level and transition
+
 ### Fix
 
+- **web**: wrap settings help text instead of truncating
 - **nix**: drop pinned coverage toolchain, Rust 1.99.1 with LLVM 23 tools
 
 ### Refactor
