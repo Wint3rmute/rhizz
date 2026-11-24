@@ -89,11 +89,9 @@
               <option value={opt.value}>{opt.label}</option>
             {/each}
           </select>
-          <label class="label" for="settings-theme">
-            <span class="label-text-alt text-base-content/60"
-              >Auto follows the browser preference.</span
-            >
-          </label>
+          <p class="mt-1 text-xs text-base-content/60">
+            Auto follows the browser preference.
+          </p>
         </div>
 
         <div class="form-control w-full">
@@ -110,11 +108,9 @@
               <option value={level}>{warningLevelLabel(level)}</option>
             {/each}
           </select>
-          <label class="label" for="settings-warning-level">
-            <span class="label-text-alt text-base-content/60"
-              >Gates which warnings the compiler reports. Errors always show.</span
-            >
-          </label>
+          <p class="mt-1 text-xs text-base-content/60">
+            Gates which warnings the compiler reports. Errors always show.
+          </p>
         </div>
 
         <div class="form-control w-full">
@@ -137,13 +133,12 @@
             class="range range-primary"
             aria-describedby="settings-transition-help"
           />
-          <label class="label" for="settings-transition">
-            <span
-              id="settings-transition-help"
-              class="label-text-alt text-base-content/60"
-              >0 is instant, 3000 is 3 seconds. Honors reduced-motion.</span
-            >
-          </label>
+          <p
+            id="settings-transition-help"
+            class="mt-1 text-xs text-base-content/60"
+          >
+            0 is instant, 3000 is 3 seconds. Honors reduced-motion.
+          </p>
         </div>
       </div>
     </div>
