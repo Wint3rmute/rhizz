@@ -8,7 +8,7 @@
 #
 # Defaults wire into the existing pipeline:
 #   input      = Playwright/VRT screenshot (1920x1080)
-#   background = assets/landing-gradient.jpg (1920x1280 pastel gradient)
+#   background = web/assets/landing-gradient.jpg (1920x1280 pastel gradient)
 #   output     = book/src/rhizz_landing.png (embedded by README.md + book intro)
 #
 # Requires: ImageMagick 7 (`magick` on PATH).
@@ -21,7 +21,7 @@ SHOT_W=1900  # screenshot width in px; higher = more zoomed in
 Y_OFF=0    # vertical offset in px; negative lifts the shot up
 
 INPUT="${1:-web/vrt/__screenshots__/pages-projects--empty-landing--light.png}"
-BG="${2:-assets/landing-gradient.jpg}"
+BG="${2:-web/assets/landing-gradient.jpg}"
 OUTPUT="${3:-book/src/rhizz_landing.png}"
 
 if ! command -v magick >/dev/null 2>&1; then
