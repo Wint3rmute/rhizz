@@ -162,29 +162,52 @@ no clear resolution is possible, immediately halt and inform the user.
 
 ## Task <N> — Replace the Justfile with Nix-managed scripts
 
-Replace `Justfile` recipes with scripts defined in `flake.nix` and put them on
-the devshell `PATH`, so they run as `lint-rust`, `lint-commit`, etc.
+Replace `Justfile` recipes with scripts defined in `flake.nix` (see
+`nix/tasks.nix`), exposed as runnable flake packages so they run as
+`nix run .#lint-rust`, `nix run .#lint-commit`, etc., with the `Justfile`
+kept as a thin wrapper/aggregator over them.
+
+**Design decision (recorded, supersedes the original devshell-PATH plan):**
+the scripts are deliberately *not* put on the devshell `PATH`. Entering the
+devshell realizes its entire closure (~1191 paths / ~2.7 GiB: Playwright
+browsers, clippy, rustfmt, mdbook — measured in `frontend.yml`), so every
+script would pay the maximum cost and depend on the shellHook env
+(`LLVM_COV`, `PLAYWRIGHT_BROWSERS_PATH`, `RHIZZ_VRT_FONTCONFIG_FILE`).
+Runnable packages realize only each task's own `runtimeInputs` and bake
+their env into the script, so CI and developers never enter the devshell to
+run a task. The `Justfile` stays (aggregators like `lint` and dependencies
+like `test: wasm` have no package equivalent).
 
 - Decide the script language: bash (`pkgs.writeShellApplication`) or nushell
   (`pkgs.writers.writeNuBin`). Confirm the chosen writer exists in the pinned
   nixpkgs before committing to it.
-- Start with `lint-rust`, `lint-frontend`, and `lint-commit`. Add them to
-  `devShells.default` `packages`, and keep the devshell env vars (`LLVM_COV`,
-  `PLAYWRIGHT_BROWSERS_PATH`, `RHIZZ_VRT_FONTCONFIG_FILE`) working inside them.
+- Start with `lint-rust`, `lint-frontend`, and `lint-commit`. Each script
+  declares exactly the binaries it needs and carries its own env, instead of
+  relying on the devshell shellHook.
 - Port the remaining recipes (`format`, `test`, `build`, `coverage`, `wasm`,
   `web-build`, `book`, `vrt`, `serve`, `changelog`, `bump`), with a script
   `cd`ing to the repo root via `git rev-parse --show-toplevel`.
-- Point CI at the scripts: `nix develop --command <script>` in
-  `.github/workflows/*.yml`, including `commitizen.yml`'s `commit-check` and
-  `changelog` calls.
-- Remove `Justfile` and update `AGENTS.md` and docs that mention `just`.
+- Point CI at the scripts: `nix run .#<task>` in `.github/workflows/*.yml`,
+  including `commitizen.yml`'s `commit-check` and `changelog` calls.
+- Update `AGENTS.md` and docs that mention `just`.
 - Remove the stub `builder.sh` package from the devshell in `flake.nix`.
 
 Definition of done:
 
 - `lint` runs `lint-rust`, `lint-frontend`, and `lint-commit` and passes.
-- Every former `just` recipe has a devshell equivalent.
-- CI passes with no `just` invocations left in `.github/`.
+- Every former `just` recipe has a runnable-package equivalent.
+- CI passes with no `just` or `nix develop` invocations left in `.github/`
+  (except `opencode.yml`'s PATH export, which only provides the `just`
+  binary, and `rust-cache`'s `cmd-format` probes — see follow-ups).
+
+Follow-ups (out of scope here):
+
+- No `lint`/`test` meta-packages exist — orchestration lives in the
+  `Justfile` only.
+- `Swatinem/rust-cache` `cmd-format: nix develop -c {0}` in `rust.yml` /
+  `docs.yml` is the last devshell realization in CI (version probing for
+  cache keys). Dropping it means cold `target/` rebuilds; keeping it
+  preserves CI times.
 
 ---
 
