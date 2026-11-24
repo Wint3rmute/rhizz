@@ -365,4 +365,38 @@ describe("advance", () => {
   it("eases rather than jumping halfway", () => {
     expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
   });
+
+  it("uses a custom duration when provided", () => {
+    const next = advance(
+      { scene: from, camera },
+      { scene: to, camera },
+      {
+        transition: true,
+        moveCamera: false,
+        reducedMotion: false,
+        now: 0,
+        tween: null,
+        durationMs: 1200,
+      },
+    );
+    expect(next.tween?.duration).toBe(1200);
+  });
+
+  it("cuts immediately when the duration is zero", () => {
+    const next = advance(
+      { scene: from, camera },
+      { scene: to, camera: { x: 10, y: 0, zoom: 1 } },
+      {
+        transition: true,
+        moveCamera: true,
+        reducedMotion: false,
+        now: 0,
+        tween: null,
+        durationMs: 0,
+      },
+    );
+    expect(next.scene).toBe(to);
+    expect(next.settling).toBe(false);
+    expect(next.tween).toBeNull();
+  });
 });

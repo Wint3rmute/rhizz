@@ -11,6 +11,7 @@ import {
   type Tween,
 } from "./blend";
 import type { DiagramScene } from "./scene";
+import { getTransitionMs } from "../../../../TransitionState.svelte";
 
 export function createDiagramTransition() {
   let scene = $state<DiagramScene>(emptyScene());
@@ -76,6 +77,7 @@ export function createDiagramTransition() {
         reducedMotion: prefersReducedMotion(),
         now,
         tween,
+        durationMs: untrack(() => getTransitionMs()),
       },
     );
     tween = result.tween;
