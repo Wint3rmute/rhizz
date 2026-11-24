@@ -28,6 +28,70 @@ let
     export RHIZZ_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
 
+  # Shared body of the landing-hero pipeline (`landing` + the tail of
+  # `vrt-accept`): perspective + drop shadow + gradient background via
+  # ImageMagick. Callers set INPUT (source screenshot), BG (gradient
+  # background) and OUTPUT (hero png); kept as one definition so the two
+  # entry points cannot drift apart. Runs in the repo root (paths below are
+  # root-relative).
+  landingLib = ''
+    # Framing tunables — edit the numbers directly.
+    SHOT_W=1900  # screenshot width in px; higher = more zoomed in
+    Y_OFF=0    # vertical offset in px; negative lifts the shot up
+
+    if ! command -v magick >/dev/null 2>&1; then
+      echo "error: 'magick' (ImageMagick 7) not found on PATH" >&2
+      echo "  run via 'nix run .#landing', which provides it." >&2
+      exit 1
+    fi
+
+    for f in "$INPUT" "$BG"; do
+      if [ ! -f "$f" ]; then
+        echo "error: file not found: $f" >&2
+        exit 1
+      fi
+    done
+
+    W=$(magick identify -format "%w" "$INPUT")
+    H=$(magick identify -format "%h" "$INPUT")
+    # Perspective inset scales with width (tuned for 1920px VRT screenshots).
+    INSET=$((W * 80 / 1920))
+    TOP=40
+    RADIUS=24
+    OUT_W=1920
+    OUT_H=1280
+
+    TMPDIR=$(mktemp -d)
+    trap 'rm -rf "$TMPDIR"' EXIT
+
+    # 1. Rounded corners (mask keeps it resolution-independent).
+    magick -size "''${W}x''${H}" xc:none -fill white \
+      -draw "roundrectangle 0,0 $W,$H $RADIUS,$RADIUS" \
+      "$TMPDIR/mask.png"
+    magick "$INPUT" "$TMPDIR/mask.png" \
+      -alpha off -compose CopyOpacity -composite \
+      "$TMPDIR/rounded.png"
+
+    # 2. Fake 3D tilt: narrow the top edge, keep the bottom full-width.
+    # 3. Soft drop shadow (50% opacity — v1 used 80% and looked muddy).
+    magick "$TMPDIR/rounded.png" \
+      -alpha set -virtual-pixel transparent \
+      -distort Perspective "0,0 $INSET,$TOP  $W,0 $((W - INSET)),$TOP  $W,$H $W,$H  0,$H 0,$H" \
+      +repage \
+      \( +clone -background black -shadow "50x30+0+40" \) \
+      +swap -background none -layers merge +repage \
+      "$TMPDIR/tilted.png"
+
+    # 4. Composite centered (lifted slightly) over the gradient.
+    magick "$BG" -resize "''${OUT_W}x''${OUT_H}!" "$TMPDIR/bg.png"
+    magick "$TMPDIR/tilted.png" -resize "''${SHOT_W}x" "$TMPDIR/tilted-small.png"
+    magick "$TMPDIR/bg.png" "$TMPDIR/tilted-small.png" \
+      -gravity center -geometry "$(printf '+0%+d' "$Y_OFF")" -composite \
+      "$OUTPUT"
+
+    echo "wrote $OUTPUT ($(magick identify -format '%wx%h' "$OUTPUT")) from $INPUT"
+  '';
+
   # Single source of truth for toolchain packages (see header).
   taskInputs = with pkgs; {
     bump = [ commitizen git coreutils bash ];
@@ -309,16 +373,23 @@ let
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
-        exec ./scripts/make-landing.sh
-      '';
+        INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
+        BG="web/assets/landing-gradient.jpg"
+        OUTPUT="book/src/rhizz_landing.png"
+      '' + landingLib;
     };
 
+    # Regenerates the README/book hero from a screenshot (defaults to the VRT
+    # landing capture): `nix run .#landing -- my-shot.png`.
     landing = write {
       name = "landing";
       runtimeInputs = taskInputs.landing;
       text = ''
-        exec ./scripts/make-landing.sh "$1" web/assets/landing-gradient.jpg book/src/rhizz_landing.png
-      '';
+        set -euo pipefail
+        INPUT="''${1:-web/vrt/__screenshots__/pages-projects--empty-landing--light.png}"
+        BG="web/assets/landing-gradient.jpg"
+        OUTPUT="book/src/rhizz_landing.png"
+      '' + landingLib;
     };
 
     dev = write {
