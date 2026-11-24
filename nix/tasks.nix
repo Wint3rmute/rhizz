@@ -6,6 +6,12 @@
 # snapshots the git tree), so dirty edits and incremental `target/` /
 # `node_modules/` keep working. `wasm` / `web-build` stay as `nix build`
 # derivations (see wasm.nix / frontend.nix).
+#
+# Toolchain packages are declared once in `taskInputs` below: each script
+# uses its entry for `runtimeInputs`, and the union is exported as
+# `shellInputs` for the interactive devshell in flake.nix (which adds only
+# devshell-only extras like `just`, `gh`, `flyctl`). When adding a task, add
+# its inputs to `taskInputs` — never inline a new `runtimeInputs` list.
 { pkgs, pkgsCoverage }:
 
 let
@@ -22,299 +28,337 @@ let
     export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
     export RHIZZ_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
+
+  # Single source of truth for toolchain packages (see header). The `coverage`
+  # task is excluded: it uses the pinned `pkgsCoverage` toolchain, which has
+  # its own `coverage` devshell.
+  taskInputs = with pkgs; {
+    bump = [ commitizen git coreutils bash ];
+    changelog = [ commitizen git coreutils bash ];
+    format = [ cargo rustfmt nodejs coreutils bash ];
+    "lint-rust" = [ cargo rustc rustfmt clippy lld coreutils bash ];
+    doc = [ cargo rustc lld coreutils bash ];
+    "lint-frontend" = [ nodejs coreutils bash ];
+    "lint-commit" = [ commitizen git coreutils bash ];
+    audit = [ cargo cargo-audit coreutils bash ];
+    "install-web" = [ nodejs coreutils bash ];
+    "test-rust" = [ cargo rustc lld coreutils bash ];
+    "test-web" = [ nodejs playwright-driver.browsers coreutils bash ];
+    "test-e2e" = [ nodejs playwright-driver.browsers python3 coreutils bash ];
+    build = [ cargo rustc lld nodejs coreutils bash ];
+    book = [ cargo rustc mdbook lld coreutils bash ];
+    "book-accept" = [ cargo rustc mdbook lld coreutils bash ];
+    "book-serve" = [ mdbook coreutils bash ];
+    vrt = [ nodejs playwright-driver.browsers coreutils bash ];
+    "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
+    "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
+    landing = [ imagemagick coreutils bash ];
+    dev = [ nodejs coreutils bash ];
+    storybook = [ nodejs coreutils bash ];
+    serve = [ cargo rustc lld coreutils bash ];
+  };
+
+  scripts = {
+    bump = write {
+      name = "bump";
+      runtimeInputs = taskInputs.bump;
+      text = ''
+        headline="$1"
+        shift
+        exec ${pkgs.commitizen}/bin/cz bump --annotated-tag-message "$headline" "$@"
+      '';
+    };
+
+    changelog = write {
+      name = "changelog";
+      runtimeInputs = taskInputs.changelog;
+      text = ''
+        exec ${pkgs.commitizen}/bin/cz changelog "$@"
+      '';
+    };
+
+    format = write {
+      name = "format";
+      runtimeInputs = taskInputs.format;
+      text = ''
+        set -euo pipefail
+        ${pkgs.cargo}/bin/cargo fmt --all
+        cd web || exit 1
+        ${pkgs.nodejs}/bin/npm run format
+      '';
+    };
+
+    lint-rust = write {
+      name = "lint-rust";
+      runtimeInputs = taskInputs."lint-rust";
+      text = ''
+        set -euo pipefail
+        ${pkgs.cargo}/bin/cargo fmt --all -- --check
+        ${pkgs.cargo}/bin/cargo clippy --all-targets --all-features -- -D warnings
+        ${pkgs.cargo}/bin/cargo doc --no-deps --all
+      '';
+    };
+
+    # API reference only (`cargo doc`); `lint-rust` also builds docs, plus
+    # fmt + clippy. Used by docs.yml, which uploads target/doc for Pages.
+    doc = write {
+      name = "doc";
+      runtimeInputs = taskInputs.doc;
+      text = ''
+        set -euo pipefail
+        exec ${pkgs.cargo}/bin/cargo doc --no-deps --all
+      '';
+    };
+
+    lint-frontend = write {
+      name = "lint-frontend";
+      runtimeInputs = taskInputs."lint-frontend";
+      text = ''
+        set -euo pipefail
+        cd web || exit 1
+        ${pkgs.nodejs}/bin/npm run sync
+        ${pkgs.nodejs}/bin/npm run format:check
+        ${pkgs.nodejs}/bin/npm run eslint
+        exec ${pkgs.nodejs}/bin/npm run check-only
+      '';
+    };
+
+    lint-commit = write {
+      name = "lint-commit";
+      runtimeInputs = taskInputs."lint-commit";
+      text = ''
+        set -euo pipefail
+        base="''${1:-origin/main}"
+        if [ -z "$(${pkgs.git}/bin/git rev-list "$base"..HEAD)" ]; then
+          echo "No commits since $base, nothing to check."
+        else
+          exec ${pkgs.commitizen}/bin/cz check --rev-range "$base"..HEAD
+        fi
+      '';
+    };
+
+    # Advisory scan of Cargo.lock (audit.yml): `cargo audit` exits non-zero on
+    # real vulnerabilities but allows informational warnings, which is the
+    # intended gate.
+    audit = write {
+      name = "audit";
+      runtimeInputs = taskInputs.audit;
+      text = ''
+        set -euo pipefail
+        exec ${pkgs.cargo}/bin/cargo audit
+      '';
+    };
+
+    # Installs web/ dependencies (`npm ci`). CI glue: the other web tasks
+    # assume node_modules exists (locally provided by `just dev`/manual runs),
+    # and `just` itself lives in the devshell, so CI cannot reach `npm` except
+    # through a task script.
+    install-web = write {
+      name = "install-web";
+      runtimeInputs = taskInputs."install-web";
+      text = ''
+        set -euo pipefail
+        cd web || exit 1
+        exec ${pkgs.nodejs}/bin/npm ci
+      '';
+    };
+
+    test-rust = write {
+      name = "test-rust";
+      runtimeInputs = taskInputs."test-rust";
+      text = ''
+        exec ${pkgs.cargo}/bin/cargo test --quiet --all
+      '';
+    };
+
+    test-web = write {
+      name = "test-web";
+      runtimeInputs = taskInputs."test-web";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        cd web || exit 1
+        exec ${pkgs.nodejs}/bin/npm run test
+      '';
+    };
+
+    test-e2e = write {
+      name = "test-e2e";
+      runtimeInputs = taskInputs."test-e2e";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        cd web || exit 1
+        # Fail fast when the installed Playwright driver expects browser
+        # revisions absent from the Nix-provided browsers (see flake.nix).
+        # Catches both a package.json/flake.lock pin mismatch and a stale
+        # web/node_modules resolving an old driver.
+        ${pkgs.python3}/bin/python3 -c '
+        import glob, json, os, sys
+        match = glob.glob("node_modules/playwright-core/browsers.json")
+        expected = set()
+        for path in match:
+            for b in json.load(open(path))["browsers"]:
+                if b["name"] in ("chromium", "chromium-headless-shell"):
+                    expected.add(b["name"].replace("-", "_") + "-" + b["revision"])
+        missing = expected - set(os.listdir(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
+        if missing:
+            sys.exit("playwright/nix browser mismatch, missing: " + ", ".join(sorted(missing)))
+        print("playwright browsers match: " + ", ".join(sorted(expected)))
+        '
+        exec ${pkgs.nodejs}/bin/npm run test:e2e
+      '';
+    };
+
+    # TEMPORARY (Rust 1.99 regression, see flake.nix): Rust 1.99.0 generates
+    # empty coverage profiles and segfaults instrumented build scripts, so
+    # coverage uses the pinned Rust 1.98.1 toolchain instead of the main one.
+    coverage = writeOld {
+      name = "coverage";
+      runtimeInputs = with pkgsCoverage; [ rustc cargo cargo-llvm-cov llvmPackages_21.llvm coreutils bash ];
+      text = ''
+        set -euo pipefail
+        mkdir -p target/coverage
+        export RUSTC_BOOTSTRAP=1
+        export LLVM_COV="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-cov"
+        export LLVM_PROFDATA="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-profdata"
+        ${pkgsCoverage.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
+        exec ${pkgsCoverage.cargo}/bin/cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
+      '';
+    };
+
+    build = write {
+      name = "build";
+      runtimeInputs = taskInputs.build;
+      text = ''
+        set -euo pipefail
+        (
+          cd web || exit 1
+          ${pkgs.nodejs}/bin/npm run build-storybook
+        )
+        exec ${pkgs.cargo}/bin/cargo build --release --all-targets
+      '';
+    };
+
+    book = write {
+      name = "book";
+      runtimeInputs = taskInputs.book;
+      text = ''
+        set -euo pipefail
+        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
+        exec ${pkgs.mdbook}/bin/mdbook build book
+      '';
+    };
+
+    book-accept = write {
+      name = "book-accept";
+      runtimeInputs = taskInputs."book-accept";
+      text = ''
+        set -euo pipefail
+        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
+        export BOOKLOCK_ACCEPT_CHANGES=1
+        exec ${pkgs.mdbook}/bin/mdbook build book
+      '';
+    };
+
+    book-serve = write {
+      name = "book-serve";
+      runtimeInputs = taskInputs."book-serve";
+      text = ''
+        set -euo pipefail
+        exec ${pkgs.mdbook}/bin/mdbook serve book
+      '';
+    };
+
+    vrt = write {
+      name = "vrt";
+      runtimeInputs = taskInputs.vrt;
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        (
+          cd web || exit 1
+          ${pkgs.nodejs}/bin/npm run build-storybook -- --quiet
+        )
+        cd web || exit 1
+        exec ${pkgs.nodejs}/bin/npm run test:vrt -- "$@"
+      '';
+    };
+
+    vrt-quick = write {
+      name = "vrt-quick";
+      runtimeInputs = taskInputs."vrt-quick";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        cd web || exit 1
+        exec ${pkgs.nodejs}/bin/npm run test:vrt -- "$@"
+      '';
+    };
+
+    vrt-accept = write {
+      name = "vrt-accept";
+      runtimeInputs = taskInputs."vrt-accept";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        (
+          cd web || exit 1
+          ${pkgs.nodejs}/bin/npm run test:vrt:accept -- "$@"
+        )
+        ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png
+        ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
+        ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
+        ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
+        exec ./scripts/make-landing.sh
+      '';
+    };
+
+    landing = write {
+      name = "landing";
+      runtimeInputs = taskInputs.landing;
+      text = ''
+        exec ./scripts/make-landing.sh "$1" assets/landing-gradient.jpg book/src/rhizz_landing.png
+      '';
+    };
+
+    dev = write {
+      name = "dev";
+      runtimeInputs = taskInputs.dev;
+      text = ''
+        set -euo pipefail
+        cd web || exit 1
+        ${pkgs.nodejs}/bin/npm ci
+        exec ${pkgs.nodejs}/bin/npm run dev
+      '';
+    };
+
+    storybook = write {
+      name = "storybook";
+      runtimeInputs = taskInputs.storybook;
+      text = ''
+        set -euo pipefail
+        cd web || exit 1
+        ${pkgs.nodejs}/bin/npm run sync
+        exec ${pkgs.nodejs}/bin/npm run storybook
+      '';
+    };
+
+    serve = write {
+      name = "serve";
+      runtimeInputs = taskInputs.serve;
+      text = ''
+        set -euo pipefail
+        ${pkgs.cargo}/bin/cargo build --release -p rhizz-cli
+        RHIZZ_DATA_DIR=examples exec ${pkgs.cargo}/bin/cargo run --release -p rhizz-cli -- web
+      '';
+    };
+  };
+
+  # Union of every task's toolchain, for the interactive devshell in flake.nix.
+  shellInputs =
+    pkgs.lib.unique (pkgs.lib.flatten (pkgs.lib.attrValues taskInputs));
 in
 {
-  bump = write {
-    name = "bump";
-    runtimeInputs = with pkgs; [ commitizen git coreutils bash ];
-    text = ''
-      headline="$1"
-      shift
-      exec ${pkgs.commitizen}/bin/cz bump --annotated-tag-message "$headline" "$@"
-    '';
-  };
-
-  changelog = write {
-    name = "changelog";
-    runtimeInputs = with pkgs; [ commitizen git coreutils bash ];
-    text = ''
-      exec ${pkgs.commitizen}/bin/cz changelog "$@"
-    '';
-  };
-
-  format = write {
-    name = "format";
-    runtimeInputs = with pkgs; [ cargo rustfmt nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      ${pkgs.cargo}/bin/cargo fmt --all
-      cd web || exit 1
-      ${pkgs.nodejs}/bin/npm run format
-    '';
-  };
-
-  lint-rust = write {
-    name = "lint-rust";
-    runtimeInputs = with pkgs; [ cargo rustc rustfmt clippy lld coreutils bash ];
-    text = ''
-      set -euo pipefail
-      ${pkgs.cargo}/bin/cargo fmt --all -- --check
-      ${pkgs.cargo}/bin/cargo clippy --all-targets --all-features -- -D warnings
-      ${pkgs.cargo}/bin/cargo doc --no-deps --all
-    '';
-  };
-
-  # API reference only (`cargo doc`); `lint-rust` also builds docs, plus
-  # fmt + clippy. Used by docs.yml, which uploads target/doc for Pages.
-  doc = write {
-    name = "doc";
-    runtimeInputs = with pkgs; [ cargo rustc lld coreutils bash ];
-    text = ''
-      set -euo pipefail
-      exec ${pkgs.cargo}/bin/cargo doc --no-deps --all
-    '';
-  };
-
-  lint-frontend = write {
-    name = "lint-frontend";
-    runtimeInputs = with pkgs; [ nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      cd web || exit 1
-      ${pkgs.nodejs}/bin/npm run sync
-      ${pkgs.nodejs}/bin/npm run format:check
-      ${pkgs.nodejs}/bin/npm run eslint
-      exec ${pkgs.nodejs}/bin/npm run check-only
-    '';
-  };
-
-  lint-commit = write {
-    name = "lint-commit";
-    runtimeInputs = with pkgs; [ commitizen git coreutils bash ];
-    text = ''
-      set -euo pipefail
-      base="''${1:-origin/main}"
-      if [ -z "$(${pkgs.git}/bin/git rev-list "$base"..HEAD)" ]; then
-        echo "No commits since $base, nothing to check."
-      else
-        exec ${pkgs.commitizen}/bin/cz check --rev-range "$base"..HEAD
-      fi
-    '';
-  };
-
-  # Advisory scan of Cargo.lock (audit.yml): `cargo audit` exits non-zero on
-  # real vulnerabilities but allows informational warnings, which is the
-  # intended gate.
-  audit = write {
-    name = "audit";
-    runtimeInputs = with pkgs; [ cargo cargo-audit coreutils bash ];
-    text = ''
-      set -euo pipefail
-      exec ${pkgs.cargo}/bin/cargo audit
-    '';
-  };
-
-  # Installs web/ dependencies (`npm ci`). CI glue: the other web tasks
-  # assume node_modules exists (locally provided by `just dev`/manual runs),
-  # and `just` itself lives in the devshell, so CI cannot reach `npm` except
-  # through a task script.
-  install-web = write {
-    name = "install-web";
-    runtimeInputs = with pkgs; [ nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      cd web || exit 1
-      exec ${pkgs.nodejs}/bin/npm ci
-    '';
-  };
-
-  test-rust = write {
-    name = "test-rust";
-    runtimeInputs = with pkgs; [ cargo rustc lld coreutils bash ];
-    text = ''
-      exec ${pkgs.cargo}/bin/cargo test --quiet --all
-    '';
-  };
-
-  test-web = write {
-    name = "test-web";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers coreutils bash ];
-    text = ''
-      set -euo pipefail
-    '' + playwrightEnv + ''
-      cd web || exit 1
-      exec ${pkgs.nodejs}/bin/npm run test
-    '';
-  };
-
-  test-e2e = write {
-    name = "test-e2e";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers python3 coreutils bash ];
-    text = ''
-      set -euo pipefail
-    '' + playwrightEnv + ''
-      cd web || exit 1
-      # Fail fast when the installed Playwright driver expects browser
-      # revisions absent from the Nix-provided browsers (see flake.nix).
-      # Catches both a package.json/flake.lock pin mismatch and a stale
-      # web/node_modules resolving an old driver.
-      ${pkgs.python3}/bin/python3 -c '
-      import glob, json, os, sys
-      match = glob.glob("node_modules/playwright-core/browsers.json")
-      expected = set()
-      for path in match:
-          for b in json.load(open(path))["browsers"]:
-              if b["name"] in ("chromium", "chromium-headless-shell"):
-                  expected.add(b["name"].replace("-", "_") + "-" + b["revision"])
-      missing = expected - set(os.listdir(os.environ["PLAYWRIGHT_BROWSERS_PATH"]))
-      if missing:
-          sys.exit("playwright/nix browser mismatch, missing: " + ", ".join(sorted(missing)))
-      print("playwright browsers match: " + ", ".join(sorted(expected)))
-      '
-      exec ${pkgs.nodejs}/bin/npm run test:e2e
-    '';
-  };
-
-  # TEMPORARY (Rust 1.99 regression, see flake.nix): Rust 1.99.0 generates
-  # empty coverage profiles and segfaults instrumented build scripts, so
-  # coverage uses the pinned Rust 1.98.1 toolchain instead of the main one.
-  coverage = writeOld {
-    name = "coverage";
-    runtimeInputs = with pkgsCoverage; [ rustc cargo cargo-llvm-cov llvmPackages_21.llvm coreutils bash ];
-    text = ''
-      set -euo pipefail
-      mkdir -p target/coverage
-      export RUSTC_BOOTSTRAP=1
-      export LLVM_COV="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-cov"
-      export LLVM_PROFDATA="${pkgsCoverage.llvmPackages_21.llvm}/bin/llvm-profdata"
-      ${pkgsCoverage.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
-      exec ${pkgsCoverage.cargo}/bin/cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
-    '';
-  };
-
-  build = write {
-    name = "build";
-    runtimeInputs = with pkgs; [ cargo rustc lld nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      (
-        cd web || exit 1
-        ${pkgs.nodejs}/bin/npm run build-storybook
-      )
-      exec ${pkgs.cargo}/bin/cargo build --release --all-targets
-    '';
-  };
-
-  book = write {
-    name = "book";
-    runtimeInputs = with pkgs; [ cargo rustc mdbook lld coreutils bash ];
-    text = ''
-      set -euo pipefail
-      ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
-      exec ${pkgs.mdbook}/bin/mdbook build book
-    '';
-  };
-
-  book-accept = write {
-    name = "book-accept";
-    runtimeInputs = with pkgs; [ cargo rustc mdbook lld coreutils bash ];
-    text = ''
-      set -euo pipefail
-      ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
-      export BOOKLOCK_ACCEPT_CHANGES=1
-      exec ${pkgs.mdbook}/bin/mdbook build book
-    '';
-  };
-
-  book-serve = write {
-    name = "book-serve";
-    runtimeInputs = with pkgs; [ mdbook coreutils bash ];
-    text = ''
-      exec ${pkgs.mdbook}/bin/mdbook serve book
-    '';
-  };
-
-  vrt = write {
-    name = "vrt";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers coreutils bash ];
-    text = ''
-      set -euo pipefail
-    '' + playwrightEnv + ''
-      (
-        cd web || exit 1
-        ${pkgs.nodejs}/bin/npm run build-storybook -- --quiet
-      )
-      cd web || exit 1
-      exec ${pkgs.nodejs}/bin/npm run test:vrt -- "$@"
-    '';
-  };
-
-  vrt-quick = write {
-    name = "vrt-quick";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers coreutils bash ];
-    text = ''
-      set -euo pipefail
-    '' + playwrightEnv + ''
-      cd web || exit 1
-      exec ${pkgs.nodejs}/bin/npm run test:vrt -- "$@"
-    '';
-  };
-
-  vrt-accept = write {
-    name = "vrt-accept";
-    runtimeInputs = with pkgs; [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
-    text = ''
-      set -euo pipefail
-    '' + playwrightEnv + ''
-      (
-        cd web || exit 1
-        ${pkgs.nodejs}/bin/npm run test:vrt:accept -- "$@"
-      )
-      ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-1--light.png web/src/screenshots/background_1.png
-      ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
-      ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
-      ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
-      exec ./scripts/make-landing.sh
-    '';
-  };
-
-  landing = write {
-    name = "landing";
-    runtimeInputs = with pkgs; [ imagemagick coreutils bash ];
-    text = ''
-      exec ./scripts/make-landing.sh "$1" assets/landing-gradient.jpg book/src/rhizz_landing.png
-    '';
-  };
-
-  dev = write {
-    name = "dev";
-    runtimeInputs = with pkgs; [ nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      cd web || exit 1
-      ${pkgs.nodejs}/bin/npm ci
-      exec ${pkgs.nodejs}/bin/npm run dev
-    '';
-  };
-
-  storybook = write {
-    name = "storybook";
-    runtimeInputs = with pkgs; [ nodejs coreutils bash ];
-    text = ''
-      set -euo pipefail
-      cd web || exit 1
-      ${pkgs.nodejs}/bin/npm run sync
-      exec ${pkgs.nodejs}/bin/npm run storybook
-    '';
-  };
-
-  serve = write {
-    name = "serve";
-    runtimeInputs = with pkgs; [ cargo rustc lld coreutils bash ];
-    text = ''
-      set -euo pipefail
-      ${pkgs.cargo}/bin/cargo build --release -p rhizz-cli
-      RHIZZ_DATA_DIR=examples exec ${pkgs.cargo}/bin/cargo run --release -p rhizz-cli -- web
-    '';
-  };
+  inherit scripts shellInputs;
 }

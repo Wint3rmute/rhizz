@@ -77,7 +77,8 @@
 
           # Runnable scripts for every `just` recipe (see Justfile): each
           # declares exactly the binaries it needs, so `nix run .#lint-rust`
-          # realizes only the Rust toolchain. See nix/tasks.nix.
+          # realizes only the Rust toolchain. See nix/tasks.nix. `shellInputs`
+          # is the union of all task toolchains, for the devshell below.
           tasks = import ./nix/tasks.nix {
             inherit pkgs;
             pkgsCoverage = nixpkgs-coverage.legacyPackages.${system};
@@ -86,7 +87,7 @@
         {
           inherit rhizz-wasm-pkg rhizz-frontend rhizz-server;
         }
-        // tasks
+        // tasks.scripts
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
           inherit rhizz-docker;
         });
@@ -97,46 +98,33 @@
           # Pinned font set for visual regression tests, shared with the
           # `vrt` task scripts (see nix/tasks.nix).
           vrtFontsConf = pkgs.callPackage ./nix/vrt-fonts.nix { };
+          # Union of every task script's toolchain (see `taskInputs` in
+          # nix/tasks.nix): the single source of truth for shared packages.
+          # Only devshell-only extras (no task uses them) are listed below.
+          tasks = import ./nix/tasks.nix {
+            inherit pkgs;
+            pkgsCoverage = nixpkgs-coverage.legacyPackages.${system};
+          };
         in
         {
           default = pkgs.mkShell {
-            packages = with pkgs; [
-              rustc
-              cargo
-              cargo-audit
+            packages = tasks.shellInputs ++ (with pkgs; [
+              # The task runner itself (`just <recipe>` delegates to
+              # `nix run .#<task>`); the toolchains come from shellInputs.
+              just
               # cargo-llvm-cov's own test suite shells out to cargo against
               # fresh registries and fails in the sandbox (no network) as of
               # the f9a75f4 nixpkgs bump — 14 integration tests red while the
-              # binary itself builds fine. We only need the binary for
-              # `just coverage`, so skip its self-tests.
+              # binary itself builds fine. Only needed for manual coverage
+              # experiments here (`just coverage` uses the pinned toolchain
+              # via its task script), so skip its self-tests.
               (cargo-llvm-cov.overrideAttrs (_old: { doCheck = false; }))
-              clippy
-              mdbook
-              rustfmt
-              wasm-pack
-              nodejs
-              just
-              # ImageMagick for `scripts/make-landing.sh` (README hero image).
-              imagemagick
-              # Conventional-commit tooling (`cz commit`, `cz check`, `cz bump`);
-              # config lives in cz.toml. Driven through the `just` recipes.
-              commitizen
-              lld
-              # LLVM tools matching rustc's LLVM (21.1.8), required by
-              # cargo-llvm-cov (NixOS equivalent of rustup's
+              # LLVM tools matching rustc's LLVM (21.1.8), for the same manual
+              # coverage experiments (NixOS equivalent of rustup's
               # llvm-tools-preview component).
               llvmPackages_21.llvm
-              # Playwright browsers for the web browser-mode tests
-              # (`npm run test`, the storybook Vitest project, also covered by
-              # `just test`). Nixpkgs' playwright-driver version must match the
-              # `playwright` version pinned in web/package.json (currently
-              # 1.64.1), because Playwright looks up browsers by revision
-              # directory name (chromium-1248).
-              # After bumping either side, rerun `npm ci` so node_modules
-              # resolves the new driver; a stale tree keeps resolving the old
-              # driver (e.g. 1243 lookups against 1248 browsers) with no
-              # warning.
-              playwright-driver.browsers
+              # Helpers with no task equivalent.
+              wasm-pack
               flyctl
               gh
 
@@ -146,7 +134,7 @@
               # needs no privileged service. Note the published port is
               # forwarded over IPv4 only — probe 127.0.0.1, not localhost.
               # podman
-            ];
+            ]);
 
             # Point cargo-llvm-cov at the Nix-managed LLVM tools, and Playwright
             # at the Nix-provided browsers instead of ~/.cache/ms-playwright.
