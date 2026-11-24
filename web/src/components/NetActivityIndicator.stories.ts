@@ -35,6 +35,9 @@ export const Active: Story = {
 };
 
 export const Fading: Story = {
+  // No VRT: fading is `opacity-0`, so the screenshot is just empty
+  // background. Play still pins the fading state in vitest.
+  tags: ["no-vrt"],
   args: { label: "Syncing…", fading: true },
   loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
