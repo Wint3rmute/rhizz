@@ -282,6 +282,8 @@ export function advance(
     reducedMotion: boolean;
     now: number;
     tween: Tween | null;
+    /** Tween length in ms. Defaults to TRANSITION_MS; 0 cuts immediately. */
+    durationMs?: number;
   },
 ): {
   scene: DiagramScene;
@@ -292,7 +294,8 @@ export function advance(
   const keepCamera = displayed.camera;
   const targetCamera =
     opts.moveCamera && desired.camera ? desired.camera : keepCamera;
-  if (!opts.transition || opts.reducedMotion) {
+  const durationMs = opts.durationMs ?? TRANSITION_MS;
+  if (!opts.transition || opts.reducedMotion || durationMs <= 0) {
     return {
       scene: desired.scene,
       camera: targetCamera,
@@ -309,7 +312,7 @@ export function advance(
       opts.moveCamera && desired.camera ? desired.camera : current.camera,
     moveCamera: opts.moveCamera && desired.camera !== null,
     startedAt: opts.now,
-    duration: TRANSITION_MS,
+    duration: durationMs,
   };
   const frame = frameAt(tween, opts.now);
   return {

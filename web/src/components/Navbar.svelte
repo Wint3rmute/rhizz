@@ -22,7 +22,10 @@
   import { requestPalette } from "../commands/paletteRequest.svelte";
   import { paletteShortcutHint } from "./palette/commandPalette";
   import LockBadge from "./LockBadge.svelte";
+  import SettingsModal from "./SettingsModal.svelte";
   import { projectLock } from "../collab/projectLock.svelte";
+
+  let settingsOpen = $state(false);
 
   // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
   // renders `<Navbar />` with no props and reads everything from the shared
@@ -182,6 +185,15 @@
         >
           {getTheme() === "dark" ? "🌙" : "☀️"}
         </button>
+        <button
+          onclick={() => (settingsOpen = true)}
+          class="btn btn-ghost btn-sm btn-square"
+          title="Open settings"
+          aria-label="Open settings"
+          type="button"
+        >
+          <span class="text-base leading-none" aria-hidden="true">⚙️</span>
+        </button>
       </div>
 
       <!-- Mobile hamburger button -->
@@ -255,6 +267,17 @@
           >
         </div>
       </div>
+      <button
+        type="button"
+        class="btn btn-ghost btn-sm justify-start w-full text-left"
+        onclick={() => {
+          closeMenu();
+          settingsOpen = true;
+        }}
+      >
+        ⚙️ Settings
+      </button>
     </nav>
   {/if}
+  <SettingsModal open={settingsOpen} onclose={() => (settingsOpen = false)} />
 </header>
