@@ -540,11 +540,11 @@ test("opening the palette does not move the browser's own colour", async ({
 
 test("the toolbar colour follows the theme", async ({ page }) => {
   await page.goto("/");
-  // The navbar renders the toggle a beat after load, and it is the same
-  // render pass that applies the theme — so wait for it before reading the
-  // colour it produced, or this reads the static default instead.
-  const toggle = page.getByTitle(/toggle light\/dark theme/i);
-  await expect(toggle).toBeVisible();
+  // Theme lives in the settings modal now — open it before reading the
+  // colour the current theme produced, or this reads the static default.
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const dialog = page.getByTestId("settings-modal");
+  await expect(dialog).toBeVisible();
 
   const applied = () =>
     page.evaluate(() => ({
@@ -558,11 +558,12 @@ test("the toolbar colour follows the theme", async ({ page }) => {
   const start = await applied();
   expect(start.chrome).toBe(start.theme === "dark" ? "#1D232A" : "#FFFFFF");
 
-  // Toggling pins the opposite theme, and the toolbar colour has to follow
-  // it — a toolbar stuck on the other theme's colour is the same class of
-  // bug as one that jumps.
-  await toggle.click();
-  await expect.poll(async () => (await applied()).theme).not.toBe(start.theme);
+  // Pinning the opposite theme in settings has to move the toolbar colour
+  // with it — a toolbar stuck on the other theme's colour is the same class
+  // of bug as one that jumps.
+  const target = start.theme === "dark" ? "light" : "dark";
+  await page.locator("select#settings-theme").selectOption(target);
+  await expect.poll(async () => (await applied()).theme).toBe(target);
   const after = await applied();
   expect(after.chrome).toBe(after.theme === "dark" ? "#1D232A" : "#FFFFFF");
   expect(after.chrome).not.toBe(start.chrome);
