@@ -13,14 +13,20 @@
     TRANSITION_MS_MIN,
   } from "../TransitionState.svelte";
   import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+  import { resolveIcon } from "../iconHelper";
 
   let {
     open = false,
     onclose = () => {},
+    onstarttour = () => {},
   }: {
     open?: boolean;
     onclose?: () => void;
+    /** Starts the guided tour (provided by the navbar, which owns projects/navigation). */
+    onstarttour?: () => void;
   } = $props();
+
+  const tourIcon = resolveIcon("question");
 
   const THEME_OPTIONS: { value: ThemeSelection; label: string }[] = [
     { value: "auto", label: "Auto (follow browser)" },
@@ -139,6 +145,32 @@
           >
             0 is instant, 3000 is 3 seconds. Honors reduced-motion.
           </p>
+        </div>
+
+        <div class="divider my-0"></div>
+
+        <div class="form-control w-full">
+          <span class="label-text font-medium">Guided tour</span>
+          <p class="mt-1 text-xs text-base-content/60">
+            Walks through every workspace page with the drone example.
+          </p>
+          <button
+            type="button"
+            class="btn btn-outline w-full mt-2"
+            onclick={onstarttour}
+            aria-label="Start the guided tour"
+          >
+            {#if tourIcon}
+              <svg
+                viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
+                class="w-4 h-4 fill-current"
+                aria-hidden="true"
+              >
+                <path d={tourIcon.svgPath} />
+              </svg>
+            {/if}
+            Start tour
+          </button>
         </div>
       </div>
     </div>

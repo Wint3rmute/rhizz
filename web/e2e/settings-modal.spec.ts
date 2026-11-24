@@ -68,3 +68,13 @@ test("a corrupt stored transition falls back to the default", async ({
   await page.getByRole("button", { name: "Open settings" }).click();
   await expect(page.locator("input#settings-transition")).toHaveValue("320");
 });
+
+test("guided tour starts from settings", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+  await page.getByRole("button", { name: "Start the guided tour" }).click();
+  await expect(page.getByTestId("settings-modal")).toBeHidden();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible({ timeout: 20000 });
+  await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
+});

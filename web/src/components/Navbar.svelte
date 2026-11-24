@@ -2,12 +2,6 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import {
-    getSelection,
-    getTheme,
-    setSelection,
-    toggleTheme,
-  } from "../ThemeState.svelte";
-  import {
     createProjectWithFiles,
     getCurrentProject,
     getCurrentProjectId,
@@ -41,10 +35,7 @@
   let activeProjectId = $derived(getCurrentProjectId());
   let activeProject = $derived(getCurrentProject());
 
-  // Plain FontAwesome question mark for the guided-tour button.
-  let tourIcon = $derived(resolveIcon("question"));
-
-  // Magnifier for the command palette button, same treatment.
+  // Magnifier for the command palette button.
   let searchIcon = $derived(resolveIcon("magnifying-glass"));
 
   function toggleMenu() {
@@ -130,28 +121,9 @@
 
     <!-- Right section: Desktop controls, Mobile hamburger button -->
     <div class="ml-auto flex items-center gap-2 min-w-0">
-      <!-- Desktop buttons and theme toggle. The score badge and the strictness
-           control that used to sit here now live in the diagnostics bar at the
-           bottom of the page — one place for the project's state, rather than
-           two bars each holding half of it. -->
+      <!-- Desktop controls: palette (inside a project) and settings.
+           Theme and tour live in the settings modal now. -->
       <div class="hidden md:flex items-center gap-2">
-        {#if tourIcon}
-          <button
-            onclick={() => void startTourFlow()}
-            class="btn btn-ghost btn-sm btn-square"
-            title="Guided tour through every workspace page"
-            aria-label="Start the guided tour"
-            type="button"
-          >
-            <svg
-              viewBox={`0 0 ${tourIcon.width} ${tourIcon.height}`}
-              class="w-4 h-4 fill-current"
-              aria-hidden="true"
-            >
-              <path d={tourIcon.svgPath} />
-            </svg>
-          </button>
-        {/if}
         <!-- The palette's other way in. A shortcut nobody can discover is
              only a shortcut for the people who wrote it, so the navbar
              offers the same thing — but only inside a project, which is the
@@ -177,14 +149,6 @@
             {/if}
           </button>
         {/if}
-        <button
-          onclick={toggleTheme}
-          class="btn btn-ghost btn-sm"
-          title="Toggle light/dark theme (pins the choice; Auto follows the browser preference)"
-          type="button"
-        >
-          {getTheme() === "dark" ? "🌙" : "☀️"}
-        </button>
         <button
           onclick={() => (settingsOpen = true)}
           class="btn btn-ghost btn-sm btn-square"
@@ -236,37 +200,7 @@
         <div class="divider my-1"></div>
       {/if}
 
-      <!-- Mobile theme picker: Auto follows the browser preference;
-           picking Light/Dark explicitly pins the theme. -->
-      <div class="flex items-center justify-between pt-1">
-        <span class="text-xs text-base-content/70">Theme</span>
-        <div class="join">
-          <button
-            onclick={() => setSelection("auto")}
-            class="btn btn-ghost btn-xs join-item {getSelection() === 'auto'
-              ? 'btn-active'
-              : ''}"
-            type="button"
-            title="Follow the browser's preferred color scheme">Auto</button
-          >
-          <button
-            onclick={() => setSelection("dark")}
-            class="btn btn-ghost btn-xs join-item {getSelection() === 'dark'
-              ? 'btn-active'
-              : ''}"
-            type="button"
-            title="Always use dark theme">🌙 Dark</button
-          >
-          <button
-            onclick={() => setSelection("light")}
-            class="btn btn-ghost btn-xs join-item {getSelection() === 'light'
-              ? 'btn-active'
-              : ''}"
-            type="button"
-            title="Always use light theme">☀️ Light</button
-          >
-        </div>
-      </div>
+      <!-- Theme and tour live in the settings modal now. -->
       <button
         type="button"
         class="btn btn-ghost btn-sm justify-start w-full text-left"
@@ -279,5 +213,12 @@
       </button>
     </nav>
   {/if}
-  <SettingsModal open={settingsOpen} onclose={() => (settingsOpen = false)} />
+  <SettingsModal
+    open={settingsOpen}
+    onclose={() => (settingsOpen = false)}
+    onstarttour={() => {
+      settingsOpen = false;
+      void startTourFlow();
+    }}
+  />
 </header>
