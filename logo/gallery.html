@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rhizz-logo — style gallery</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 24px; line-height: 1.45; }
+  header p { max-width: 70ch; }
+  h2 { margin-top: 48px; border-top: 1px solid #8885; padding-top: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+  figure { margin: 0; border: 1px solid #8884; border-radius: 12px; padding: 12px; background: #fff; }
+  figure img { width: 100%; height: auto; display: block; }
+  figure.wide { grid-column: 1 / -1; }
+  figure.wide img { max-height: 220px; width: auto; max-width: 100%; }
+  figcaption { font-size: 13px; color: #666; margin-top: 8px; }
+  figcaption code { color: inherit; }
+  .sizes img { width: auto; background: #fff; border: 1px solid #8884; border-radius: 8px; padding: 8px; margin-right: 12px; vertical-align: bottom; }
+  pre { background: #8882; padding: 12px; border-radius: 8px; overflow-x: auto; }
+  @media (prefers-color-scheme: dark) {
+    figure img, .sizes img { filter: invert(1); }
+    figure, .sizes img { background: #000; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>rhizz-logo — style gallery</h1>
+  <p>Styles generated from <code>seed + params → .svg</code>.
+  Nothing here is hand-drawn. Regenerate with the commands at the bottom, then reload.</p>
+  <p><b><a href="editor/">parametric editor →</a></b> drag nodes, tune connections, export SVG.</p>
+  <p><b>Current pick: <a href="#molecule">§0 Molecule</a></b> — exact arc geometry, 93.1% IoU against the reference.</p>
+</header>
+
+<h2 id="molecule">0 · Molecule — exact outline, measured from the reference</h2>
+<p><code>src/molecule.mjs</code>. The mark is a <b>tree of circles joined by constant-width capsules</b>,
+so its silhouette is traced <i>exactly</i> — node-circle arcs, capsule side lines, and a tangent
+fillet arc at every concave corner. One path of real <code>A</code>/<code>L</code> commands:
+no marching squares, no boolean ops, no filters.</p>
+
+<h3>The fillet system</h3>
+<p>The organic feel of the reference comes entirely from its concave corners. Two
+<i>structurally different</i> corners occur, and conflating them is what produced sharp
+V-spikes in the first pass:</p>
+<ul>
+  <li><b>A · Dot joint</b> — the node circle pokes out past the bar, so the bar's side line runs
+  into the circle. The fillet is tangent to a <b>line and a circle</b>: its centre sits at
+  <code>r+f</code> from the node centre and <code>h+f</code> from the bar axis, which pins it exactly.
+  Radius = <code>fillet</code>.</li>
+  <li><b>B · Notch</b> — two bars converge steeply enough that their facing sides cross
+  <i>before</i> reaching the circle, which is swallowed. This is <b>every corner of the hub</b>,
+  since the reference hub has no dot. The fillet is the circle inscribed in the angle between
+  <b>two lines</b>, clamped so its tangent points stay on the bars. Radius = <code>jointFillet</code>.</li>
+</ul>
+<p>The previous version grew the node radius until case B degenerated into case A, then bridged
+the remainder with a straight line — a hard corner exactly where the reference is softest.
+Handling B natively is the fix; node radii are no longer inflated at all.</p>
+<div class="grid">
+  <figure class="wide">
+    <img src="renders/png/molecule-fillet-compare.png" alt="junction before and after the fillet system">
+    <figcaption><b>Left:</b> straight-line bridge — note the V-spike where two bars cross.
+    <b>Right:</b> notch fillet, same geometry. 4× zoom on the hub.</figcaption>
+  </figure>
+  <figure class="wide">
+    <img src="renders/png/molecule-fillet-sweep.png" alt="jointFillet sweep">
+    <figcaption><code>jointFillet</code> = 0 / 16 / 30 / 48 / 70. <b>16 is the pick.</b>
+    Past ~30 the fillets web across the bars — the same failure mode as the metaball goo in §5.</figcaption>
+  </figure>
+</div>
+<p style="font-size:13px;color:#666"><b>Note on the metric:</b> IoU keeps <i>rising</i> through that
+sweep (93.0% → 93.5% at <code>jointFillet=70</code>) because it only rewards filled area. It is a
+good guard against drifting geometry, but it cannot judge a fillet — that call was made by eye
+from the sweep above.</p>
+<h3>Measurement</h3>
+<p>Geometry came from measurement, not eyeballing. <code>src/measure-ref.mjs</code> runs a distance
+transform over the reference bitmap to recover dot centres and bar width; <code>src/fit-ref.mjs</code>
+then coordinate-descends the free parameters against pixel IoU. Three findings overturned the
+earlier generators: <b>there is no hub dot</b> (four bars just converge), <b>bars are constant
+width</b> (not tapered), and bar/dot-diameter = <b>0.365</b>.</p>
+<div class="grid">
+  <figure class="wide">
+    <img src="renders/molecule/lockup-ref.svg" alt="molecule reference lockup">
+    <figcaption><code>molecule/lockup-ref.svg</code> — <b>the match.</b> Reference preset + Roboto Bold outlines</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-ref.svg" alt="molecule reference preset">
+    <figcaption><code>molecule-ref.svg</code> — <code>--preset reference</code>, <b>93.1% IoU</b>, filleted</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/png/diff-molecule.png" alt="IoU overlay">
+    <figcaption>IoU overlay — black = agreement, red = reference only, blue = render only</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-favicon.svg" alt="favicon variant">
+    <figcaption><code>molecule-favicon.svg</code> — reduced params (<code>arms=3,chains=1,dotR=58,jointFillet=20</code>) for 16px</figcaption>
+  </figure>
+</div>
+<h3>Seeded variants — same structural language</h3>
+<p>A hub fan of <code>arms</code>, <code>chains</code> of which continue into a second terminal.
+Chained dots are placed with a clearance test, so the silhouette stays a tree
+(seed 4 closed a ring before that guard).</p>
+<div class="grid">
+  <figure>
+    <img src="renders/molecule/molecule-001.svg" alt="molecule seed 1">
+    <figcaption><code>molecule-001.svg</code> — seed 1</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-002.svg" alt="molecule seed 2">
+    <figcaption><code>molecule-002.svg</code> — seed 2</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-003.svg" alt="molecule seed 3">
+    <figcaption><code>molecule-003.svg</code> — seed 3</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-004.svg" alt="molecule seed 4">
+    <figcaption><code>molecule-004.svg</code> — seed 4, ring-free after the clearance guard</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-005.svg" alt="molecule seed 5">
+    <figcaption><code>molecule-005.svg</code> — seed 5</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/molecule/molecule-006.svg" alt="molecule seed 6">
+    <figcaption><code>molecule-006.svg</code> — seed 6</figcaption>
+  </figure>
+</div>
+<h3>Small sizes</h3>
+<p>Full mark holds at 32px; at 16px six dots are too many, so the favicon preset drops to
+3 arms with fatter dots. Shown at native size then zoomed 4×/8×.</p>
+<p class="sizes">
+  <img src="renders/molecule/molecule-ref.svg" width="32" height="32" alt="mark at 32px">
+  <img src="renders/molecule/molecule-ref.svg" width="16" height="16" alt="mark at 16px">
+  <img src="renders/molecule/molecule-favicon.svg" width="32" height="32" alt="favicon at 32px">
+  <img src="renders/molecule/molecule-favicon.svg" width="16" height="16" alt="favicon at 16px">
+  <img src="renders/molecule/lockup-ref.svg" width="180" alt="lockup at 180px wide">
+</p>
+<p class="sizes">
+  <img src="renders/png/molecule-small.png" alt="mark 32/16 zoomed">
+  <img src="renders/png/molecule-favicon-small.png" alt="favicon 32/16 zoomed">
+</p>
+<h3>Fidelity against earlier attempts</h3>
+<table style="border-collapse:collapse;font-size:14px">
+  <tr><th style="text-align:left;padding:4px 16px 4px 0">generator</th><th style="text-align:left;padding:4px">IoU vs reference</th></tr>
+  <tr><td style="padding:4px 16px 4px 0"><code>molecule.mjs --preset reference</code></td><td style="padding:4px"><b>93.11%</b></td></tr>
+  <tr><td style="padding:4px 16px 4px 0"><code>reference-mark.svg</code> (hand model → metaball tracer)</td><td style="padding:4px">50.08%</td></tr>
+  <tr><td style="padding:4px 16px 4px 0"><code>v002/paper-rhizome-001.svg</code></td><td style="padding:4px">29.66%</td></tr>
+  <tr><td style="padding:4px 16px 4px 0"><code>metaball-chunky/metaball-002.svg</code></td><td style="padding:4px">26.95%</td></tr>
+</table>
+<p style="font-size:13px;color:#666">Measured by <code>src/diff-ref.mjs</code>: both masks trimmed to their
+ink bounding box and letterboxed into 512², so the score is shape-only (position and scale
+neutral).</p>
+
+<h2>1 · Node trees — graph-like rhizome marks <small style="font-weight:normal;color:#888">(superseded by §0)</small></h2>
+<p>Thick rounded branches, dot terminals, united into a single silhouette (paper.js <code>unite()</code>).
+Header / favicon bet. Lockups pair the mark with Roboto Bold outlines.</p>
+<div class="grid">
+  <figure class="wide">
+    <img src="renders/lockup-001.svg" alt="lockup seed 1">
+    <figcaption><code>lockup-001.svg</code> — pick. paper-rhizome seed 1 + Roboto Bold “Rhizome”</figcaption>
+  </figure>
+  <figure class="wide">
+    <img src="renders/lockup-002.svg" alt="lockup seed 2">
+    <figcaption><code>lockup-002.svg</code> — alternative. seed 2, more symmetric</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/paper-rhizome-001.svg" alt="paper rhizome 1">
+    <figcaption><code>paper-rhizome-001.svg</code> — paper.js, united silhouette</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/paper-rhizome-002.svg" alt="paper rhizome 2">
+    <figcaption><code>paper-rhizome-002.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/paper-rhizome-003.svg" alt="paper rhizome 3">
+    <figcaption><code>paper-rhizome-003.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/paper-rhizome-004.svg" alt="paper rhizome 4">
+    <figcaption><code>paper-rhizome-004.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/paper-rhizome-hole.svg" alt="donut hub variant">
+    <figcaption><code>paper-rhizome-hole.svg</code> — donut-hub cut-out via <code>subtract()</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-001.svg" alt="rhizome 1">
+    <figcaption><code>rhizome-001.svg</code> — zero-dep generator, seed 1</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-002.svg" alt="rhizome 2">
+    <figcaption><code>rhizome-002.svg</code> — seed 2</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-003.svg" alt="rhizome 3">
+    <figcaption><code>rhizome-003.svg</code> — seed 3</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-004.svg" alt="rhizome 4">
+    <figcaption><code>rhizome-004.svg</code> — seed 4</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-005.svg" alt="rhizome 5">
+    <figcaption><code>rhizome-005.svg</code> — seed 5</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/rhizome-006.svg" alt="rhizome 6">
+    <figcaption><code>rhizome-006.svg</code> — seed 6</figcaption>
+  </figure>
+</div>
+<h3>Small sizes</h3>
+<p class="sizes">
+  <img src="renders/paper-rhizome-001.svg" width="32" height="32" alt="mark at 32px">
+  <img src="renders/paper-rhizome-001.svg" width="16" height="16" alt="mark at 16px">
+  <img src="renders/lockup-001.svg" width="96" alt="lockup at 96px wide">
+</p>
+
+<h3>v002 — refined pass</h3>
+<p>Uniform terminals, slotted angles (28° min separation), tapered branches united into one path,
+mid-node noise removed, tighter wordmark tracking. Lives in <code>renders/v002/</code> — v001 kept for comparison.</p>
+<div class="grid">
+  <figure class="wide">
+    <img src="renders/v002/lockup-001.svg" alt="v002 lockup">
+    <figcaption><code>v002/lockup-001.svg</code> — refined pick</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/v002/paper-rhizome-001.svg" alt="v002 seed 1">
+    <figcaption><code>v002/paper-rhizome-001.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/v002/paper-rhizome-002.svg" alt="v002 seed 2">
+    <figcaption><code>v002/paper-rhizome-002.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/v002/paper-rhizome-003.svg" alt="v002 seed 3">
+    <figcaption><code>v002/paper-rhizome-003.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/v002/paper-rhizome-004.svg" alt="v002 seed 4">
+    <figcaption><code>v002/paper-rhizome-004.svg</code></figcaption>
+  </figure>
+</div>
+
+<h2>2 · Floating rectangles — stacked isometric plates</h2>
+<p>Thousand-Plateaus book-cover vibe. Hero / secondary mark; too fine for favicon.</p>
+<div class="grid">
+  <figure>
+    <img src="renders/plateau-001.svg" alt="plateau 1">
+    <figcaption><code>plateau-001.svg</code> — seed 1</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/plateau-002.svg" alt="plateau 2">
+    <figcaption><code>plateau-002.svg</code> — seed 2</figcaption>
+  </figure>
+</div>
+
+<h2>3 · Semi-connected lines — warped torn grid</h2>
+<p>Distressed-mesh cover vibe. Background / loading texture; too busy for an icon.</p>
+<div class="grid">
+  <figure>
+    <img src="renders/mesh-001.svg" alt="mesh 1">
+    <figcaption><code>mesh-001.svg</code> — seed 1</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/mesh-002.svg" alt="mesh 2">
+    <figcaption><code>mesh-002.svg</code> — seed 2</figcaption>
+  </figure>
+</div>
+
+<h2>4 · Hybrid — rhizome grown on the mesh</h2>
+<p>Branches walk grid-node to grid-node on the warped mesh (faceted paths), terminals are dots,
+torn grid shows through faintly. <code>src/hybrid.mjs</code>, output in <code>renders/hybrid/</code>.</p>
+<div class="grid">
+  <figure>
+    <img src="renders/hybrid/hybrid-001.svg" alt="hybrid 1">
+    <figcaption><code>hybrid/hybrid-001.svg</code> — pick</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/hybrid/hybrid-002.svg" alt="hybrid 2">
+    <figcaption><code>hybrid/hybrid-002.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/hybrid/hybrid-003.svg" alt="hybrid 3">
+    <figcaption><code>hybrid/hybrid-003.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/hybrid/hybrid-004.svg" alt="hybrid 4">
+    <figcaption><code>hybrid/hybrid-004.svg</code></figcaption>
+  </figure>
+</div>
+
+<h2>5 · Metaballs — the reference, gooified <small style="font-weight:normal;color:#888">(superseded by §0)</small></h2>
+<p>Nodes melt into branches via analytic smooth-minimum fields, contour traced with marching squares.
+Single pure path, no filters. Chunky proportions (<code>--set baseLen=90,nodeR=30,hubR=36</code>), pick is seed 2.</p>
+<p><b>Why it lost:</b> the reference's joints are small <i>concave fillets</i>, not blends. A global
+<code>smin</code> radius big enough to round the hub also dissolves the terminals, so dots stop reading
+as discrete nodes — 26.95% IoU. <code>renders/reference-mark.svg</code> is the proof: correct measured
+geometry, run through this tracer, still comes out an amoeba.</p>
+<div class="grid">
+  <figure class="wide">
+    <img src="renders/metaball-chunky-lockup.svg" alt="metaball lockup">
+    <figcaption><code>metaball-chunky-lockup.svg</code> — the match. Compare <code>renders/png/vs-final.png</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/metaball-chunky/metaball-001.svg" alt="chunky 1">
+    <figcaption><code>metaball-chunky/metaball-001.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/metaball-chunky/metaball-002.svg" alt="chunky 2">
+    <figcaption><code>metaball-chunky/metaball-002.svg</code> — pick</figcaption>
+  </figure>
+  <figure>
+    <img src="renders/metaball-chunky/metaball-003.svg" alt="chunky 3">
+    <figcaption><code>metaball-chunky/metaball-003.svg</code></figcaption>
+  </figure>
+  <figure>
+    <img src="renders/metaball-chunky/metaball-004.svg" alt="chunky 4">
+    <figcaption><code>metaball-chunky/metaball-004.svg</code></figcaption>
+  </figure>
+</div>
+
+<h2>Regenerate</h2>
+<pre>nix develop
+
+# §0 molecule — the pick
+node src/molecule.mjs --preset reference --out renders/molecule/molecule-ref.svg
+node src/molecule.mjs --seed 1 --seed-end 6 --outdir renders/molecule
+node src/molecule.mjs --seed 2 --set arms=3,chains=1,dotR=58,barW=38,fillet=10,jointFillet=20 \
+     --out renders/molecule/molecule-favicon.svg
+node src/lockup.mjs --mark renders/molecule/molecule-ref.svg --out renders/molecule/lockup-ref.svg
+
+# measurement + fidelity scoring
+node src/measure-ref.mjs references/logo_suggestion_chatgpt.png   # dots, bar width, angles
+node src/fit-ref.mjs                                             # IoU coordinate descent
+resvg --background white renders/molecule/molecule-ref.svg renders/png/molecule-ref.png
+node src/diff-ref.mjs renders/png/molecule-ref.png renders/png/diff-molecule.png
+
+# earlier explorations
+node src/generate.mjs --variant rhizome --seed 1 --seed-end 6 --outdir renders</pre>
+node src/paper-rhizome.mjs --seed 1 --seed-end 4 --outdir renders
+node src/paper-rhizome.mjs --seed 1 --hub-hole 12 --out renders/paper-rhizome-hole.svg
+node src/lockup.mjs --mark renders/paper-rhizome-001.svg --out renders/lockup-001.svg
+node src/paper-rhizome.mjs --seed 1 --seed-end 4 --outdir renders/v002
+node src/hybrid.mjs --seed 1 --seed-end 4 --outdir renders/hybrid
+python3 -m http.server 8000  # then open gallery.html</pre>
+
+</body>
+</html>

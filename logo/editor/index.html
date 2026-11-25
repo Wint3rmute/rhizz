@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>rhizz-logo — parametric editor</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { color-scheme: light; }
+  body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 24px; line-height: 1.45; }
+  header { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 16px; }
+  header h1 { font-size: 20px; margin: 0 12px 0 0; }
+  main { display: flex; flex-wrap: wrap; gap: 16px; align-items: start; }
+  .stage { background: #fff; border: 1px solid #8884; border-radius: 12px; padding: 12px; }
+  canvas { display: block; width: min(512px, 80vw); height: auto; cursor: crosshair; touch-action: none; }
+  aside { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 12px; }
+  .card { border: 1px solid #8884; border-radius: 12px; padding: 12px; }
+  .card h3 { margin: 0 0 8px; font-size: 14px; }
+  label { display: block; font-size: 13px; margin: 6px 0; }
+  label output { float: right; color: #666; }
+  input[type=range] { width: 100%; }
+  button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 8px; border: 1px solid #8886; background: #f4f4f5; cursor: pointer; }
+  button:hover { background: #e8e8ea; }
+  button.primary { background: #111; color: #fff; border-color: #111; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  #readout { font-size: 13px; color: #666; }
+  details { font-size: 13px; color: #555; }
+  input[type=range]:disabled { opacity: 0.35; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>parametric logo editor</h1>
+  <span class="row" id="seeds"></span>
+  <label><input type="checkbox" id="skel" checked> skeleton</label>
+  <button id="exportSvg" class="primary">Export SVG</button>
+  <button id="exportPng">Export PNG</button>
+  <button id="reset">Reset</button>
+</header>
+
+<main>
+  <div class="stage"><canvas id="stage" width="512" height="512"></canvas></div>
+  <aside>
+    <div class="card">
+      <h3>Selection</h3>
+      <div id="readout">nothing selected</div>
+      <label>node radius <output id="oR"></output><input type="range" id="sR" min="6" max="60" step="1" disabled></label>
+      <label>edge width @ start <output id="oW0"></output><input type="range" id="sW0" min="4" max="40" step="0.5" disabled></label>
+      <label>edge width @ end <output id="oW1"></output><input type="range" id="sW1" min="4" max="40" step="0.5" disabled></label>
+      <div class="row">
+        <button id="addNode">+ node</button>
+        <button id="delSel">delete</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Global</h3>
+      <label>gooeyness <output id="oG"></output><input type="range" id="sG" min="4" max="32" step="1" value="16"></label>
+      <label>branch width × <output id="oW"></output><input type="range" id="sW" min="0.5" max="1.5" step="0.05" value="1"></label>
+    </div>
+    <details>
+      <summary>how to drive it</summary>
+      <p><b>drag</b> any handle to move a node · <b>click</b> a node/edge to select it ·
+      <b>double-click</b> empty space to grow a node (joins nearest) ·
+      <b>double-click a node</b> while one is selected to connect them ·
+      <b>Del</b> removes selection · sliders tune the selection or the whole mark.</p>
+    </details>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/paper@0.12.20/dist/paper-full.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
