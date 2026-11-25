@@ -23,8 +23,11 @@ export const MOLECULE_DEFAULTS = {
   dotR: 39.6,       // terminal radius in a 512 box (measured 38.6, IoU-refined)
   barW: 28.2,       // bar width, constant (measured)
   hubR: 15.0,       // junction node radius; bars converge, no visible dot
-  fillet: 9.0,      // DOT-JOINT fillet: where a bar side runs into a node circle
+  fillet: 12.0,     // DOT-JOINT fillet: where a bar side runs into a node circle
   jointFillet: 16.0, // NOTCH fillet: where two converging bar sides cross
+  jointTangent: 18,  // >0: NOTCH fillets use this fixed tangent length instead of a fixed
+                    // radius (r = t*tan(gap/2)), so every hub corner blends into its bars
+                    // at the same distance from the corner. 0 = legacy fixed-radius (jointFillet).
   margin: 24,       // auto-fit padding inside the box
   // --- generative knobs (ignored when --preset reference) ---
   arms: 4,          // bars leaving the junction
@@ -259,7 +262,8 @@ export function traceOutline(graph, cfg) {
         const half = phi / 2;
         // keep tangent points on the bars, and never cut past the node centre
         const room = Math.min(A.L, B.L) * 0.42;
-        const t = Math.min(fJoint / Math.tan(half), room);
+        const tWanted = cfg.jointTangent > 0 ? cfg.jointTangent : fJoint / Math.tan(half);
+        const t = Math.min(tWanted, room);
         const rf = t * Math.tan(half);
         const pIn = add(X, mul(A.u, -t));
         const pOut = add(X, mul(B.u, t));
