@@ -37,6 +37,16 @@ if (navigator.webdriver) {
     }
     return nativeMatchMedia(query);
   };
+
+  // While a modal is open, daisyUI's root scroll gutter (`rootscrollgutter`)
+  // runs a scroll-driven `set-page-has-scroll` animation on <html>. A
+  // scroll-timeline animation never finishes, so Storybook's post-play
+  // `waitForAnimations` sits out its full 5 s cap on every modal story —
+  // about a third of the VRT suite's runtime. Under automation, drop it: the
+  // stories' pages don't scroll, so the reserved gutter it toggles is moot.
+  const style = document.createElement("style");
+  style.textContent = ":root { animation: none !important; }";
+  document.head.append(style);
 }
 
 export default {
