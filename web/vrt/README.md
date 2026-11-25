@@ -22,11 +22,29 @@ baseline), and a grid of the unchanged baselines.
 
 - **New story:** picked up automatically from `storybook-static/index.json`. The
   first run shows it as "New" and writes its baseline.
-- **Opt out:** add `tags: ["no-vrt"]` to a story.
+- **Opt out:** add `tags: ["no-vrt"]` to a story. Its play function still runs
+  under `just test`; only the screenshot is skipped. Delete its baselines in
+  `__screenshots__/` too.
 - **Viewports:** stories using Storybook's `mobile1`/`mobile2`/`tablet`/
   `desktop` viewport are screenshotted at that size; everything else at
   1280×800.
-- Not part of `just test` or CI (separate `playwright.vrt.config.ts`).
+- Not part of `just test` (separate `playwright.vrt.config.ts`); CI runs it in
+  the `visual-regressions` job.
+
+## What gets a screenshot
+
+Every screenshot costs CI time (×2 for the themes), so a story is screenshotted
+only when it shows something no other baseline does. Keep:
+
+- **Full app pages** (`Pages/*`, the tour), including mobile layouts.
+- **The diagram gallery** (`Diagrams/DiagramStaticView`): one story per
+  rendering feature.
+- **At least one per popup / complex widget** (modals, menus, inspectors,
+  palette), plus variants that add visibly new UI: banners, error states,
+  open dropdowns.
+
+Opt out behaviour-only stories (their screenshot matches the default state),
+near-duplicate variants, and small widgets already visible on a full page.
 
 ## Git LFS
 

@@ -60,6 +60,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Desktop: Story = {
+  tags: ["no-vrt"],
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
@@ -101,6 +102,7 @@ export const ProjectOpen: Story = {
 };
 
 export const MobileCollapsed: Story = {
+  tags: ["no-vrt"],
   globals: {
     viewport: { value: "mobile1" },
   },

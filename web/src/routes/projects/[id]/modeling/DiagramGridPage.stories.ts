@@ -190,6 +190,7 @@ export const GridGraduationsEnabled: Story = {
 
 /** Same editor window with the grid toggled off — background goes transparent. */
 export const GridToggledOff: Story = {
+  tags: ["no-vrt"],
   args: {
     projectId: GRID_PROJECT_ID,
   },

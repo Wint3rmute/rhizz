@@ -52,6 +52,7 @@ export const Default: Story = {
 // Same diagram with a couple of nodes selected, exercising the selection
 // outline in the embed viewport.
 export const Selected: Story = {
+  tags: ["no-vrt"],
   args: {
     components: sampleComponents,
     connections: sampleConnections,
@@ -66,6 +67,7 @@ export const Selected: Story = {
 // node fires onnodeclick, unlinked nodes stay inert — the embed page wires
 // this to in-embed drill-down navigation with a toast fallback.
 export const LinkedNavigation: Story = {
+  tags: ["no-vrt"],
   args: {
     components: sampleComponents,
     connections: sampleConnections,
@@ -92,6 +94,7 @@ export const LinkedNavigation: Story = {
 // The far-above note carries Markdown (**bold**) so this storybook also
 // exercises styled annotation runs.
 export const WithDistantAnnotations: Story = {
+  tags: ["no-vrt"],
   args: {
     components: sampleComponents,
     connections: sampleConnections,

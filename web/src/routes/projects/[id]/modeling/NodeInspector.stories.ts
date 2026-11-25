@@ -55,6 +55,7 @@ export const Default: Story = {
 };
 
 export const Styled: Story = {
+  tags: ["no-vrt"],
   args: {
     component: {
       ...meta.args.component,
@@ -70,6 +71,7 @@ export const Styled: Story = {
 };
 
 export const AtomicLeaf: Story = {
+  tags: ["no-vrt"],
   args: {
     component: {
       label: "temp-sensor",
@@ -173,6 +175,7 @@ export const Readonly: Story = {
  * definition: the source row links to that definition's Inventory page.
  */
 export const Sourced: Story = {
+  tags: ["no-vrt"],
   args: {
     projectId: "drone-story",
     componentKey: "drone/fc",
@@ -219,6 +222,7 @@ export const Sourced: Story = {
 };
 
 export const ProxyPort: Story = {
+  tags: ["no-vrt"],
   args: {
     component: {
       label: "weather-service",

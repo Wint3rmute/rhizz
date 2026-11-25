@@ -41,6 +41,7 @@ export const Default: Story = {
 };
 
 export const SnapActive: Story = {
+  tags: ["no-vrt"],
   args: {
     ...fullArgs,
     snapEnabled: true,
@@ -49,6 +50,7 @@ export const SnapActive: Story = {
 };
 
 export const AutoLayoutRunning: Story = {
+  tags: ["no-vrt"],
   args: {
     ...fullArgs,
     autoLayoutRunning: true,
@@ -59,6 +61,7 @@ export const AutoLayoutRunning: Story = {
 // and "Zoom to Fill". Omitting the snap/auto-layout/reset/add callbacks
 // hides those buttons — this story locks that subset in (VRT).
 export const Minimal: Story = {
+  tags: ["no-vrt"],
   args: {},
 };
 

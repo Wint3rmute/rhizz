@@ -23,5 +23,6 @@ export const Open: Story = {
 };
 
 export const NoSystems: Story = {
+  tags: ["no-vrt"],
   args: { systems: [], defaultSystem: undefined },
 };

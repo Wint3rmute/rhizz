@@ -39,6 +39,7 @@ export const ComponentMenu: Story = {
 };
 
 export const EmptyCanvasMenu: Story = {
+  tags: ["no-vrt"],
   args: {
     items: [
       { label: "New component", shortcut: "C", action: () => {} },
@@ -61,6 +62,7 @@ export const EmptyCanvasMenu: Story = {
 };
 
 export const AnnotationMenu: Story = {
+  tags: ["no-vrt"],
   args: {
     items: [
       {
@@ -80,6 +82,7 @@ export const AnnotationMenu: Story = {
 };
 
 export const ClickItemCloses: Story = {
+  tags: ["no-vrt"],
   args: {},
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

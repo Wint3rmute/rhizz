@@ -165,6 +165,7 @@ export const EmptyLanding: Story = {
 // phone-width card when they share a row. Storybook's test runner renders
 // narrower than `sm`, so this story exercises the mobile layout.
 export const MobileHeaderStacks: Story = {
+  tags: ["no-vrt"],
   args: {
     projects,
   },

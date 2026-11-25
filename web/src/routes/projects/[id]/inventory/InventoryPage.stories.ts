@@ -233,6 +233,7 @@ export const Desktop: Story = {
 };
 
 export const SystemsTab: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -255,6 +256,7 @@ export const SystemsTab: Story = {
 // definitions: no "Use Existing Component" toggle, since this page never
 // places instances.
 export const AddComponentOpensDefinitionModal: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -304,6 +306,7 @@ export const SystemDiagramPreview: Story = {
 // A system without a same-named view gets the empty state with the
 // system-worded button. `aux-system` deliberately has no view file.
 export const SystemMissingDiagram: Story = {
+  tags: ["no-vrt"],
   args: { requestedLabel: "aux-system" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -342,6 +345,7 @@ export const MissingDefaultDiagram: Story = {
 // is unit-tested on definitionLabelForNode, which is cheaper than churning
 // every diagram baseline in this file to rename it.
 export const ClickingANodeFocusesThatComponent: Story = {
+  tags: ["no-vrt"],
   args: { requestedLabel: "controller" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -407,6 +411,7 @@ export const EmptyModel: Story = {
 // deliberately not the first card, so this can't pass by accident on the same
 // entity a bare /inventory would have opened.
 export const DeepLinkedEntity: Story = {
+  tags: ["no-vrt"],
   args: {
     requestedLabel: "draft-module",
   },
@@ -477,6 +482,7 @@ export const DetailPaneStacksBelowTheDiagram: Story = {
  * the VRT baselines' job, at 1280 wide.
  */
 export const EveryTabFitsInThePane: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -597,6 +603,7 @@ export const StyleTabEditsTheComponent: Story = {
 // systems carry no such attributes in the model. The write is asserted by
 // reading `main.hcl` back, matching the component story's read-back style.
 export const StyleTabEditsTheSystem: Story = {
+  tags: ["no-vrt"],
   args: { requestedLabel: "aux-system" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -667,6 +674,7 @@ export const DeleteTabBlockedForUsedComponent: Story = {
 // the button stays disabled until the input names the label, and the model
 // file loses the block. `draft-module` is never instanced.
 export const DeleteTabDeletesUnusedComponent: Story = {
+  tags: ["no-vrt"],
   args: { requestedLabel: "draft-module" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -702,6 +710,7 @@ export const DeleteTabDeletesUnusedComponent: Story = {
 // `views/demo-system.hcl` dangling with E006. The confirm form is shown
 // disabled, with the files to delete first listed below it.
 export const DeleteTabBlockedForSystemWithViews: Story = {
+  tags: ["no-vrt"],
   args: { requestedLabel: "demo-system" },
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
@@ -770,6 +779,7 @@ export const PanesOpenByDefault: Story = {
 // sides (the details side is pinned through its open tab instead — the
 // Description viewer stays mounted under the rail the same way).
 export const PanesHideAndRestore: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -841,6 +851,7 @@ export const PanesHiddenShowsRails: Story = {
 // nothing and named by no port.
 
 export const ProtocolsTab: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -916,6 +927,7 @@ export const ProtocolDetail: Story = {
 };
 
 export const ProtocolDeleteBlocked: Story = {
+  tags: ["no-vrt"],
   loaders: [ensureInventoryProject],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

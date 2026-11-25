@@ -30,6 +30,7 @@ export const FirstTip: Story = {
 };
 
 export const SecondTip: Story = {
+  tags: ["no-vrt"],
   args: {
     index: 1,
   },

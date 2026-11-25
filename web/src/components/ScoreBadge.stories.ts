@@ -24,6 +24,7 @@ type Story = StoryObj<typeof meta>;
 
 /** A published score: the rounded figure, and the exact one on hover. */
 export const WithScore: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const badge = await canvas.findByText("Score: 73%");

@@ -21,6 +21,7 @@ type Story = StoryObj<typeof meta>;
 
 // A real revision links to its commit on GitHub.
 export const Commit: Story = {
+  tags: ["no-vrt"],
   args: { buildInfo: { git_sha: "07265fb" } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

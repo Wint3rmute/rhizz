@@ -22,6 +22,7 @@ export const Default: Story = {
 };
 
 export const Empty: Story = {
+  tags: ["no-vrt"],
   args: {
     value: "",
   },

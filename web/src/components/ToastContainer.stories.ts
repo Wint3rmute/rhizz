@@ -50,6 +50,7 @@ export const AllLevels: Story = {
 // A refusal message carries inline Markdown (the Rust diagnostics wrap protocol
 // labels in backticks), so the toast renders it as code rather than plain text.
 export const MarkdownMessage: Story = {
+  tags: ["no-vrt"],
   args: {
     state: stateWithMarkdown(),
   },

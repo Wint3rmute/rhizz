@@ -44,6 +44,7 @@ function surface(root: Element, index: number): HTMLElement {
 }
 
 export const Collapsed: Story = {
+  tags: ["no-vrt"],
   args: {},
   loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
@@ -79,6 +80,7 @@ const duplicateDiagnostics = [
 ] satisfies StoryDiagnostic[];
 
 export const DuplicateDiagnostics: Story = {
+  tags: ["no-vrt"],
   loaders: [resetDiagnosticsBar],
   args: {
     diagnostics: duplicateDiagnostics,
@@ -96,6 +98,7 @@ export const DuplicateDiagnostics: Story = {
 };
 
 export const Clean: Story = {
+  tags: ["no-vrt"],
   loaders: [resetDiagnosticsBar],
   args: {
     diagnostics: [] satisfies StoryDiagnostic[],
@@ -179,6 +182,7 @@ export const FullStrip: Story = {
 // stays hidden down here (like the score badge): phones keep the one line
 // for counts, chevron and strictness.
 export const NarrowStrip: Story = {
+  tags: ["no-vrt"],
   loaders: [resetDiagnosticsBar],
   globals: {
     viewport: { value: "mobile1" },
