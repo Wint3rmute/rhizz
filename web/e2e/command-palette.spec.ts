@@ -568,3 +568,55 @@ test("the toolbar colour follows the theme", async ({ page }) => {
   expect(after.chrome).toBe(after.theme === "dark" ? "#1D232A" : "#FFFFFF");
   expect(after.chrome).not.toBe(start.chrome);
 });
+
+test("choosing open settings opens the settings modal", async ({ page }) => {
+  const id = await createNewProject(page, "E2E palette settings");
+  await gotoProject(page, id, "overview");
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  await expect(palette).toBeVisible();
+
+  await page.keyboard.type("settings");
+  await expect(options(page, "Open settings")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+
+  // Selecting closes the palette and opens the same modal the gear button opens.
+  await expect(palette).toHaveCount(0);
+  await expect(page.getByTestId("settings-modal")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeVisible();
+});
+
+test("choosing toggle theme flips the theme and persists it", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E palette theme");
+  await gotoProject(page, id, "overview");
+
+  const appliedTheme = () =>
+    page.evaluate(() => document.documentElement.dataset.theme ?? null);
+  const storedTheme = () => page.evaluate(() => localStorage.getItem("THEME"));
+
+  const start = await appliedTheme();
+
+  await page.keyboard.press("Control+p");
+  const palette = page.getByTestId(PALETTE);
+  await expect(palette).toBeVisible();
+
+  await page.keyboard.type("theme");
+  await expect(options(page, "Toggle theme")).toHaveCount(1);
+  // The mode synonym rides in the hint, not the label.
+  await page.getByTestId("command-palette-input").fill("dark");
+  await expect(options(page, "Toggle theme")).toHaveCount(1);
+  await page.keyboard.press("Enter");
+
+  await expect(palette).toHaveCount(0);
+  const flipped = start === "dark" ? "light" : "dark";
+  await expect.poll(appliedTheme).toBe(flipped);
+  await expect.poll(storedTheme).toBe(flipped);
+
+  await page.reload();
+  await gotoProject(page, id, "overview");
+  await expect.poll(appliedTheme).toBe(flipped);
+  await expect.poll(storedTheme).toBe(flipped);
+});

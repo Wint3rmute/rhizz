@@ -114,10 +114,9 @@
 
   function handleSelect(row: PaletteItem | undefined): void {
     if (row === undefined) return;
-    // The row's own action first: a host that navigates on select will tear
-    // this component down, and `onselect` may well be the callback that told
-    // it to.
-    row.action?.();
+    // The host owns what choosing does (it closes, then acts — see
+    // PaletteHost's handleSelect). The shell only reports the choice, so an
+    // action never runs twice: a double toggle would cancel itself.
     onselect(row);
   }
 

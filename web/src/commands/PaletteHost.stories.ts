@@ -122,9 +122,18 @@ export const CommandsAndFilesInOneList: Story = {
     await expect(
       await canvas.findByRole("option", { name: "docs/sensor.md" }),
     ).toBeInTheDocument();
-    // Both groups are drawn, so the list reads as "both of these" rather
+    // The global actions ride along: settings and theme are reachable from
+    // the keyboard on every scope.
+    await expect(
+      await canvas.findByRole("option", { name: "Open settings" }),
+    ).toBeInTheDocument();
+    await expect(
+      await canvas.findByRole("option", { name: "Toggle theme" }),
+    ).toBeInTheDocument();
+    // Three groups are drawn, so the list reads as "all of these" rather
     // than as one list that happens to contain some files.
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
+    await expect(canvas.getByText("Actions")).toBeInTheDocument();
     await expect(canvas.getByText("Files")).toBeInTheDocument();
     // And the entities section is not: this is not the inventory page.
     await expect(canvas.queryByText("Inventory")).not.toBeInTheDocument();
@@ -191,11 +200,12 @@ export const FindsAView: Story = {
   },
 };
 
-// Inventory gets the model's own definitions and the page switches, and no
-// files: the page is about entities, so those are the two answers it can
-// give, and a file row is a third thing to search that lands the user on
-// some other page. Kept as two stories so each baseline shows one state —
-// this one the untouched list, which is the thing a screenshot can pin.
+// Inventory gets the model's own definitions, the page switches, the global
+// actions, and no files: the page is about entities, so those are the three
+// answers it can give, and a file row is a fourth thing to search that lands
+// the user on some other page. Kept as two stories so each baseline shows
+// one state — this one the untouched list, which is the thing a screenshot
+// can pin.
 export const InventorySectionOnInventory: Story = {
   // VRT duplicate of ComponentIconsOnInventory (byte-identical baselines):
   // same untouched inventory palette. Play still runs in vitest.
@@ -215,9 +225,11 @@ export const InventorySectionOnInventory: Story = {
     await expect(
       await canvas.findByRole("option", { name: /^go to system demo\b/i }),
     ).toBeInTheDocument();
-    // Two sections, not three: the commands and the entities. The files are
-    // gone entirely, so the heading they were drawn under is gone too.
+    // Three sections, not four: the commands, the actions and the entities.
+    // The files are gone entirely, so the heading they were drawn under is
+    // gone too.
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
+    await expect(canvas.getByText("Actions")).toBeInTheDocument();
     await expect(canvas.getByText("Inventory")).toBeInTheDocument();
     await expect(canvas.queryByText("Files")).not.toBeInTheDocument();
     // And no file row survives in their place — not the system model, not the
@@ -306,6 +318,56 @@ export const InventoryFindsByFullName: Story = {
 // whatever state it starts in, it ends in the right one. (There is
 // consequently no "closed by default" story here: the shell's own stories
 // cover the closed state.)
+export const ActionsAfterNavigate: Story = {
+  // VRT duplicate of CommandsAndFilesInOneList (same untouched palette, now
+  // with the actions): same pixels. Play still runs in vitest.
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    // Navigate stays first (see CommandsComeFirst), actions second, files
+    // after — Enter on an untouched palette still lands on Overview.
+    const rows = await canvas.findAllByRole("option");
+    await expect(rows[0]).toHaveTextContent("Go to Overview");
+    const labels = rows.map((r) => r.textContent);
+    const firstAction = labels.findIndex((t) => t.includes("Open settings"));
+    const firstFile = labels.findIndex((t) => t.includes("main.hcl"));
+    await expect(firstAction).toBeGreaterThan(0);
+    await expect(firstAction).toBeLessThan(firstFile);
+    await expect(canvas.getByText("Actions")).toBeInTheDocument();
+  },
+};
+
+export const FindsSettingsAction: Story = {
+  // Filtered state, no pixels to pin beyond the shell's own search stories.
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    const input = await canvas.findByTestId("command-palette-input");
+    // "preferences" is only in the hint, so this proves the synonym path.
+    await userEvent.type(input, "preferences");
+    await expect(
+      await canvas.findByRole("option", { name: "Open settings" }),
+    ).toBeInTheDocument();
+  },
+};
+
+export const FindsThemeAction: Story = {
+  // Filtered state, no pixels to pin beyond the shell's own search stories.
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    await openVia();
+    const canvas = within(canvasElement);
+    const input = await canvas.findByTestId("command-palette-input");
+    // "dark" is only in the hint, so this proves the mode-synonym path.
+    await userEvent.type(input, "dark");
+    await expect(
+      await canvas.findByRole("option", { name: "Toggle theme" }),
+    ).toBeInTheDocument();
+  },
+};
+
 export const EscapeCloses: Story = {
   // VRT blank (byte-identical to ScoreBadge/NoScore and
   // DiagramStaticView/Empty): palette closed, no pixels to pin.

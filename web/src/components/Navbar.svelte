@@ -14,12 +14,25 @@
   import { requestTourStart } from "../tour/tourRequest.svelte";
   import { WORKSPACE_PAGES } from "../commands/workspacePages";
   import { requestPalette } from "../commands/paletteRequest.svelte";
+  import { getSettingsRequest } from "../commands/settingsRequest.svelte";
   import { paletteShortcutHint } from "./palette/commandPalette";
   import LockBadge from "./LockBadge.svelte";
   import SettingsModal from "./SettingsModal.svelte";
   import { projectLock } from "../collab/projectLock.svelte";
 
   let settingsOpen = $state(false);
+
+  // A palette action (project layout) asks for settings through a shared
+  // request — the two layouts share no props, same as the palette/tour pair.
+  // Settings is global, so the request is a bare generation bump with no
+  // project to aim at.
+  let lastHandledSettingsRequest = 0;
+  $effect(() => {
+    const { generation } = getSettingsRequest();
+    if (generation === lastHandledSettingsRequest) return;
+    lastHandledSettingsRequest = generation;
+    settingsOpen = true;
+  });
 
   // `isOpen` (the mobile menu) is bindable purely as a test seam: the real app
   // renders `<Navbar />` with no props and reads everything from the shared
