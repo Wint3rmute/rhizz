@@ -39,6 +39,7 @@ book/                – the Rhizz book
 3. Run `just test`, `just lint`, and `just build` until everything passes.
 4. Run `just format` to format the code.
 5. Commit your code, use conventional commits.
+6. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
 
 ### Tasks from `TASKS/TODO.md`
 
@@ -50,6 +51,23 @@ book/                – the Rhizz book
 5. Run `just format` to format the code.
 6. Move the completed task to `TASKS/FINISHED.md` and report that you are
    finished.
+7. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
+
+### Before pushing
+
+CI fails any PR whose `CHANGELOG.md` differs from what `cz changelog` generates
+from its commits. The changelog is built from commits, so this check only works
+**after** you have committed — running it earlier changes nothing. Right before
+every `git push`:
+
+1. Make sure tags are present (`git tag` is non-empty), else run
+   `git fetch --tags origin`. Without tags `just changelog` prints "No tag
+   found…", exits successfully, and leaves the file stale.
+2. Run `just changelog`.
+3. If `CHANGELOG.md` changed, commit it on its own as `docs: refresh changelog`.
+
+Repeat whenever you add commits after that (e.g. CI or review fixes): the
+changelog must match the branch's final commits.
 
 ## Build, Test & Lint Commands
 
