@@ -5,7 +5,7 @@
 //
 //   node src/concepts.mjs --outdir renders/concepts
 
-import { mulberry32 } from './molecule.mjs';
+import { mulberry32, referenceGraph, MOLECULE_DEFAULTS } from './molecule.mjs';
 
 const f = (n) => +n.toFixed(2);
 const svg = (body, defs = '') =>
@@ -168,13 +168,158 @@ export const CONCEPTS = {
   'rhizome-stem': rhizomeStem,
 };
 
+
+// ============================================================ LIGHT SET ====
+// Hairline-weight redraws after the two Thousand Plateaus covers: architectural
+// wireframe (thin parallel line families, slender posts, scratchy overshoot) and
+// a few accent weights. Nodes become small rings / pin dots instead of fat discs.
+const ring = (x, y, r, w) => `<circle cx="${f(x)}" cy="${f(y)}" r="${f(r)}" fill="#fff" stroke="#000" stroke-width="${w}"/>`;
+const thin = (w) => `fill="none" stroke="#000" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round"`;
+
+// L1. rhizome, hairline: the measured molecule tree with thin bars and ring nodes,
+// plus a few overshooting "scratch" lines like the cover's stray wireframe.
+export function lightRhizome() {
+  const { nodes, edges } = referenceGraph({ ...MOLECULE_DEFAULTS });
+  const bars = edges.map((e) => `<path d="${line([nodes[e.a].x, nodes[e.a].y], [nodes[e.b].x, nodes[e.b].y])}"/>`).join('');
+  // overshoot: extend each bar beyond its far node by a short, thinner stroke
+  const over = edges.map((e) => {
+    const a = nodes[e.a], b = nodes[e.b];
+    const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy);
+    return `<path d="${line([b.x + (dx / L) * 40, b.y + (dy / L) * 40], [b.x + (dx / L) * 78, b.y + (dy / L) * 78])}"/>`;
+  }).join('');
+  const rings = nodes.filter((n) => n.kind === 'terminal').map((n) => ring(n.x, n.y, 25, 4)).join('');
+  const hub = circ(nodes[0].x, nodes[0].y, 7);
+  return svg(G(thin(4), bars) + G(thin(1.4), over) + rings + `<g fill="#000">${hub}</g>`);
+}
+
+// L2. plateau slats (cover with the mustard field): stacked iso plates, each a thin
+// outline with a family of parallel slat lines, joined by slender posts.
+export function lightPlateauSlats() {
+  const w = 190, h = 92, cx = 256, ys = [330, 250, 170]; // draw bottom-up, white fill occludes
+  let g = '';
+  ys.forEach((cy, k) => {
+    const [T, R, B, L] = rhombus(cx, cy, w, h);
+    let slats = '';
+    for (let i = 1; i <= 7; i++) {
+      const s = i / 8;
+      const a = [L[0] + (T[0] - L[0]) * s, L[1] + (T[1] - L[1]) * s];
+      const b = [B[0] + (R[0] - B[0]) * s, B[1] + (R[1] - B[1]) * s];
+      slats += `<path d="${line(a, b)}"/>`;
+    }
+    g += `<path d="${poly([T, R, B, L])}Z" fill="#fff" stroke="none"/>` +
+      G(thin(1.6), slats) + G(thin(3.2), `<path d="${poly([T, R, B, L])}Z"/>`);
+    if (k < 2) { // posts: left & right tips down to the plate below (drawn before the upper plate on top)
+      g = `<g ${thin(2)}><path d="${line(L, [L[0], L[1] + 80])}"/><path d="${line(R, [R[0], R[1] + 80])}"/></g>` + g;
+    }
+  });
+  // two stray overshooting rods, like the cover's loose structural members
+  g += G(thin(1.4), `<path d="${line([cx - 40, 70], [cx - 40, 196])}"/><path d="${line([cx + 110, 140], [cx + 110, 250])}"/>`);
+  return svg(g);
+}
+
+// L3. sail (dark cover): a fan of ribs from one root, arched cross-ribs, terminal pins.
+export function lightSail() {
+  const root = [120, 440], n = 9;
+  const ribs = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const ang = (-84 + t * 70) * Math.PI / 180; // up -> right
+    const len = 330 - Math.abs(t - 0.35) * 150 + (i === 0 ? 40 : 0);
+    ribs.push([root[0] + Math.cos(ang) * len, root[1] + Math.sin(ang) * len * 1.05]);
+  }
+  let rib = '', cross = '', pins = '';
+  ribs.forEach((e) => { rib += `<path d="${line(root, e)}"/>`; pins += circ(e[0], e[1], 6.5); });
+  for (const k of [0.3, 0.45, 0.6, 0.75, 0.9]) {
+    cross += `<path d="${poly(ribs.map((e) => [root[0] + (e[0] - root[0]) * k, root[1] + (e[1] - root[1]) * k]))}"/>`;
+  }
+  return svg(G(thin(3), rib) + G(thin(1.5), cross) + `<g fill="#000">${pins}${circ(...root, 8)}</g>`);
+}
+
+// L4. fine mesh: warped hairline grid, torn toward the bottom-right, with one rhizome
+// walking the grid in a heavier stroke and terminating in a ring.
+export function lightMesh({ seed = 4, n = 8, size = 380, warp = 56 } = {}) {
+  const rng = mulberry32(seed);
+  const c = 256, half = size / 2;
+  const P = [];
+  for (let i = 0; i < n; i++) { P[i] = []; for (let j = 0; j < n; j++) {
+    const k = ((i + j) / (2 * (n - 1))) ** 1.3;
+    P[i][j] = [c - half + (i / (n - 1)) * size + (rng() - 0.5) * warp * (0.2 + k),
+               c - half + (j / (n - 1)) * size + (rng() - 0.5) * warp * (0.2 + k)];
+  } }
+  const keep = new Map(); // edge key -> [a,b]
+  const ek = (a, b) => [a, b].map((p) => p.join(',')).sort().join('|');
+  for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+    const k = (i + j) / (2 * (n - 1));
+    if (i < n - 1 && rng() > k * 0.9) keep.set(ek([i, j], [i + 1, j]), [[i, j], [i + 1, j]]);
+    if (j < n - 1 && rng() > k * 0.9) keep.set(ek([i, j], [i, j + 1]), [[i, j], [i, j + 1]]);
+  }
+  let d = '';
+  keep.forEach(([a, b]) => { d += line(P[a[0]][a[1]], P[b[0]][b[1]]); });
+  // the walker: from top-left, prefer moving right/down along surviving edges
+  let cur = [0, 0], visited = new Set(['0,0']), walk = [P[0][0]];
+  for (let s = 0; s < 9; s++) {
+    const opts = [[1, 0], [0, 1], [1, 1], [-1, 0], [0, -1]].map(([di, dj]) => [cur[0] + di, cur[1] + dj])
+      .filter(([i, j]) => i >= 0 && j >= 0 && i < n && j < n && !visited.has(`${i},${j}`) && keep.has(ek(cur, [i, j])));
+    if (!opts.length) break;
+    cur = opts[Math.floor(rng() * Math.min(2, opts.length))];
+    visited.add(cur.join(',')); walk.push(P[cur[0]][cur[1]]);
+  }
+  return svg(
+    G(thin(1.8), `<path d="${d}"/>`) + G(thin(6), `<path d="${poly(walk)}"/>`) +
+      ring(...walk[0], 11, 4) + ring(...walk[walk.length - 1], 16, 4.5),
+  );
+}
+
+// L5. offset plates joined by one thin spine with ring nodes.
+export function lightPlateauNodes() {
+  const w = 150, h = 75, cx = 220;
+  const plates = [[cx - 40, 326], [cx, 238], [cx + 40, 150]];
+  let g = '';
+  plates.forEach(([x, y]) => { g += `<path d="${poly(rhombus(x, y, w, h))}Z" fill="#fff" stroke="#000" stroke-width="3.2" stroke-linejoin="round"/>`; });
+  const tips = plates.map(([x, y]) => [x + w + 36, y]);
+  return svg(g + G(thin(3.2), `<path d="${poly(tips)}"/>` + plates.map(([x, y], i) => `<path d="${line([x + w, y], tips[i])}"/>`).join('')) +
+    tips.map((t) => ring(...t, 17, 4)).join(''));
+}
+
+// L6. nested systems, hairline, with ring nodes on the broken-out edge.
+export function lightNested() {
+  const rects = [[56, 56, 400, 52], [128, 128, 272, 38], [200, 200, 144, 24]];
+  const node = [272, 272], out = [92, 92];
+  const mask = `<mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="512" height="512"><rect width="512" height="512" fill="#fff"/>` +
+    `<path d="${line(node, out)}" stroke="#000" stroke-width="30" fill="none"/></mask>`;
+  const rs = rects.map(([x, y, s, r]) => `<rect x="${x}" y="${y}" width="${s}" height="${s}" rx="${r}"/>`).join('');
+  return svg(`<g mask="url(#m)">${G(thin(3.2), rs)}</g>` + G(thin(3.2), `<path d="${line(node, out)}"/>`) +
+    ring(...node, 15, 4) + `<circle cx="${node[0]}" cy="${node[1]}" r="4"/>` + ring(...out, 15, 4), `<defs>${mask}</defs>`);
+}
+
+// L7. zz: a double-line Z (architectural parallel) with ring corners.
+export function lightZigzag() {
+  const pts = [[128, 128], [384, 128], [128, 384], [384, 384]];
+  const off = (dx, dy) => pts.map(([x, y]) => [x + dx, y + dy]);
+  return svg(
+    G(thin(4.5), `<path d="${poly(pts)}"/>`) + G(thin(1.6), `<path d="${poly(off(16, 16))}"/><path d="${poly(off(-16, -16))}"/>`) +
+      pts.map((p) => ring(...p, 20, 4.5)).join('') + `<g fill="#000">${circ(256, 256, 7)}</g>`,
+  );
+}
+
+export const LIGHT = {
+  'light-rhizome': lightRhizome,
+  'light-plateau-slats': lightPlateauSlats,
+  'light-sail': lightSail,
+  'light-mesh-1': () => lightMesh({ seed: 4 }),
+  'light-mesh-2': () => lightMesh({ seed: 11 }),
+  'light-plateau-nodes': lightPlateauNodes,
+  'light-nested': lightNested,
+  'light-zigzag': lightZigzag,
+};
+
 const isCLI = typeof process !== 'undefined' && process.argv && import.meta.url === `file://${process.argv[1]}`;
 if (isCLI) {
   const fs = await import('node:fs');
   const i = process.argv.indexOf('--outdir');
   const outdir = i >= 0 ? process.argv[i + 1] : 'renders/concepts';
   fs.mkdirSync(outdir, { recursive: true });
-  for (const [name, fn] of Object.entries(CONCEPTS)) {
+  for (const [name, fn] of Object.entries({ ...CONCEPTS, ...LIGHT })) {
     fs.writeFileSync(`${outdir}/${name}.svg`, fn());
     console.log(`wrote ${outdir}/${name}.svg`);
   }
