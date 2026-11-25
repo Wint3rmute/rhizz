@@ -202,6 +202,7 @@ jobs:
   # Visual regression tests over every Storybook story (web/vrt). Split out
   # of `e2e` so a story diff doesn't queue behind the full browser suite. The
   # static diff gallery is kept as an artifact for post-failure inspection.
+  # Also runs the generated-assets freshness check (`assets-check`) right after.
   visual-regressions:
     needs: wasm
     runs-on: ubuntu-latest
@@ -231,6 +232,11 @@ jobs:
       # itself, then runs every story screenshot. No app build: VRT serves
       # storybook-static/ alone (see vrt/serve.ts).
       - run: nix run .#vrt
+
+      # Generated graphics (landing hero from the VRT landing screenshot, logo
+      # SVGs) must match what `just assets` produces. Lives here because this
+      # job already has the LFS screenshots the hero is built from.
+      - run: nix run .#assets-check
 
       # Static diff gallery: download, unzip, open index.html.
       - uses: actions/upload-artifact@v7

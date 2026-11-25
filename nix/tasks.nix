@@ -115,7 +115,7 @@ let
     "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
     assets = [ imagemagick nodejs coreutils bash ];
-    "logo-check" = [ nodejs diffutils coreutils bash ];
+    "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
     serve = [ cargo rustc lld coreutils bash ];
@@ -385,7 +385,7 @@ let
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
     #   - the logo SVGs (logo/renders/molecule/), with Roboto Bold from nixpkgs
-    #     (pinned by flake.lock) via ROBOTO_BOLD. `logo-check` is the CI guard.
+    #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
       name = "assets";
       runtimeInputs = taskInputs.assets;
@@ -405,31 +405,50 @@ let
       '';
     };
 
-    # Freshness check for the committed logo SVGs: regenerates them into a
-    # temp dir (the working tree is left untouched) and fails if any differs.
-    logo-check = write {
-      name = "logo-check";
-      runtimeInputs = taskInputs."logo-check";
+    # Freshness check for everything `assets` generates: regenerates the landing
+    # hero and the logo SVGs into temp dirs (the working tree is left
+    # untouched) and fails if any differs from the committed file. The hero is
+    # compared by pixel count (`magick compare -metric AE`), not bytes, so PNG
+    # metadata cannot cause false alarms. CI runs this in the VRT job, which
+    # already has the LFS screenshots the hero is built from.
+    assets-check = write {
+      name = "assets-check";
+      runtimeInputs = taskInputs."assets-check";
       text = ''
         set -euo pipefail
+        stale=0
+
+        echo "== landing hero"
+        OUTDIR=$(mktemp -d)
+        INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
+        BG="web/assets/landing-gradient.jpg"
+        OUTPUT="$OUTDIR/rhizz_landing.png"
+      '' + landingLib + ''
+        # landingLib installed its own EXIT trap; replace it with one for both dirs.
+        trap 'rm -rf "$TMPDIR" "$OUTDIR"' EXIT
+        diff_px=$(magick compare -metric AE "$OUTPUT" book/src/rhizz_landing.png null: 2>&1 || true)
+        if [ "$diff_px" != "0" ]; then
+          echo "book/src/rhizz_landing.png is out of date ($diff_px differing pixels)" >&2
+          stale=1
+        fi
+
+        echo "== logo"
         export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
         npm ci --prefix logo --ignore-scripts --no-audit --no-fund
-        OUT=$(mktemp -d)
-        trap 'rm -rf "$OUT"' EXIT
-        node logo/src/molecule.mjs --preset reference --out "$OUT/molecule-ref.svg"
-        node logo/src/lockup.mjs --mark "$OUT/molecule-ref.svg" --out "$OUT/lockup-ref.svg"
-        stale=0
+        node logo/src/molecule.mjs --preset reference --out "$OUTDIR/molecule-ref.svg"
+        node logo/src/lockup.mjs --mark "$OUTDIR/molecule-ref.svg" --out "$OUTDIR/lockup-ref.svg"
         for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg; do
-          if ! cmp -s "$OUT/$f" "logo/renders/molecule/$f"; then
+          if ! cmp -s "$OUTDIR/$f" "logo/renders/molecule/$f"; then
             echo "logo/renders/molecule/$f is out of date" >&2
             stale=1
           fi
         done
+
         if [ "$stale" -ne 0 ]; then
           echo "Run \`just assets\` and commit the regenerated files." >&2
           exit 1
         fi
-        echo "logo renders are up to date"
+        echo "generated assets are up to date"
       '';
     };
 

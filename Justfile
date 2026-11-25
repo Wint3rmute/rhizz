@@ -159,9 +159,10 @@ vrt-accept *args:
 assets input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
     nix run .#assets -- {{input}}
 
-# Fails if the committed logo SVGs differ from what the generator produces.
-logo-check:
-    nix run .#logo-check
+# Fails if the committed landing hero or logo SVGs differ from what `assets`
+# generates. CI runs the same check in the visual-regressions job.
+assets-check:
+    nix run .#assets-check
 
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
