@@ -4,17 +4,10 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "canvas": "^2.11.2",
-    "jsdom": "^24.0.0",
-    "opentype.js": "^2.0.0",
-    "paper": "^0.12.18"
+    "opentype.js": "^2.0.0"
   },
   "scripts": {
-    "gen": "node src/generate.mjs",
-    "gen:paper": "node src/paper-rhizome.mjs",
-    "gen:lockup": "node src/lockup.mjs",
-    "gen:hybrid": "node src/hybrid.mjs",
-    "gen:metaball": "node src/metaball.mjs",
-    "preview": "python3 -m http.server 8000"
+    "gen:mark": "node src/molecule.mjs --preset reference --out renders/molecule/molecule-ref.svg",
+    "gen:lockup": "node src/lockup.mjs --mark renders/molecule/molecule-ref.svg --out renders/molecule/lockup-ref.svg"
   }
 }
