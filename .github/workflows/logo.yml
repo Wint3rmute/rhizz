@@ -1,0 +1,30 @@
+name: logo
+
+# Freshness check for the generated logo SVGs: regenerates them with the
+# `logo-check` task (see nix/tasks.nix) and fails if the committed files differ.
+on:
+  push:
+    branches: [main, master]
+    paths: [logo/**, nix/tasks.nix, flake.lock, .github/workflows/logo.yml]
+  pull_request:
+    branches: [main, master]
+    paths: [logo/**, nix/tasks.nix, flake.lock, .github/workflows/logo.yml]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  logo-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
+      - run: nix run .#logo-check
+
+permissions:
+  contents: read
