@@ -29,6 +29,10 @@
 - **nix**: point CI at runnable task scripts instead of the devshell
 - **nix**: runnable task scripts instead of one big devshell
 
+### Perf
+
+- **vrt**: stop modal stories waiting out Storybook's animation cap
+
 ## 0.14.0 (2026-11-23)
 
 ### BREAKING CHANGE
