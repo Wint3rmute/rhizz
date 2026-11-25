@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Palette commands: Open settings + Toggle theme
+
+- **Signal (`settingsRequest.svelte.ts`):** bare generation bump, no projectId (global); `requestSettings()` + `getSettingsRequest()` mirroring palette/tour requests. `Navbar` subscribes via $effect and sets `settingsOpen = true`.
+- **Rows (`actionItems.ts`):** group "Actions", ids `command:open-settings` / `command:toggle-theme`, labels `Open settings` / `Toggle theme`, hints `settings preferences` / `dark light mode appearance theme`, icons `resolveIcon("gear")` / `resolveIcon("circle-half-stroke")`.
+- **Wiring (`PaletteHost.svelte`):** actions after commands (Navigate stays first), before files/views/inventory; offered on every scope. Toggle calls `toggleTheme()` directly; settings calls `requestSettings()`.
+- **Fix:** `CommandPalette.svelte` no longer runs row actions itself — host owns close-then-act, otherwise toggle fired twice and cancelled (navigation was idempotent, toggle is not).
+- **TDD:** `actionItems.test.ts` (ids/labels/group, distinct ids, callbacks, hint search via Fuse for preferences/dark/light/appearance); `settingsRequest.test.ts` (generation bumps); `PaletteHost.stories.ts` updated (Actions group on main + inventory) + new `no-vrt` ActionsAfterNavigate/FindsSettingsAction/FindsThemeAction; e2e in `command-palette.spec.ts` (open settings opens modal; toggle flips data-theme + persists THEME across reload).
+- `just test-web` green (122 files / 1408 tests), `lint-frontend` green, e2e palette settings/theme 2 passed; full CICD green on PR.
+- Branch: `feat/palette-settings-theme`.
+
+---
+
 ## Task <N> — Network activity widget in the bottom bar
 
 - **Tracker (`netActivity.ts`, pure):** `trackFetch`-style wrapper (counter + current label, per-endpoint map). `PUT …/files` → `Uploading…`, `GET /api/vfs` → `Syncing…` (initial + follower reloads), `POST …/lock` → `Acquiring lock…`, `POST …/release` → `Releasing lock…`; lock poll (`GET …/state`), heartbeat, `/api/version`, unknown → untracked. `ACTIVITY_INDICATOR_DELAY_MS = 300` (fast ops never flicker), `ACTIVITY_FADE_OUT_MS = 500` with cancel-on-new-request, errors bypass the delay (`Sync failed` etc.), instant hide under `prefers-reduced-motion`.
