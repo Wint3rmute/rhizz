@@ -151,16 +151,13 @@ vrt-quick *args:
 vrt-accept *args:
     nix run .#vrt-accept -- {{args}}
 
-# Cool 3D README/book hero: perspective + drop shadow + gradient background.
-# Regenerates book/src/rhizz_landing.png from the VRT landing screenshot.
-# Pass a custom screenshot to preview with your own capture, e.g.:
-#   just landing my-apollo-shot.png
-landing input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
-    nix run .#landing -- {{input}}
-
-# Regenerates the logo SVGs in logo/renders/molecule/. CI runs `logo-check`.
-logo:
-    nix run .#logo
+# Regenerates all declaratively generated graphics: the 3D README/book hero
+# (book/src/rhizz_landing.png, from the VRT landing screenshot) and the logo
+# SVGs (logo/renders/molecule/). Pass a custom screenshot to preview the hero
+# with your own capture, e.g.:
+#   just assets my-apollo-shot.png
+assets input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
+    nix run .#assets -- {{input}}
 
 # Fails if the committed logo SVGs differ from what the generator produces.
 logo-check:

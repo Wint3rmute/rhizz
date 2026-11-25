@@ -23,10 +23,10 @@ const get = (k, d) => {
 const markPath = get('mark', 'renders/paper-rhizome-001.svg');
 const outPath = get('out', 'renders/lockup-001.svg');
 const text = get('text', 'Rhizome');
-// Roboto Bold comes from nixpkgs: the `logo` task in nix/tasks.nix exports ROBOTO_BOLD.
+// Roboto Bold comes from nixpkgs: the `assets` task in nix/tasks.nix exports ROBOTO_BOLD.
 const fontPath = get('font', process.env.ROBOTO_BOLD);
 if (!fontPath) {
-  console.error('No font: set ROBOTO_BOLD (`nix run .#logo` sets it) or pass --font <path-to-Roboto-Bold.ttf>');
+  console.error('No font: set ROBOTO_BOLD (`nix run .#assets` sets it) or pass --font <path-to-Roboto-Bold.ttf>');
   process.exit(1);
 }
 const fontSize = parseFloat(get('font-size', '200'));

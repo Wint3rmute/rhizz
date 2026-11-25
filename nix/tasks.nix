@@ -28,7 +28,7 @@ let
     export RHIZZ_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
 
-  # Shared body of the landing-hero pipeline (`landing` + the tail of
+  # Shared body of the landing-hero pipeline (`assets` + the tail of
   # `vrt-accept`): perspective + drop shadow + gradient background via
   # ImageMagick. Callers set INPUT (source screenshot), BG (gradient
   # background) and OUTPUT (hero png); kept as one definition so the two
@@ -41,7 +41,7 @@ let
 
     if ! command -v magick >/dev/null 2>&1; then
       echo "error: 'magick' (ImageMagick 7) not found on PATH" >&2
-      echo "  run via 'nix run .#landing', which provides it." >&2
+      echo "  run via 'nix run .#assets', which provides it." >&2
       exit 1
     fi
 
@@ -114,8 +114,7 @@ let
     vrt = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
-    landing = [ imagemagick coreutils bash ];
-    logo = [ nodejs coreutils bash ];
+    assets = [ imagemagick nodejs coreutils bash ];
     "logo-check" = [ nodejs diffutils coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
@@ -381,31 +380,28 @@ let
       '' + landingLib;
     };
 
-    # Regenerates the README/book hero from a screenshot (defaults to the VRT
-    # landing capture): `nix run .#landing -- my-shot.png`.
-    landing = write {
-      name = "landing";
-      runtimeInputs = taskInputs.landing;
+    # Regenerates every declaratively generated graphic:
+    #   - the README/book landing hero (book/src/rhizz_landing.png), from a
+    #     screenshot (defaults to the VRT landing capture; pass another one as
+    #     the first argument: `nix run .#assets -- my-shot.png`)
+    #   - the logo SVGs (logo/renders/molecule/), with Roboto Bold from nixpkgs
+    #     (pinned by flake.lock) via ROBOTO_BOLD. `logo-check` is the CI guard.
+    assets = write {
+      name = "assets";
+      runtimeInputs = taskInputs.assets;
       text = ''
         set -euo pipefail
+
+        echo "== landing hero"
         INPUT="''${1:-web/vrt/__screenshots__/pages-projects--empty-landing--light.png}"
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="book/src/rhizz_landing.png"
-      '' + landingLib;
-    };
+      '' + landingLib + ''
 
-    # Regenerates the committed logo SVGs (logo/renders/molecule/) in place.
-    # Roboto Bold comes from nixpkgs (pinned by flake.lock) via ROBOTO_BOLD.
-    logo = write {
-      name = "logo";
-      runtimeInputs = taskInputs.logo;
-      text = ''
-        set -euo pipefail
+        echo "== logo"
         export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
         npm ci --prefix logo --ignore-scripts --no-audit --no-fund
-        cd logo
-        npm run -s gen:mark
-        npm run -s gen:lockup
+        (cd logo && npm run -s gen:mark && npm run -s gen:lockup)
       '';
     };
 
@@ -430,7 +426,7 @@ let
           fi
         done
         if [ "$stale" -ne 0 ]; then
-          echo "Run \`just logo\` and commit the regenerated files." >&2
+          echo "Run \`just assets\` and commit the regenerated files." >&2
           exit 1
         fi
         echo "logo renders are up to date"
