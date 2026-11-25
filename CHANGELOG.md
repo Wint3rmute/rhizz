@@ -15,6 +15,7 @@
 
 ### Refactor
 
+- **nix**: inline landing pipeline into task scripts, drop scripts/ dir
 - **nix**: drop vestigial coverage and wasm tooling from default devshell
 - **nix**: single-source task toolchains for scripts and devshell
 - **nix**: point CI at runnable task scripts instead of the devshell
