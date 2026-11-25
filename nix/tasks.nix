@@ -426,7 +426,9 @@ let
       '' + landingLib + ''
         # landingLib installed its own EXIT trap; replace it with one for both dirs.
         trap 'rm -rf "$TMPDIR" "$OUTDIR"' EXIT
+        # ImageMagick 7 prints "<count> (<fraction>)", e.g. "0 (0)"; keep the count.
         diff_px=$(magick compare -metric AE "$OUTPUT" book/src/rhizz_landing.png null: 2>&1 || true)
+        diff_px=''${diff_px%% *}
         if [ "$diff_px" != "0" ]; then
           echo "book/src/rhizz_landing.png is out of date ($diff_px differing pixels)" >&2
           stale=1
