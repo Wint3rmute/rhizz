@@ -26,7 +26,7 @@ function isSafeHclPath(path: string): boolean {
 
 const BookPayloadFileSchema = z.object({
   path: z.string().min(1).max(MAX_BOOK_FILE_PATH_LENGTH).refine(isSafeHclPath, {
-    message: "path must be a relative .hcl path without '..' segments",
+    error: "path must be a relative .hcl path without '..' segments",
   }),
   content: z.string().max(MAX_BOOK_FILE_CONTENT_LENGTH),
 });
