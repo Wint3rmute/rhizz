@@ -23,7 +23,12 @@ const get = (k, d) => {
 const markPath = get('mark', 'renders/paper-rhizome-001.svg');
 const outPath = get('out', 'renders/lockup-001.svg');
 const text = get('text', 'Rhizome');
-const fontPath = get('font', 'assets/Roboto-Bold.ttf');
+// Roboto Bold comes from nixpkgs: `nix develop` exports ROBOTO_BOLD (see flake.nix).
+const fontPath = get('font', process.env.ROBOTO_BOLD);
+if (!fontPath) {
+  console.error('No font: set ROBOTO_BOLD (run inside `nix develop`) or pass --font <path-to-Roboto-Bold.ttf>');
+  process.exit(1);
+}
 const fontSize = parseFloat(get('font-size', '200'));
 const tracking = parseFloat(get('tracking', '-15')); // font units per glyph, tightened for logo feel
 const gapFactor = parseFloat(get('gap', '0.42')); // × cap-height

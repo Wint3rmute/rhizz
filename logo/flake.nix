@@ -46,6 +46,7 @@
           ];
 
           shellHook = ''
+            export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
             echo "◆ rhizz-logo shell"
             echo "  node $(node --version) | resvg $(resvg --version 2>/dev/null || echo ok) | $(python3 --version)"
             echo ""
