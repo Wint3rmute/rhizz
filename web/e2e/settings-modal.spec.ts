@@ -78,3 +78,14 @@ test("guided tour starts from settings", async ({ page }) => {
   await expect(dialog).toBeVisible({ timeout: 20000 });
   await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
 });
+
+test("escape dismisses the settings modal", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const dialog = page.getByTestId("settings-modal");
+  await expect(dialog).toBeVisible();
+  // Focus stays on the opener button, so this proves the window-level
+  // handler rather than a backdrop-only keydown.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
