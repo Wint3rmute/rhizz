@@ -115,6 +115,8 @@ let
     "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
     landing = [ imagemagick coreutils bash ];
+    logo = [ nodejs coreutils bash ];
+    "logo-check" = [ nodejs diffutils coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
     serve = [ cargo rustc lld coreutils bash ];
@@ -390,6 +392,49 @@ let
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="book/src/rhizz_landing.png"
       '' + landingLib;
+    };
+
+    # Regenerates the committed logo SVGs (logo/renders/molecule/) in place.
+    # Roboto Bold comes from nixpkgs (pinned by flake.lock) via ROBOTO_BOLD.
+    logo = write {
+      name = "logo";
+      runtimeInputs = taskInputs.logo;
+      text = ''
+        set -euo pipefail
+        export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
+        npm ci --prefix logo --ignore-scripts --no-audit --no-fund
+        cd logo
+        npm run -s gen:mark
+        npm run -s gen:lockup
+      '';
+    };
+
+    # Freshness check for the committed logo SVGs: regenerates them into a
+    # temp dir (the working tree is left untouched) and fails if any differs.
+    logo-check = write {
+      name = "logo-check";
+      runtimeInputs = taskInputs."logo-check";
+      text = ''
+        set -euo pipefail
+        export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
+        npm ci --prefix logo --ignore-scripts --no-audit --no-fund
+        OUT=$(mktemp -d)
+        trap 'rm -rf "$OUT"' EXIT
+        node logo/src/molecule.mjs --preset reference --out "$OUT/molecule-ref.svg"
+        node logo/src/lockup.mjs --mark "$OUT/molecule-ref.svg" --out "$OUT/lockup-ref.svg"
+        stale=0
+        for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg; do
+          if ! cmp -s "$OUT/$f" "logo/renders/molecule/$f"; then
+            echo "logo/renders/molecule/$f is out of date" >&2
+            stale=1
+          fi
+        done
+        if [ "$stale" -ne 0 ]; then
+          echo "Run \`just logo\` and commit the regenerated files." >&2
+          exit 1
+        fi
+        echo "logo renders are up to date"
+      '';
     };
 
     dev = write {

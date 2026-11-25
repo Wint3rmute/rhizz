@@ -158,6 +158,14 @@ vrt-accept *args:
 landing input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
     nix run .#landing -- {{input}}
 
+# Regenerates the logo SVGs in logo/renders/molecule/. CI runs `logo-check`.
+logo:
+    nix run .#logo
+
+# Fails if the committed logo SVGs differ from what the generator produces.
+logo-check:
+    nix run .#logo-check
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     nix run .#dev
