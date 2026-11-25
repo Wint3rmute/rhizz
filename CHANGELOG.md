@@ -11,6 +11,8 @@
 
 ### Fix
 
+- **web**: satisfy typescript-eslint 8.74 rules
+- **deps**: bump minimatch via npm audit fix
 - **web**: dismiss settings modal with Escape
 - **web**: wrap settings help text instead of truncating
 - **nix**: drop pinned coverage toolchain, Rust 1.99.1 with LLVM 23 tools
