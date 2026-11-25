@@ -44,10 +44,20 @@
     return `${seconds} s (${String(ms)} ms)`;
   }
 
-  function onBackdropKeydown(e: KeyboardEvent): void {
-    if (e.key === "Escape") onclose();
+  // Dismiss on Escape even when focus never entered the dialog (e.g. the
+  // "Open settings" button keeps focus after opening). The backdrop's own
+  // onkeydown only fires for events bubbling through it, so a window
+  // listener — same as the command palette's — is the honest one.
+  function handleWindowKeydown(e: KeyboardEvent): void {
+    if (!open) return;
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onclose();
+    }
   }
 </script>
+
+<svelte:window onkeydown={handleWindowKeydown} />
 
 {#if open}
   <div
@@ -60,7 +70,6 @@
     onclick={(e) => {
       if (e.target === e.currentTarget) onclose();
     }}
-    onkeydown={onBackdropKeydown}
   >
     <div
       class="modal-box max-w-md bg-base-100 border border-base-300 shadow-2xl p-6 rounded-box max-h-[90vh] flex flex-col cursor-default"
