@@ -58,7 +58,8 @@
     diagnostics,
     score = null,
   }: {
-    diagnostics: DiagnosticJS[];
+    /** Only `code` and `message` are read, so plain objects (stories, tests) fit. */
+    diagnostics: Pick<DiagnosticJS, "code" | "message">[];
     /** The compiled model's overall score; null hides the badge. */
     score?: { overall_percentage: number } | null;
   } = $props();

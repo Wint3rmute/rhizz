@@ -19,7 +19,7 @@ const meta = {
   title: "Overview/DiagnosticsStatusBar",
   component: DiagnosticsStatusBar,
   args: {
-    diagnostics: sampleDiagnostics as DiagnosticJS[],
+    diagnostics: sampleDiagnostics,
   },
 } satisfies Meta<typeof DiagnosticsStatusBar>;
 
@@ -81,8 +81,7 @@ const duplicateDiagnostics = [
 export const DuplicateDiagnostics: Story = {
   loaders: [resetDiagnosticsBar],
   args: {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- svelte-check needs DiagnosticJS (wasm class); ESLint's program can't see it.
-    diagnostics: duplicateDiagnostics as DiagnosticJS[],
+    diagnostics: duplicateDiagnostics,
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -99,7 +98,7 @@ export const DuplicateDiagnostics: Story = {
 export const Clean: Story = {
   loaders: [resetDiagnosticsBar],
   args: {
-    diagnostics: [] satisfies DiagnosticJS[],
+    diagnostics: [] satisfies StoryDiagnostic[],
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
