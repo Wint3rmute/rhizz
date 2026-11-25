@@ -40,3 +40,34 @@ test("the diagram toolbar is pinned to the top of the canvas", async ({
   const canvasCentre = canvasBox.x + canvasBox.width / 2;
   expect(Math.abs(toolbarCentre - canvasCentre)).toBeLessThanOrEqual(2);
 });
+
+// On a narrow window the toolbar (`w-max`, centred) is wider than the
+// canvas column and used to spill over the sidebars, stealing their clicks.
+test("the diagram toolbar never covers the sidebars on a narrow window", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 700, height: 800 });
+  await page.goto("/");
+  const create = page.getByRole("button", { name: "New project" }).first();
+  await expect(create).toBeVisible();
+  page.once("dialog", (dialog) => void dialog.accept("E2E toolbar overflow"));
+  await create.click();
+  await expect(page).toHaveURL(/\/projects\/.+\/(code|overview)/);
+  await skipTourIfPresent(page);
+  const id = new URL(page.url()).pathname.split("/")[2];
+  await page.goto(`/projects/${id}/modeling`);
+
+  const toolbar = page.getByTestId("diagram-toolbar");
+  const canvas = page.getByTestId("diagram-canvas");
+  await expect(toolbar).toBeVisible();
+  const canvasBox = await canvas.boundingBox();
+  if (!canvasBox) throw new Error("missing bounding box");
+
+  // A point just left of the canvas (inside the left sidebar) must not
+  // hit the toolbar or anything inside it.
+  const hitsToolbar = await toolbar.evaluate((el, x) => {
+    const hit = document.elementFromPoint(x, 60);
+    return !!hit && el.contains(hit);
+  }, canvasBox.x - 4);
+  expect(hitsToolbar).toBe(false);
+});
