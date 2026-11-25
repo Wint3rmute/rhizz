@@ -16,6 +16,70 @@ How to work on this file:
 
 ---
 
+## Task <N> — Palette commands: Open settings + Toggle theme
+
+The Ctrl/Cmd-P palette (`web/src/commands/PaletteHost.svelte`) currently only
+offers navigation (`commandItems` → `WORKSPACE_PAGES`, group `"Navigate"`)
+plus files/views/entities. Settings lives behind the navbar gear button only
+(`settingsOpen` local to `web/src/components/Navbar.svelte` →
+`SettingsModal.svelte`), and theme switching lives inside that modal
+(`ThemeState.svelte` / `theme.ts`). Add two palette commands so both are
+reachable from the keyboard:
+
+- **Open settings** — opens the settings modal.
+- **Toggle theme** — flips light/dark via the existing `toggleTheme()`
+  (pins the opposite of the currently resolved theme, leaving `auto`).
+
+Design notes (follow existing patterns, don't invent new ones):
+
+- **Settings signal:** `Navbar` (root layout) and `PaletteHost` (project
+  layout) share no props, same as palette/tour. Add a tiny request store
+  `web/src/commands/settingsRequest.svelte.ts` mirroring
+  `paletteRequest.svelte.ts` / `tour/tourRequest.svelte.ts`
+  (`requestSettings()` + `getSettingsRequest()`, generation counter).
+  `Navbar` subscribes via `$effect` and sets `settingsOpen = true`.
+  Settings is global, so the request needs no `projectId` — keep it a bare
+generation bump. Alternative (lifting `settingsOpen` into shared state)
+  is out of scope unless the request pattern proves awkward.
+- **Command rows:** new builder next to `commandItems.ts` (e.g.
+  `actionItems({ onOpenSettings, onToggleTheme })` or an extended
+  `commandItems` signature — pick the smaller diff). Group `"Actions"`
+  (new), ids `command:open-settings` / `command:toggle-theme`, labels
+  `Open settings` / `Toggle theme`, `hint`s carrying search synonyms
+  (`settings preferences`, `dark light mode appearance theme`). Icons via
+  `resolveIcon` (`gear`, theme-appropriate) or emoji to match `WORKSPACE_PAGES`
+  — one line decision at implementation time.
+- **Wiring:** `PaletteHost` appends the action rows after `commandItems`
+  (Navigate stays first per the `CommandsComeFirst` story) and before
+  files/views/inventory. `handleSelect` already closes-then-acts, so no
+  special close handling. Toggle calls `toggleTheme()` directly; settings
+  calls `requestSettings()`.
+- **Scope:** both commands are offered on every palette scope (modeling /
+  explore / code / inventory) — like page commands, unlike files.
+
+Definition of done:
+
+1. `Ctrl/Cmd-P` → typing `settings` offers `Open settings`; Enter opens
+   `SettingsModal` (same modal the gear button opens).
+2. `Ctrl/Cmd-P` → typing `theme`/`dark`/`light` offers `Toggle theme`;
+   Enter flips `<html data-theme>` light↔dark and persists `THEME` in
+   localStorage (pinned value, per `nextSelectionOnToggle`).
+3. Unit tests: action/command rows (distinct ids, labels, groups, hints
+   searchable, actions invoke callbacks) — extend `commandItems.test.ts`
+   or a new `*actionItems.test.ts`.
+4. Stories: palette shows the new rows/groups on at least one scope;
+   search-filtering for `theme`/`settings` (extend `PaletteHost.stories.ts`;
+   new stories `no-vrt` where they would duplicate baselines).
+5. E2E (`command-palette.spec.ts` and/or `settings-modal.spec.ts`): open
+   settings via palette; toggle theme via palette flips theme + persists
+   across reload.
+6. `just test`, `just lint`, `just build` green; `just format` clean.
+
+Out of scope: dedicated theme hotkey, tri-state auto→light→dark cycling,
+deep-linking into a settings tab, per-project settings.
+
+---
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
@@ -60,29 +124,6 @@ look to find the isolated system subtree? Just bare "multiple component trees"
 detected is not very informative, although at this point I've no idea how to
 point the user towards resolving their issue.
 
-
-
----
-
-## Task <N> — Modular multi-pane workspace with shared reactive context
-
-Refactor the web architecture from isolated page routes to a unified, dockable multi-pane workspace where multiple synchronized views (Editor, Diagrams, Explore, Diagnostics) operate concurrently on a shared reactive data model.
-
-- **Strategy**
-  - Hoist project file and compiled model state into a shared reactive context (`ProjectWorkspaceContext.svelte.ts`) at the project layout root.
-  - Decouple view pages into standalone, embeddable pane components (`<EditorPane />`, `<DiagramPane />`, `<ExplorePane />`, `<DiagnosticsPane />`).
-  - Introduce a configurable split/tiling layout container supporting resizable horizontal and vertical panes.
-- **Implementation Scope**
-  - **Shared Reactive State:** Single source of truth for VFS `sources`, WASM compilation outputs, diagnostics, and transaction history. Edits in any pane immediately update the reactive model and notify all sibling panes.
-  - **Pane Components:** Extract view logic from `routes/projects/[id]/*` into standalone modular components.
-  - **Layout Manager:** Implement a dockable/splittable window layout container (supporting tabs, 2-column split, 3-column split, grid) with persistent layout configuration in localStorage.
-- **Acceptance Criteria**
-  - User can display the Code Editor and Diagram Canvas side-by-side simultaneously.
-  - Editing HCL text in the Editor pane updates the rendered diagram in real-time.
-  - Creating/moving components in the Diagram pane updates the text in the open Editor pane without cursor jump or desynchronization.
-  - Panes can be resized, split horizontally/vertically, and closed.
-  - Layout configuration persists across page reloads.
-  - Validated with `just test`, `just lint`, and `just build`.
 
 ---
 
@@ -148,60 +189,6 @@ versions. `npm audit fix` cannot replace them: without `--force` it moves
   `npm view @tailwindcss/typography@<version> dependencies`.
 
 After removing an override, run `npm audit` and confirm the finding stays clear.
-
----
-
----
-
-
-## Task <N> — Replace the Justfile with Nix-managed scripts
-
-Replace `Justfile` recipes with scripts defined in `flake.nix` (see
-`nix/tasks.nix`), exposed as runnable flake packages so they run as
-`nix run .#lint-rust`, `nix run .#lint-commit`, etc., with the `Justfile`
-kept as a thin wrapper/aggregator over them.
-
-**Design decision (recorded, supersedes the original devshell-PATH plan):**
-the scripts are deliberately *not* put on the devshell `PATH`. Entering the
-devshell realizes its entire closure (~1191 paths / ~2.7 GiB: Playwright
-browsers, clippy, rustfmt, mdbook — measured in `frontend.yml`), so every
-script would pay the maximum cost and depend on the shellHook env
-(`LLVM_COV`, `PLAYWRIGHT_BROWSERS_PATH`, `RHIZZ_VRT_FONTCONFIG_FILE`).
-Runnable packages realize only each task's own `runtimeInputs` and bake
-their env into the script, so CI and developers never enter the devshell to
-run a task. The `Justfile` stays (aggregators like `lint` and dependencies
-like `test: wasm` have no package equivalent).
-
-- Decide the script language: bash (`pkgs.writeShellApplication`) or nushell
-  (`pkgs.writers.writeNuBin`). Confirm the chosen writer exists in the pinned
-  nixpkgs before committing to it.
-- Start with `lint-rust`, `lint-frontend`, and `lint-commit`. Each script
-  declares exactly the binaries it needs and carries its own env, instead of
-  relying on the devshell shellHook.
-- Port the remaining recipes (`format`, `test`, `build`, `coverage`, `wasm`,
-  `web-build`, `book`, `vrt`, `serve`, `changelog`, `bump`), with a script
-  `cd`ing to the repo root via `git rev-parse --show-toplevel`.
-- Point CI at the scripts: `nix run .#<task>` in `.github/workflows/*.yml`,
-  including `commitizen.yml`'s `commit-check` and `changelog` calls.
-- Update `AGENTS.md` and docs that mention `just`.
-- Remove the stub `builder.sh` package from the devshell in `flake.nix`.
-
-Definition of done:
-
-- `lint` runs `lint-rust`, `lint-frontend`, and `lint-commit` and passes.
-- Every former `just` recipe has a runnable-package equivalent.
-- CI passes with no `just` or `nix develop` invocations left in `.github/`
-  (except `opencode.yml`'s PATH export, which only provides the `just`
-  binary, and `rust-cache`'s `cmd-format` probes — see follow-ups).
-
-Follow-ups (out of scope here):
-
-- No `lint`/`test` meta-packages exist — orchestration lives in the
-  `Justfile` only.
-- `Swatinem/rust-cache` `cmd-format: nix develop -c {0}` in `rust.yml` /
-  `docs.yml` is the last devshell realization in CI (version probing for
-  cache keys). Dropping it means cold `target/` rebuilds; keeping it
-  preserves CI times.
 
 ---
 
