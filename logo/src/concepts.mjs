@@ -313,13 +313,132 @@ export const LIGHT = {
   'light-zigzag': lightZigzag,
 };
 
+// ========================================================== ESOTERIC SET ====
+// Occult-diagram vocabulary (sephirotic tree, Metatron graph, seed of life, kamea sigil,
+// natal chart, mandala) turned into rhizome diagrams: hierarchy broken by cross-links.
+const pol = (cx, cy, r, deg) => [cx + r * Math.cos((deg * Math.PI) / 180), cy + r * Math.sin((deg * Math.PI) / 180)];
+const dash = (w, d) => `fill="none" stroke="#000" stroke-width="${w}" stroke-dasharray="${d}" stroke-linecap="round"`;
+
+// E1. Tree of Life, rhizomatised: the ten sephirot and 22 paths, plus Daath and four
+// forbidden cross-links (dashed) that make the tree a network — Deleuze's "tree vs rhizome".
+export function esotericTree() {
+  const N = {
+    K: [256, 44], Ch: [372, 118], B: [140, 118], Ches: [372, 215], Ge: [140, 215], T: [256, 262],
+    Ne: [372, 352], H: [140, 352], Y: [256, 410], M: [256, 468], D: [256, 166],
+  };
+  const paths = 'K-Ch K-B K-T Ch-B Ch-T Ch-Ches B-T B-Ge Ches-Ge Ches-T Ches-Ne Ge-T Ge-H T-Ne T-H T-Y Ne-H Ne-Y Ne-M H-Y H-M Y-M'.split(' ');
+  const extra = 'Ch-Ge B-Ches Ches-H Ge-Ne'.split(' ');
+  const seg = (a) => { const [u, v] = a.split('-'); return `<path d="${line(N[u], N[v])}"/>`; };
+  const nodes = Object.entries(N).filter(([k]) => k !== 'D').map(([k, p]) => ring(...p, k === 'M' ? 20 : 17, 3.4)).join('');
+  return svg(
+    G(thin(2.4), paths.map(seg).join('')) + G(dash(1.6, '2 7'), extra.map(seg).join('')) +
+      `<g fill="#fff" stroke="#000" stroke-width="2.2" stroke-dasharray="3 5"><circle cx="${N.D[0]}" cy="${N.D[1]}" r="15"/></g>` +
+      nodes + `<circle cx="256" cy="468" r="7"/><circle cx="256" cy="44" r="6"/>`,
+  );
+}
+
+// E2. Metatron graph: 13 nodes, every pair connected ("any point can be connected to
+// any other" — rhizome principle 1). Hairline; node rings sit on top.
+export function esotericMetatron() {
+  const c = [256, 256];
+  const pts = [c, ...[0, 1, 2, 3, 4, 5].map((k) => pol(...c, 76, k * 60 - 90)), ...[0, 1, 2, 3, 4, 5].map((k) => pol(...c, 152, k * 60 - 90))];
+  let d = '';
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) d += line(pts[i], pts[j]);
+  return svg(
+    `<circle cx="256" cy="256" r="196" ${thin(1.6)}/><circle cx="256" cy="256" r="186" ${thin(0.8)}/>` +
+      G(thin(0.9), `<path d="${d}"/>`) + pts.map((p, i) => ring(...p, i === 0 ? 16 : 13, 2.6)).join('') +
+      `<circle cx="256" cy="256" r="4"/>`,
+  );
+}
+
+// E3. Seed of life as substrate: 7 hairline circles, one rhizome walking their centres
+// in a heavier line, vesica-tip nodes where circles cross.
+export function esotericSeed() {
+  const c = [256, 256], R = 84;
+  const cen = [c, ...[0, 1, 2, 3, 4, 5].map((k) => pol(...c, R, k * 60 - 90))];
+  const circles = cen.map((p) => `<circle cx="${f(p[0])}" cy="${f(p[1])}" r="${R}"/>`).join('');
+  const tips = [0, 1, 2, 3, 4, 5].map((k) => pol(...c, R * Math.sqrt(3), k * 60 - 60));
+  const walk = poly([cen[3], cen[0], cen[1], cen[2]]);
+  const branch = poly([cen[0], cen[5], cen[6]]);
+  return svg(
+    G(thin(1.5), circles) + G(thin(6), `<path d="${walk}"/><path d="${branch}"/>`) +
+      [cen[0], cen[1], cen[2], cen[3], cen[5], cen[6]].map((p) => ring(...p, 14, 4.5)).join('') +
+      `<g fill="#000">${tips.map((p) => circ(...p, 5)).join('')}${circ(...cen[0], 6)}</g>`,
+  );
+}
+
+// E4. Mandala: a six-fold rhizome inside a zodiac-style ring with degree ticks.
+export function esotericMandala() {
+  const c = [256, 256];
+  let ticks = '';
+  for (let a = 0; a < 360; a += 5) { const long = a % 30 === 0; ticks += `<path d="${line(pol(...c, 208, a), pol(...c, long ? 232 : 220, a))}"/>`; }
+  let g = '', nodes = '';
+  const branch = (p, ang, len, depth) => {
+    const q = pol(...p, len, ang);
+    g += `<path d="${line(p, q)}"/>`;
+    if (depth === 0) { nodes += ring(...q, 8, 2.8); return; }
+    branch(q, ang - 32, len * 0.72, depth - 1);
+    branch(q, ang + 32, len * 0.72, depth - 1);
+    if (depth === 2) { branch(q, ang, len * 0.7, 0); }
+  };
+  for (let k = 0; k < 6; k++) branch(pol(...c, 26, k * 60), k * 60, 64, 2);
+  return svg(
+    `<circle cx="256" cy="256" r="208" ${thin(2)}/><circle cx="256" cy="256" r="196" ${thin(0.9)}/>` +
+      G(thin(1.5), ticks) + G(thin(2.6), g) + nodes + ring(...c, 22, 3.4) + `<circle cx="256" cy="256" r="5"/>`,
+  );
+}
+
+// E5. Sigil of RHIZZ drawn on the Saturn kamea (3x3 magic square):
+// R=18, H=8, I=9, Z=26 -> digits 1 8 9 2 6, ring at the start, bar at the end.
+export function esotericSigil() {
+  const sq = [[4, 9, 2], [3, 5, 7], [8, 1, 6]], step = 104;
+  const at = (d) => { for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) if (sq[r][q] === d) return [256 + (q - 1) * step, 256 + (r - 1) * step]; };
+  const path = [1, 8, 9, 2, 6].map(at);
+  const grid = sq.flat().map((d) => circ(...at(d), 4)).join('');
+  const last = path[4], prev = path[3];
+  const dx = last[0] - prev[0], dy = last[1] - prev[1], L = Math.hypot(dx, dy);
+  const nx = -dy / L, ny = dx / L;
+  const bar = line([last[0] + nx * 22, last[1] + ny * 22], [last[0] - nx * 22, last[1] - ny * 22]);
+  return svg(
+    `<circle cx="256" cy="256" r="214" ${thin(2)}/><circle cx="256" cy="256" r="200" ${thin(0.9)}/>` +
+      `<g fill="#000">${grid}</g>` + G(thin(6), `<path d="${poly(path)}"/><path d="${bar}"/>`) + ring(...path[0], 17, 4.5),
+  );
+}
+
+// E6. Natal chart: concentric rings and house spokes, the rhizome's nodes placed as
+// "planets" on orbits, hierarchy edges heavy, aspect lines (cross-links) hairline.
+export function esotericChart() {
+  const c = [256, 256];
+  const planet = (r, a) => pol(...c, r, a);
+  const P = { hub: c, a: planet(160, -70), b: planet(110, 200), c: planet(176, 160), d: planet(100, 120), e: planet(168, 20), f: planet(176, 60), g: planet(100, -10) };
+  const tree = [['hub', 'a'], ['hub', 'b'], ['b', 'c'], ['hub', 'd'], ['hub', 'e'], ['e', 'f']];
+  const aspects = [['a', 'e'], ['a', 'b'], ['c', 'd'], ['d', 'f'], ['b', 'd'], ['a', 'c'], ['f', 'g'], ['g', 'a']];
+  let spokes = '';
+  for (let k = 0; k < 12; k++) spokes += `<path d="${line(pol(...c, 190, k * 30), pol(...c, 224, k * 30))}"/>`;
+  const L = (list) => list.map(([u, v]) => `<path d="${line(P[u], P[v])}"/>`).join('');
+  return svg(
+    [224, 190, 138, 80].map((r, i) => `<circle cx="256" cy="256" r="${r}" ${thin(i === 0 ? 2.2 : 1)}/>`).join('') +
+      G(thin(1), spokes) + G(thin(1), L(aspects)) + G(thin(4), L(tree)) +
+      Object.entries(P).filter(([k]) => k !== 'hub').map(([, p]) => ring(...p, 13, 3.4)).join('') + `<circle cx="256" cy="256" r="6"/>`,
+  );
+}
+
+export const ESOTERIC = {
+  'esoteric-tree': esotericTree,
+  'esoteric-metatron': esotericMetatron,
+  'esoteric-seed': esotericSeed,
+  'esoteric-mandala': esotericMandala,
+  'esoteric-sigil': esotericSigil,
+  'esoteric-chart': esotericChart,
+};
+
 const isCLI = typeof process !== 'undefined' && process.argv && import.meta.url === `file://${process.argv[1]}`;
 if (isCLI) {
   const fs = await import('node:fs');
   const i = process.argv.indexOf('--outdir');
   const outdir = i >= 0 ? process.argv[i + 1] : 'renders/concepts';
   fs.mkdirSync(outdir, { recursive: true });
-  for (const [name, fn] of Object.entries({ ...CONCEPTS, ...LIGHT })) {
+  for (const [name, fn] of Object.entries({ ...CONCEPTS, ...LIGHT, ...ESOTERIC })) {
     fs.writeFileSync(`${outdir}/${name}.svg`, fn());
     console.log(`wrote ${outdir}/${name}.svg`);
   }
