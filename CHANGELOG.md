@@ -2,6 +2,10 @@
 
 ### Feat
 
+- **logo**: esoteric concept set (tree of life, Metatron graph, seed of life, mandala, kamea sigil, natal chart)
+- **logo**: hairline concept set after the Thousand Plateaus covers
+- **logo**: second-round concepts (refined plateau/mesh, R monogram, zz network, nested systems, rhizome stem)
+- **logo**: fixed-tangent notch fillets and stronger dot-joint fillets
 - **palette**: add open-settings and toggle-theme actions
 - **web**: dock network status at bar far right, hide below sm
 - **web**: ring spinner plus idle Project Saved pill
