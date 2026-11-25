@@ -214,10 +214,11 @@ export const ModelingPreview: Story = {
   ...stepStory("overview", "tour-modeling-preview", "Up next: Modeling"),
   tags: ["no-vrt"],
 };
-export const ModelingCanvas: Story = {
-  ...stepStory("modeling", "tour-diagrams-canvas", "Modeling: the core tool"),
-  tags: ["no-vrt"],
-};
+export const ModelingCanvas: Story = stepStory(
+  "modeling",
+  "tour-diagrams-canvas",
+  "Modeling: the core tool",
+);
 export const ModelingSidebar: Story = stepStory(
   "modeling",
   "tour-diagrams-sidebar",
@@ -227,18 +228,16 @@ export const InventoryPreview: Story = {
   ...stepStory("overview", "tour-inventory-preview", "Up next: Inventory"),
   tags: ["no-vrt"],
 };
-export const Inventory: Story = {
-  ...stepStory("inventory", "tour-inventory", "Inventory"),
-  tags: ["no-vrt"],
-};
+export const Inventory: Story = stepStory(
+  "inventory",
+  "tour-inventory",
+  "Inventory",
+);
 export const ExplorePreview: Story = {
   ...stepStory("overview", "tour-explore-preview", "Up next: Explore"),
   tags: ["no-vrt"],
 };
-export const Explore: Story = {
-  ...stepStory("explore", "tour-explore", "Explore"),
-  tags: ["no-vrt"],
-};
+export const Explore: Story = stepStory("explore", "tour-explore", "Explore");
 export const CodePreview: Story = {
   ...stepStory("overview", "tour-editor-preview", "Up next: Code"),
   tags: ["no-vrt"],
