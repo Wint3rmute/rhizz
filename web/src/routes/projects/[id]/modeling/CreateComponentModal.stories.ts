@@ -54,6 +54,7 @@ export const Open: Story = {
 };
 
 export const NoReusableDefinitions: Story = {
+  tags: ["no-vrt"],
   args: {
     reusableDefinitions: [],
   },

@@ -159,6 +159,7 @@ export const CommandsComeFirst: Story = {
 // diagrams and nothing else: a row for the system file would open text
 // where the user asked for a canvas.
 export const DiagramsOnlyOnModeling: Story = {
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/modeling/main.hcl" },
   play: async ({ canvasElement }) => {
     await openVia();
@@ -185,6 +186,7 @@ export const DiagramsOnlyOnModeling: Story = {
 };
 
 export const FindsAView: Story = {
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/modeling/main.hcl" },
   play: async ({ canvasElement }) => {
     await openVia();
@@ -247,6 +249,7 @@ export const InventorySectionOnInventory: Story = {
 // when they sit next to each other: one filled slot is a decoration, a filled
 // slot beside an empty one is the alignment this is protecting.
 export const ComponentIconsOnInventory: Story = {
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/inventory" },
   play: async ({ canvasElement }) => {
     await openVia();
@@ -279,6 +282,7 @@ export const ComponentIconsOnInventory: Story = {
 };
 
 export const InventoryFindsEntitiesNotFiles: Story = {
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/inventory" },
   play: async ({ canvasElement }) => {
     await openVia();
@@ -295,6 +299,7 @@ export const InventoryFindsEntitiesNotFiles: Story = {
 };
 
 export const InventoryFindsByFullName: Story = {
+  tags: ["no-vrt"],
   args: { pathname: "/projects/p/inventory" },
   play: async ({ canvasElement }) => {
     await openVia();

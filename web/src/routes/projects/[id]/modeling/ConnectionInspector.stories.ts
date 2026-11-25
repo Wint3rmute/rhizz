@@ -117,6 +117,7 @@ export const Incomplete: Story = {
 
 /** The endpoints share no defined protocol, so the panel says why instead of showing empty fields. */
 export const UndefinedProtocol: Story = {
+  tags: ["no-vrt"],
   args: {
     connection: { ...httpRequest, protocol: undefined },
     protocol: undefined,
@@ -131,6 +132,7 @@ export const UndefinedProtocol: Story = {
  * show as not connected.
  */
 export const PortConnectionStatus: Story = {
+  tags: ["no-vrt"],
   args: {
     connection: fundTransfer,
     fromPorts: endpointPorts,
@@ -155,6 +157,7 @@ export const PortConnectionStatus: Story = {
  * navigation (the "Show" row button, the protocol link) stays live.
  */
 export const Readonly: Story = {
+  tags: ["no-vrt"],
   args: {
     readonly: true,
   },

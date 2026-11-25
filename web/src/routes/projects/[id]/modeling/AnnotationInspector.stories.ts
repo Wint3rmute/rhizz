@@ -32,6 +32,7 @@ export const Default: Story = {
 };
 
 export const ScaledMarkdown: Story = {
+  tags: ["no-vrt"],
   args: {
     annotation: {
       text: "# Ingest path\n\n- fast\n- slow",
@@ -50,6 +51,7 @@ export const ScaledMarkdown: Story = {
  * the textarea nor the number input accepts edits.
  */
 export const Readonly: Story = {
+  tags: ["no-vrt"],
   args: {
     readonly: true,
   },

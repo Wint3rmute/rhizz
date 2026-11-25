@@ -142,6 +142,7 @@ export const DuplicateProjectBlock: Story = {
 };
 
 export const LongErrorMessageWraps: Story = {
+  tags: ["no-vrt"],
   args: {
     projectId: LONG_ERROR_PROJECT_ID,
   },

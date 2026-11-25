@@ -197,58 +197,60 @@ export const Welcome: Story = stepStory(
   "tour-welcome",
   "Welcome to Rhizz 👋",
 );
-export const Navbar: Story = stepStory("overview", "tour-navbar", "Navbar");
+export const Navbar: Story = {
+  ...stepStory("overview", "tour-navbar", "Navbar"),
+  tags: ["no-vrt"],
+};
 export const OverviewPreview: Story = stepStory(
   "overview",
   "tour-overview-preview",
   "Up next: Overview",
 );
-export const Overview: Story = stepStory(
-  "overview",
-  "tour-overview",
-  "Overview",
-);
-export const ModelingPreview: Story = stepStory(
-  "overview",
-  "tour-modeling-preview",
-  "Up next: Modeling",
-);
-export const ModelingCanvas: Story = stepStory(
-  "modeling",
-  "tour-diagrams-canvas",
-  "Modeling: the core tool",
-);
+export const Overview: Story = {
+  ...stepStory("overview", "tour-overview", "Overview"),
+  tags: ["no-vrt"],
+};
+export const ModelingPreview: Story = {
+  ...stepStory("overview", "tour-modeling-preview", "Up next: Modeling"),
+  tags: ["no-vrt"],
+};
+export const ModelingCanvas: Story = {
+  ...stepStory("modeling", "tour-diagrams-canvas", "Modeling: the core tool"),
+  tags: ["no-vrt"],
+};
 export const ModelingSidebar: Story = stepStory(
   "modeling",
   "tour-diagrams-sidebar",
   "Modeling: selection & inspector",
 );
-export const InventoryPreview: Story = stepStory(
-  "overview",
-  "tour-inventory-preview",
-  "Up next: Inventory",
-);
-export const Inventory: Story = stepStory(
-  "inventory",
-  "tour-inventory",
-  "Inventory",
-);
-export const ExplorePreview: Story = stepStory(
-  "overview",
-  "tour-explore-preview",
-  "Up next: Explore",
-);
-export const Explore: Story = stepStory("explore", "tour-explore", "Explore");
-export const CodePreview: Story = stepStory(
-  "overview",
-  "tour-editor-preview",
-  "Up next: Code",
-);
+export const InventoryPreview: Story = {
+  ...stepStory("overview", "tour-inventory-preview", "Up next: Inventory"),
+  tags: ["no-vrt"],
+};
+export const Inventory: Story = {
+  ...stepStory("inventory", "tour-inventory", "Inventory"),
+  tags: ["no-vrt"],
+};
+export const ExplorePreview: Story = {
+  ...stepStory("overview", "tour-explore-preview", "Up next: Explore"),
+  tags: ["no-vrt"],
+};
+export const Explore: Story = {
+  ...stepStory("explore", "tour-explore", "Explore"),
+  tags: ["no-vrt"],
+};
+export const CodePreview: Story = {
+  ...stepStory("overview", "tour-editor-preview", "Up next: Code"),
+  tags: ["no-vrt"],
+};
 export const Code: Story = stepStory("code", "tour-editor", "Code");
 export const Done: Story = stepStory("overview", "tour-done", "You're set 🚀");
 
 // Guards the story list against drifting from the tour itself: every
-// step id gets exactly one screenshot story above.
+// step id gets exactly one story above. Each story's play function checks
+// its popover; only a representative subset is also screenshotted (VRT) —
+// the rest repeat the same popover over the same page, so they carry
+// `no-vrt`.
 export const AllStepsCovered: Story = {
   tags: ["no-vrt"],
   args: { page: "overview", projectId: WALK_PROJECT_ID, stepId: STEPS[0]?.id },

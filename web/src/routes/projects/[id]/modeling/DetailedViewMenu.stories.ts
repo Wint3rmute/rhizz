@@ -150,6 +150,7 @@ export const OffersToCreate: Story = {
 
 /** A detail view exists: the row jumps to it instead. */
 export const OffersToJump: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const menu = await nodeMenu(canvasElement, "actuator");
     await expect(

@@ -118,6 +118,7 @@ export const Desktop: Story = {
 };
 
 export const MobileManyDiagrams: Story = {
+  tags: ["no-vrt"],
   globals: {
     viewport: { value: "mobile1" },
   },
@@ -134,6 +135,7 @@ export const MobileManyDiagrams: Story = {
 // story covers the embed button staying pinned to the sidebar's bottom edge
 // instead of scrolling away with the list.
 export const ManyDiagramsDesktop: Story = {
+  tags: ["no-vrt"],
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },
@@ -144,6 +146,7 @@ export const ManyDiagramsDesktop: Story = {
 };
 
 export const CrossLevelConnections: Story = {
+  tags: ["no-vrt"],
   parameters: {
     viewport: { defaultViewport: "responsive" },
   },

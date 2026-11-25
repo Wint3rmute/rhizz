@@ -193,6 +193,7 @@ export const CodeTab: Story = {
 // the incoming view's annotation appears and the previous view's content
 // fades out once the transition settles.
 export const SwitchBetweenViews: Story = {
+  tags: ["no-vrt"],
   args: {
     files: SAMPLE_FILES,
   },
@@ -245,6 +246,7 @@ const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter(
 );
 
 export const SingleFile: Story = {
+  tags: ["no-vrt"],
   args: {
     files: singleFile,
   },

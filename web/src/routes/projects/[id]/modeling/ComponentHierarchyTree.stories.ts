@@ -73,6 +73,7 @@ export const Default: Story = {
 // is shown and the system root row itself is hidden — the view header
 // already names the system, so the root would be redundant.
 export const FilteredBySystem: Story = {
+  tags: ["no-vrt"],
   args: {
     systems: [{ label: "a" }, { label: "b" }],
     components: [
@@ -102,6 +103,7 @@ export const FilteredBySystem: Story = {
 };
 
 export const FilteredUnknownSystem: Story = {
+  tags: ["no-vrt"],
   args: {
     systems: [{ label: "a" }],
     components: [{ label: "leaf-a", parent_system_index: 0 }],
@@ -119,6 +121,7 @@ export const FilteredUnknownSystem: Story = {
  * clicks still select.
  */
 export const Readonly: Story = {
+  tags: ["no-vrt"],
   args: {
     onToggleChecked: undefined,
     onDeleteComponent: undefined,

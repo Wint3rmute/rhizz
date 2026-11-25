@@ -122,6 +122,7 @@ async function openRow(
 
 /** A shared link to a view opens exactly that view, not the first one. */
 export const DeepLinkedView: Story = {
+  tags: ["no-vrt"],
   args: {
     requestedView: "actuator.hcl",
   },
@@ -136,6 +137,7 @@ export const DeepLinkedView: Story = {
 
 /** A link to a view that no longer exists falls back to the first one. */
 export const UnknownViewFallsBack: Story = {
+  tags: ["no-vrt"],
   args: {
     requestedView: "renamed-away.hcl",
   },

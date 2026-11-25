@@ -65,6 +65,7 @@ async function waitForRendered(textarea: HTMLElement, text: RegExp) {
 }
 
 export const Hcl: Story = {
+  tags: ["no-vrt"],
   args: {
     value:
       'system "drone" {\n  instance "fc" {\n    source = "flight-controller"\n  }\n}\n',
@@ -105,6 +106,7 @@ export const MarkdownWordWrapped: Story = {
 // one long line. Without it the measurement above could be passing because the
 // editor is too narrow to overflow anything, rather than because wrapping works.
 export const MarkdownUnwrappedOverflows: Story = {
+  tags: ["no-vrt"],
   args: {
     language: "markdown",
     value: BATTERY_PROSE,

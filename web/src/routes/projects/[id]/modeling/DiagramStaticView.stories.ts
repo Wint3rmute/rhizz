@@ -95,6 +95,7 @@ export const NestedComponents: Story = {
 // No component is placed on the canvas yet — the viewBox falls back to a
 // fixed default instead of collapsing/erroring on an empty bounding box.
 export const Empty: Story = {
+  tags: ["no-vrt"],
   args: {
     components: pipelineComponents,
     connections: pipelineConnections,

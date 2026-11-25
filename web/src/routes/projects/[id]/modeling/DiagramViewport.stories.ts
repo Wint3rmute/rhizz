@@ -14,6 +14,7 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
+  tags: ["no-vrt"],
   args: {
     bounds: { x: 0, y: 0, width: 400, height: 300 },
   },

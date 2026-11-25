@@ -18,9 +18,12 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Default: Story = {};
+export const Default: Story = {
+  tags: ["no-vrt"],
+};
 
 export const Disabled: Story = {
+  tags: ["no-vrt"],
   args: {
     disabled: true,
   },

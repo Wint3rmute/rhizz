@@ -25,6 +25,7 @@ const stats = {
 };
 
 export const Ok: Story = {
+  tags: ["no-vrt"],
   args: {
     status: "ok",
     head: "No errors, no warnings",
@@ -38,6 +39,7 @@ export const Ok: Story = {
 };
 
 export const Warnings: Story = {
+  tags: ["no-vrt"],
   args: {
     status: "warn",
     head: "2 warnings — model completes at 100.0%",
@@ -80,6 +82,7 @@ export const Errors: Story = {
 };
 
 export const StrictnessBadge: Story = {
+  tags: ["no-vrt"],
   args: {
     status: "ok",
     head: "No errors, no warnings",

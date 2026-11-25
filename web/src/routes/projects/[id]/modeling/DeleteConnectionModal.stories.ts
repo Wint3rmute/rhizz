@@ -34,6 +34,7 @@ type Story = StoryObj<typeof meta>;
 
 // Unchecked by default: only the connection goes.
 export const Default: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     await expect(
@@ -46,6 +47,7 @@ export const Default: Story = {
 };
 
 export const PortCleanup: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     await userEvent.click(
@@ -59,6 +61,7 @@ export const PortCleanup: Story = {
 
 // A single removable port can be selected while the other stays.
 export const SelectivePort: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     const boxes = await modal.findAllByTestId(

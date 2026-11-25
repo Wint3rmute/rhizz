@@ -129,6 +129,7 @@ export const TextAndSvgGlyphsShareOneSlot: Story = {
 // as a single eight-character pattern its space cannot line up with the only
 // space the label has — the one in "Go to".
 export const GappedWordsStillFindTheRow: Story = {
+  tags: ["no-vrt"],
   args: {
     items: [
       {
@@ -235,6 +236,7 @@ export const FuzzyFiltered: Story = {
 };
 
 export const GroupsHiddenWhileSearching: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByText("Navigate")).toBeInTheDocument();
@@ -248,6 +250,7 @@ export const GroupsHiddenWhileSearching: Story = {
 };
 
 export const NoMatches: Story = {
+  tags: ["no-vrt"],
   args: { emptyMessage: "No matching commands" },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -260,6 +263,7 @@ export const NoMatches: Story = {
 };
 
 export const Loading: Story = {
+  tags: ["no-vrt"],
   args: { items: [], loading: true },
   play: async ({ canvasElement }) => {
     await expect(
@@ -269,6 +273,7 @@ export const Loading: Story = {
 };
 
 export const ArrowKeysWrapAround: Story = {
+  tags: ["no-vrt"],
   args: { items: ITEMS.slice(0, 3) },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);

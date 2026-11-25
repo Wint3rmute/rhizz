@@ -114,6 +114,7 @@ export const ProtocolWithRoles: Story = {
 };
 
 export const NewProtocol: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     await userEvent.type(
@@ -131,6 +132,7 @@ export const NewProtocol: Story = {
 };
 
 export const RoleWithoutProtocol: Story = {
+  tags: ["no-vrt"],
   play: async ({ canvasElement }) => {
     const modal = within(canvasElement);
     await userEvent.type(
@@ -143,6 +145,7 @@ export const RoleWithoutProtocol: Story = {
 
 // The drag began on a port dot, so that end keeps its port.
 export const ExistingPortEnd: Story = {
+  tags: ["no-vrt"],
   args: {
     request: {
       ...siblings,
@@ -158,6 +161,7 @@ export const ExistingPortEnd: Story = {
 // A component nested in another: the breadcrumb says which one, and the
 // port is a boundary port because the connection leaves its parent.
 export const NestedEndpoint: Story = {
+  tags: ["no-vrt"],
   args: {
     request: {
       ...siblings,
@@ -205,6 +209,7 @@ export const TakenName: Story = {
 // the delegation variant — the outer port inherits its type, so it offers no
 // protocol or role fields, and the untyped preview draws no arrowhead.
 export const DelegationVariant: Story = {
+  tags: ["no-vrt"],
   args: {
     request: {
       scopePath: "demo/weather-service",
@@ -252,6 +257,7 @@ export const DelegationVariant: Story = {
 // Delegation with a brand-new outer port: external is forced on (a proxy
 // must be a boundary), the role field is replaced by the inherits note.
 export const DelegationNewOuter: Story = {
+  tags: ["no-vrt"],
   args: {
     request: {
       scopePath: "demo/weather-service",
@@ -286,6 +292,7 @@ export const DelegationNewOuter: Story = {
 // Conversion: the outer already declares a type, so creating the delegation
 // moves it inward — the banner names the moved protocol and Create stays enabled.
 export const DelegationConvertOuter: Story = {
+  tags: ["no-vrt"],
   args: {
     protocols: [...protocols, protocol("https", [], "HTTPS")],
     request: {

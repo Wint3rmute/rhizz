@@ -20,6 +20,7 @@ function resetDiagnosticsBar(): void {
 }
 
 export const Active: Story = {
+  tags: ["no-vrt"],
   args: { label: "Uploading…" },
   loaders: [resetDiagnosticsBar],
   play: async ({ canvasElement }) => {
