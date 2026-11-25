@@ -15,6 +15,7 @@
 
 ### Fix
 
+- **web**: clip modeling toolbar so it cannot overlap sidebars
 - **web**: satisfy typescript-eslint 8.74 rules
 - **deps**: bump minimatch via npm audit fix
 - **web**: dismiss settings modal with Escape
