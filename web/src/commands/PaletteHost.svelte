@@ -18,12 +18,15 @@
     type PaletteItem,
   } from "../components/palette/commandPalette";
   import { getProjectModel } from "../ProjectModel.svelte";
+  import { toggleTheme } from "../ThemeState.svelte";
   import type { Dirent } from "../vfs/fs";
+  import { actionItems } from "./actionItems";
   import { commandItems } from "./commandItems";
   import { editorTargetFor, fileItems, fileTargetFor } from "./fileSwitcher";
   import { inventoryEntities, inventoryItems } from "./inventoryItems";
   import { getPaletteRequest } from "./paletteRequest.svelte";
   import { paletteScopeForPath } from "./paletteScope";
+  import { requestSettings } from "./settingsRequest.svelte";
   import { WORKSPACE_PAGES } from "./workspacePages";
 
   // `pathname` defaults to the live route and is never passed by the app. It
@@ -56,15 +59,20 @@
   const FILES_GROUP = "Files";
   const VIEWS_GROUP = "Views";
 
-  // Commands first, then the page's files, then (on Inventory) its entities.
-  // That is the order of the questions the palette answers — "where can I
-  // go?", "where is that file?", "where is that thing?" — and it means Enter
-  // on an untouched palette does the most common thing rather than opening
-  // whichever row happens to sort first.
+  // Commands first, then actions, then the page's files, then (on
+  // Inventory) its entities. That is the order of the questions the palette
+  // answers — "where can I go?", "what can I do?", "where is that file?",
+  // "where is that thing?" — and it means Enter on an untouched palette does
+  // the most common thing rather than opening whichever row happens to sort
+  // first.
   let items = $derived([
     ...commandItems((pageId) => {
       const target = WORKSPACE_PAGES.find((page) => page.id === pageId);
       if (target !== undefined) void goto(target.href(projectId));
+    }),
+    ...actionItems({
+      onOpenSettings: () => requestSettings(),
+      onToggleTheme: () => toggleTheme(),
     }),
     ...fileItems(entries, scope).map<PaletteItem>((item) => ({
       ...item,
