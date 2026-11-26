@@ -18,6 +18,7 @@
   import { ServerProjectStore } from "./vfs/vfsStore";
   import { getOrCreateUsername } from "./collab/identity";
   import { getSafeStorage } from "./safeStorage";
+  import { get_empty_project } from "./rhizz_wasm_wrapper";
   import { netActivity, trackedFetch } from "./netActivity";
   import type { ProjectStore } from "./vfs/store";
   import type { Project } from "./vfs/types";
@@ -113,13 +114,15 @@
     if (currentProjectId !== null) await setCurrentProject(currentProjectId);
   }
 
-  // Creates a project and seeds it with a single root-level "main.hcl"
-  // file — the interim "one editable file per project" convention until
-  // Task 58 adds a real file-tree UI. Kept here rather than duplicated at
-  // each call site (the /projects page's "new project" and "new from
-  // example" actions). Also seeds an empty `docs/` folder alongside the
-  // model file (a `Wanted::Dir` entry persists in the VFS, no `.gitkeep`
-  // needed — the server rejects hidden entries with 400).
+  // Creates a project and seeds it with a single root-level model file —
+  // the interim "one editable file per project" convention until Task 58
+  // adds a real file-tree UI. Kept here rather than duplicated at each call
+  // site (the /projects page's "new project" and "new from example"
+  // actions). Also seeds the empty folders (`docs/`) alongside the model
+  // file (a `Wanted::Dir` entry persists in the VFS, no `.gitkeep` needed —
+  // the server rejects hidden entries with 400). The file name and folders
+  // come from the rhizz-core empty-project seed, the same layout the MCP
+  // `create_project` tool writes.
   //
   // Rejects when the name's slug is taken or unusable (see vfs/slug) — callers
   // in the UI are expected to surface that rather than let it escape.
@@ -129,8 +132,9 @@
   ): Promise<Project> {
     const project = await projectStore.createProject(name);
     const fs = openProjectFs(projectStore, project.id);
-    await fs.writeFile("main.hcl", content);
-    await fs.mkdir("docs", { recursive: true });
+    const seed = get_empty_project();
+    await fs.writeFile(seed.main_file, content);
+    for (const dir of seed.dirs) await fs.mkdir(dir, { recursive: true });
     return project;
   }
 

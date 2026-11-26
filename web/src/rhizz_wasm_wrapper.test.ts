@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import {
   apply_model_op,
   compile_system,
+  get_empty_project,
   get_example_projects,
   parse_views,
   serialize_model,
@@ -12,7 +13,6 @@ import {
   WARNING_LEVELS,
   type WarningLevel,
 } from "./rhizz_wasm_wrapper";
-import { EMPTY_PROJECT_HCL } from "./emptyProject";
 
 beforeAll(async () => {
   const wasmPath = path.resolve(
@@ -102,9 +102,18 @@ system "quad" {
     expect(views2).toEqual(views);
   });
 
+  it("exposes the rhizz-core empty-project seed layout", () => {
+    const seed = get_empty_project();
+    expect(seed.main_file).toBe("main.hcl");
+    expect(seed.main_content).toBe(
+      'system "main" {\n  full_name = "Main system"\n}\n',
+    );
+    expect(seed.dirs).toEqual(["docs"]);
+  });
+
   it("compiles the empty-project seed with its default view and no errors", () => {
     const result = compile_system([
-      { filename: "main.hcl", content: EMPTY_PROJECT_HCL },
+      { filename: "main.hcl", content: get_empty_project().main_content },
       {
         filename: "views/main.hcl",
         content: 'view "main" { system = "main" }\n',

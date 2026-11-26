@@ -1,6 +1,7 @@
 import {
   apply_model_op as wasm_apply_model_op,
   CompileResultJS,
+  get_empty_project as wasm_get_empty_project,
   get_example_projects as wasm_get_example_projects,
   type ModelJS,
   parse_views as wasm_parse_views,
@@ -127,6 +128,17 @@ export interface ExampleProject {
   name: string;
   description: string;
   files: ExampleFile[];
+}
+
+/** Seed layout of a brand-new empty project (shared with the MCP server). */
+export interface EmptyProject {
+  main_file: string;
+  main_content: string;
+  dirs: string[];
+}
+
+export function get_empty_project(): EmptyProject {
+  return wasm_get_empty_project() as EmptyProject;
 }
 
 export function get_example_projects(): ExampleProject[] {

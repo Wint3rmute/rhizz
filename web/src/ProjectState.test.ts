@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { createProjectWithMainFile, projectStore } from "./ProjectState.svelte";
 import { openProjectFs } from "./vfs/fs";
+import { initWasmForTests } from "./testing/wasmInit";
+
+beforeAll(initWasmForTests);
 
 describe("createProjectWithMainFile", () => {
   it("seeds main.hcl and an empty docs folder without hidden files", async () => {

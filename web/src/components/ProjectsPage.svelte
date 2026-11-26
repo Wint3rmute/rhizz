@@ -9,11 +9,11 @@
     createProjectWithMainFile,
     projectStore,
   } from "../ProjectState.svelte";
-  import { EMPTY_PROJECT_HCL } from "../emptyProject";
   import { pendTourStart } from "../tour/tourRequest.svelte";
   import { toastState } from "../ToastState.svelte";
   import {
     type ExampleProject,
+    get_empty_project,
     get_example_projects,
   } from "../rhizz_wasm_wrapper";
   import type { Project } from "../vfs/types";
@@ -92,7 +92,7 @@
     // taken (or unusable) is refused by the store — report it and stay here
     // rather than navigating to a project that doesn't exist.
     const project = await tryProjectChange(() =>
-      createProjectWithMainFile(name, EMPTY_PROJECT_HCL),
+      createProjectWithMainFile(name, get_empty_project().main_content),
     );
     if (!project) return;
     if (firstEver) pendTourStart();

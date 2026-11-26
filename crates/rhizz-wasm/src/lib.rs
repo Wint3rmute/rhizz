@@ -1025,6 +1025,36 @@ pub fn get_example_projects() -> Result<JsValue, JsError> {
     serde_wasm_bindgen::to_value(&list).map_err(|e| JsError::new(&e.to_string()))
 }
 
+/// The seed layout of a brand-new empty project.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct EmptyProjectJS {
+    /// Project-relative path of the seeded model file.
+    pub main_file: String,
+    /// Content of the seeded model file.
+    pub main_content: String,
+    /// Project-relative directories seeded (empty) alongside the model file.
+    pub dirs: Vec<String>,
+}
+
+/// Returns the seed layout of a brand-new empty project as
+/// `{ main_file: string, main_content: string, dirs: string[] }`.
+///
+/// # Errors
+///
+/// Returns a `JsError` if serialization fails.
+#[wasm_bindgen]
+pub fn get_empty_project() -> Result<JsValue, JsError> {
+    let seed = EmptyProjectJS {
+        main_file: rhizz_core::empty_project::EMPTY_PROJECT_MAIN_FILE.to_owned(),
+        main_content: rhizz_core::empty_project::EMPTY_PROJECT_HCL.to_owned(),
+        dirs: rhizz_core::empty_project::EMPTY_PROJECT_DIRS
+            .iter()
+            .map(|d| (*d).to_owned())
+            .collect(),
+    };
+    serde_wasm_bindgen::to_value(&seed).map_err(|e| JsError::new(&e.to_string()))
+}
+
 // ── CompileResultJS ───────────────────────────────────────────────────────────
 
 /// A compiled result exposed as a JS class with callable Rust methods.
