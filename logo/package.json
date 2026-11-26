@@ -12,6 +12,8 @@
     "gen:construction": "node src/construction.mjs --out renders/molecule/construction-ref.svg && node src/construction.mjs --theme dark --out renders/molecule/construction-ref-dark.svg",
     "gen:favicon": "node src/favicon.mjs --out ../web/static/favicon.svg",
     "gen:video": "node src/gradient.mjs --outdir renders/video",
-    "gen:intro": "node src/intro.mjs --outdir renders/video"
+    "gen:intro": "node src/intro.mjs --outdir renders/video",
+    "gen:social": "node src/social.mjs --out renders/social/social-preview.png",
+    "gen:social-shots": "node src/social-shots.mjs --outdir renders/social/shots"
   }
 }

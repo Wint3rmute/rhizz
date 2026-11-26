@@ -132,3 +132,19 @@ generators produce.
 5-second logo intro (the network sprouts and settles into the mark, then the
 wordmark appears), both into `renders/video/`. The MP4s are committed through Git LFS: re-render
 and commit them whenever the generators change, since CI does not check them.
+
+## Social preview
+
+<p align="center">
+  <img src="renders/social/social-preview.png" alt="GitHub social preview: the lockup and tagline beside two real screenshots of the app" width="640">
+</p>
+
+The 1280×640 image GitHub shows when the repository is shared (upload it under
+Settings → Social preview). It pairs the lockup with two **real screenshots of
+the app**, the drone example's `drone-overview.hcl` and `main.hcl` views, on the
+landing gradient.
+
+`just logo-social` composes it from the committed screenshots in
+`renders/social/shots/`. When the UI changes, run `just wasm` and
+`just logo-social-shots` to re-capture them from the running app, then
+`just logo-social` again. Like the videos it is not covered by `assets-check`.
