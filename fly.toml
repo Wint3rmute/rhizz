@@ -3,7 +3,7 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'rhizz'
+app = 'rhizome'
 primary_region = 'fra'
 
 [env]
@@ -11,7 +11,7 @@ primary_region = 'fra'
   RUST_LOG = 'info'
 
 [[mounts]]
-  source = 'rhizz_data'
+  source = 'rhizome_data'
   destination = '/data'
 
 [http_service]
