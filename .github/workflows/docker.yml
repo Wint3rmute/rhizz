@@ -120,4 +120,4 @@ jobs:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
         run: |
           image="ghcr.io/${GITHUB_REPOSITORY,,}:sha-${GITHUB_SHA::7}"
-          flyctl deploy --app rhizz --image "$image"
+          flyctl deploy --app rhizome --image "$image"
