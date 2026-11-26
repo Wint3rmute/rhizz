@@ -15,7 +15,7 @@ has 2 views:
 - `pc-build.hcl` - Internals of the computer
 
 
-```rhizz-project src="views-intro/1_example_simple" level="architectural"
+```rhizome-project src="views-intro/1_example_simple" level="architectural"
 ```
 
 Both of those views utilize the same model underneath. Components are imported
@@ -28,15 +28,15 @@ All views are checked for correctness. The example below demonstrates what
 happens when you use a non-existing component in a system view. As you can see,
 the view fails to render and the warning explains why:
 
-```rhizz-project src="views-intro/2_example_error" level="architectural"
+```rhizome-project src="views-intro/2_example_error" level="architectural"
 ```
 
 ## Visibility of connections
 
 > [!NOTE]
-> This behavior might change in the future, Rhizz is at MVP stage!
+> This behavior might change in the future, Rhizome is at MVP stage!
 
-Rhizz decides what connections are visible in the view based on the components
+Rhizome decides what connections are visible in the view based on the components
 that are visible in the view. If selected components have connections, they will
 be displayed. This behavior ensures that you don't accidentally miss any connections.
 
@@ -44,5 +44,5 @@ be displayed. This behavior ensures that you don't accidentally miss any connect
 
 > [!IMPORTANT]
 > This section explains the view syntax, but remember that you're not expected
-> to write views by hand. Rhizz Web App allows you to create views in the
+> to write views by hand. Rhizome Web App allows you to create views in the
   diagram editor.

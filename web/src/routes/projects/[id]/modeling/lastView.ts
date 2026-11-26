@@ -15,7 +15,7 @@ import {
 } from "../../../../safeStorage";
 
 /** localStorage key prefix; the project id is appended per project. */
-const LAST_VIEW_KEY_PREFIX = "rhizz-last-view:";
+const LAST_VIEW_KEY_PREFIX = "rhizome-last-view:";
 
 function storageKey(projectId: string): string {
   return `${LAST_VIEW_KEY_PREFIX}${projectId}`;

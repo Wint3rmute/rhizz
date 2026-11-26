@@ -6,8 +6,8 @@
 
 ## Motivation
 
-Rhizz models are plain HCL, so AI assistants can already read and edit files
-on disk. They cannot talk to a running `rhizz web` server, where projects
+Rhizome models are plain HCL, so AI assistants can already read and edit files
+on disk. They cannot talk to a running `rhizome web` server, where projects
 live, and there is no standard way for an AI client to discover what the
 server offers. The
 [Model Context Protocol (MCP)](https://en.wikipedia.org/wiki/Model_Context_Protocol)
@@ -16,14 +16,14 @@ three steps: reading, then model mutations, then documentation edits.
 
 ## Design
 
-The existing server (`rhizz-server`) additionally speaks MCP, over the
+The existing server (`rhizome-server`) additionally speaks MCP, over the
 streamable HTTP transport, at `/mcp`. It is part of the same router and process
 as the web app and the VFS API, and works on the same data dir. There is no new
 binary, port or flag. It uses the official Rust MCP SDK (`rmcp`) and offers
 tools only (no resources or prompts).
 
 The MCP layer holds no model logic. Like every other frontend, it only does I/O
-and presentation on top of `rhizz-core`.
+and presentation on top of `rhizome-core`.
 
 ### Step 1: reading
 
@@ -42,7 +42,7 @@ directory, with the same exclusions as the VFS storage (hidden entries,
 symlinks).
 
 **Implemented (2026-10, extended 2026-11):** all four tools ship on `/mcp`
-in `rhizz-server`.
+in `rhizome-server`.
 The version for `read_file` and `list_files` files is hex SHA-256 of the whole
 file content — deliberately not the VFS's mtime-based `revision` — and is the
 value step 3's compare-and-swap edits will require. `read_file`'s `offset` is
@@ -58,7 +58,7 @@ call.
 
 ### Step 2: mutations
 
-Mutations reuse the declarative model operations of `rhizz-core`
+Mutations reuse the declarative model operations of `rhizome-core`
 (`ModelOp` in `mutation.rs`), the same ones the web editor sends. The server
 loads the project's `system.hcl`, applies the op through `mutate_to_hcl`, and
 writes the canonical HCL back. The tool surface is a thin mapping of the ops:
@@ -101,7 +101,7 @@ one tool per op, with the op's name and parameters.
   so a deleted component may leave dangling view nodes, which the compiler
   reports as warnings.
 - **New operations:** a new `ModelOp` gets a tool in the same change. The op
-  set stays defined in one place, `rhizz-core`. `tool_name_for_op` in
+  set stays defined in one place, `rhizome-core`. `tool_name_for_op` in
   `mcp.rs` maps every `ModelOp` variant to its tool (or to nothing for the
   `create_component` exception) with an exhaustive match and no wildcard arm,
   and the `op_tool_mapping_covers_every_model_op` test checks the mapped
@@ -183,8 +183,8 @@ this tool an AI client could not start one. `create_project` takes only the
 project's id (an explicit slug: lowercase letters and digits joined by single
 hyphens, which is also the directory name) and seeds the same layout the web
 editor's "new project" writes: a root `main.hcl` holding a `main` system, plus
-an empty `docs/` folder. The layout lives once, in `rhizz-core`
-(`rhizz_core::empty_project`), and the web editor reads it through the WASM
+an empty `docs/` folder. The layout lives once, in `rhizome-core`
+(`rhizome_core::empty_project`), and the web editor reads it through the WASM
 bindings (`get_empty_project`), so the two cannot drift. An id that is already
 taken is refused without touching it; the write takes the project lock as `AI`
 like every other write tool. Deleting projects is deliberately not exposed.
@@ -205,8 +205,8 @@ canonical form, exactly as the web editor does.
 
 ## Alternatives
 
-- **A stdio MCP server in the CLI** (for example `rhizz mcp`): works without a
-  running server, but cannot see state in `rhizz web` and needs a second
+- **A stdio MCP server in the CLI** (for example `rhizome mcp`): works without a
+  running server, but cannot see state in `rhizome web` and needs a second
   entry point. It may be added later over the same tools.
 - **A separate MCP process or crate:** rejected. It would duplicate data access
   and configuration for no benefit at this scale.

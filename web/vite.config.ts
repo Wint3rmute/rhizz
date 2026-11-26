@@ -13,7 +13,7 @@ import { sveltekitConfig } from "./sveltekit.config.ts";
 // "hidden"`, emitting `build/**/*.map` that nothing then deletes, because it
 // resolves the delete glob from the SvelteKit adapter's output dir and
 // adapter-static is not one it knows (it assumes `.svelte-kit/output`). Those
-// maps would ship inside `web/build`, which `rhizz-server`'s build.rs embeds
+// maps would ship inside `web/build`, which `rhizome-server`'s build.rs embeds
 // into the release binary. So the whole source-map half stays off unless a
 // token is actually configured: a tokenless build emits no `.map` files at
 // all, exactly as it did before Sentry. (The SDK itself is still bundled —
@@ -50,7 +50,7 @@ export default defineConfig(({ mode }) => {
     ],
     server: {
       fs: {
-        allow: [".", "../crates/rhizz-wasm/pkg"],
+        allow: [".", "../crates/rhizome-wasm/pkg"],
       },
     },
   };

@@ -20,7 +20,7 @@ async function instrumentVfsWrites(page: Page): Promise<void> {
     const original = Storage.prototype.setItem;
     const writes: string[] = [];
     Storage.prototype.setItem = function (key: string, value: string): void {
-      if (key.startsWith("rhizz:vfs")) writes.push(value);
+      if (key.startsWith("rhizome:vfs")) writes.push(value);
       original.call(this, key, value);
     };
     (globalThis as unknown as { __vfsWrites?: string[] }).__vfsWrites = writes;

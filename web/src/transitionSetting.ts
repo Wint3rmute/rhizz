@@ -3,7 +3,7 @@
 // environment (see vite.config.ts). The Svelte wrapper
 // (TransitionState.svelte.ts) owns all browser side effects and storage I/O.
 
-export const TRANSITION_MS_STORAGE_KEY = "RHIZZ_TRANSITION_MS";
+export const TRANSITION_MS_STORAGE_KEY = "RHIZOME_TRANSITION_MS";
 export const TRANSITION_MS_DEFAULT = 320;
 export const TRANSITION_MS_MIN = 0;
 export const TRANSITION_MS_MAX = 3000;

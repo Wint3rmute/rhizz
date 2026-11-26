@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "crates/rhizz-core",
-    "crates/rhizz-cli",
-    "crates/rhizz-server",
-    "crates/rhizz-wasm",
-    "crates/rhizz-book",
+    "crates/rhizome-core",
+    "crates/rhizome-cli",
+    "crates/rhizome-server",
+    "crates/rhizome-wasm",
+    "crates/rhizome-book",
 ]
 resolver = "3"
 

@@ -1,4 +1,4 @@
-import init from "rhizz";
+import init from "rhizome";
 import * as nodeFs from "node:fs/promises";
 import * as nodePath from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -15,13 +15,13 @@ import {
   protocolUsageCount,
   staticPortsByIndex,
 } from "./modelView";
-import { compile_system } from "./rhizz_wasm_wrapper";
+import { compile_system } from "./rhizome_wasm_wrapper";
 import type { Source } from "./vfs/compile";
 
 beforeAll(async () => {
   const wasmPath = nodePath.resolve(
     __dirname,
-    "../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",
+    "../../crates/rhizome-wasm/pkg/rhizome_wasm_bg.wasm",
   );
   const buffer = await nodeFs.readFile(wasmPath);
   await init({ module_or_path: buffer });

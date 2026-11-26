@@ -5,13 +5,14 @@ import type { HandleClientError } from "@sveltejs/kit/hooks";
 // code can run — an error thrown during the first render is captured rather
 // than lost.
 //
-// `VITE_RHIZZ_DEPLOYMENT` picks the mode, read at build time:
-//   - "prod": events are sent to Sentry through the rhizz server's tunnel.
+// `VITE_RHIZOME_DEPLOYMENT` picks the mode, read at build time:
+//   - "prod": events are sent to Sentry through the rhizome server's tunnel.
 //   - anything else (including unset): nothing is sent, and no SDK is set up.
 //     Local development, Storybook, Vitest and the Playwright suite run this way.
 import * as Sentry from "@sentry/sveltekit";
 
-const deployment = import.meta.env.VITE_RHIZZ_DEPLOYMENT as string | undefined;
+const deployment = import.meta.env.VITE_RHIZOME_DEPLOYMENT as
+  string | undefined;
 
 // The Sentry project's public ingest key. It ships in every browser bundle
 // anyway, so it is committed here rather than passed in at build time. The
@@ -24,7 +25,7 @@ if (deployment === "prod") {
     dsn: PROD_DSN,
 
     // Every envelope (errors, logs, traces, replays, profiles, metrics) is posted
-    // to the rhizz server, which forwards it to Sentry. Same-origin, so ad
+    // to the rhizome server, which forwards it to Sentry. Same-origin, so ad
     // blockers that block Sentry's ingest host do not block it.
     tunnel: "/api/sentry",
 
@@ -46,7 +47,7 @@ if (deployment === "prod") {
 
       // Browser profiling (JS self-profiling). Only starts when the document
       // response carries `Document-Policy: js-profiling` — see
-      // `src/hooks.server.ts` (dev) and `crates/rhizz-server/src/server.rs`
+      // `src/hooks.server.ts` (dev) and `crates/rhizome-server/src/server.rs`
       // (production static serving).
       Sentry.browserProfilingIntegration(),
 

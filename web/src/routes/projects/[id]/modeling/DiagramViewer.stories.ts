@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
-import init from "rhizz";
+import init from "rhizome";
 import { projectSlug } from "../../../../vfs/slug";
 import {
   createProjectWithMainFile,

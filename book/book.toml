@@ -1,5 +1,5 @@
 [book]
-title = "The Rhizz language book"
+title = "The Rhizome language book"
 authors = ["Mateusz Bączek"]
 language = "en"
 
@@ -8,15 +8,15 @@ build-dir = "target-mdbook"
 
 [output.html]
 # Code highlighting uses mdBook's stock highlight.js bundle.
-additional-css = ["css/rhizz.css"]
-# Auto-sizes rhizz-project iframes to their content (see js/rhizz-embed.js).
-additional-js = ["js/rhizz-embed.js"]
+additional-css = ["css/rhizome.css"]
+# Auto-sizes rhizome-project iframes to their content (see js/rhizome-embed.js).
+additional-js = ["js/rhizome-embed.js"]
 
-[preprocessor.rhizz]
+[preprocessor.rhizome]
 # cargo walks up from book/ to the workspace root, so no wrapper is needed.
-command = "cargo run --release --quiet --bin rhizz-book"
+command = "cargo run --release --quiet --bin rhizome-book"
 renderer = ["html"]
-# Host serving the /book-example route that rhizz-project embeds iframe into.
+# Host serving the /book-example route that rhizome-project embeds iframe into.
 book-example-base-url = "https://rhizz.fly.dev"
 
 # If you want to test locally:

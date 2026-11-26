@@ -86,7 +86,7 @@
     viewPathTaken,
     writeDiagramLayoutFile,
   } from "./persistence";
-  import type { ViewFilterDefinition } from "../../../../rhizz_wasm_wrapper";
+  import type { ViewFilterDefinition } from "../../../../rhizome_wasm_wrapper";
   import {
     createHistoryStack,
     pushHistory,
@@ -305,7 +305,7 @@
   let errorCount = $derived(output?.error_count() ?? 0);
 
   // Structurally-stable persistence keys for every component, index-aligned
-  // with `components` and computed by rhizz-core (`Model::component_keys`), so
+  // with `components` and computed by rhizome-core (`Model::component_keys`), so
   // the editor and the compiler's view validation (W016) agree by construction.
   // Unlike a component's arena index, a key only changes if the component (or an
   // ancestor) is renamed or reparented.

@@ -1,0 +1,79 @@
+/*
+ * Styles for rhizome mdbook output.
+ *
+ * Compiled ```rhizome blocks and ```rhizome-project fences render as live
+ * iframes (see js/rhizome-embed.js); what remains here is the embed chrome
+ * plus the panels for non-compiled content (```rhizome,ignore notices and
+ * tool-error fallbacks).
+ *
+ * Theme-aware: mdbook applies the active theme as a class on <html>
+ * (.light / .coal / .navy / .ayu / .rust; html:not(.js) defaults to light).
+ * Neutral colors below follow the active theme; light defaults in :root,
+ * dark-theme overrides under .coal/.navy/.ayu.
+ */
+
+:root,
+html:not(.js) {
+  --rhizome-neutral-bg: #f4f6f7;
+  --rhizome-neutral-border: #90a4ae;
+  --rhizome-neutral-head-bg: #cfd8dc;
+  --rhizome-neutral-head-fg: #37474f;
+  --rhizome-neutral-fg: #455a64;
+}
+
+/* dark themes */
+.coal,
+.navy,
+.ayu {
+  --rhizome-neutral-bg: #1f2124;
+  --rhizome-neutral-border: #43484d;
+  --rhizome-neutral-head-bg: #2b2f33;
+  --rhizome-neutral-head-fg: #c3cbd1;
+  --rhizome-neutral-fg: #aeb6bc;
+}
+
+/* ── panel chrome ─────────────────────────────────────────────────── */
+
+.rhizome-diag {
+  /*margin: 0.9rem 0 1.4rem;*/
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9em;
+  overflow: hidden;
+}
+
+.rhizome-head {
+  padding: 0.45rem 0.8rem;
+  font-weight: 600;
+}
+
+/* not-compiled / tool-error panels */
+.rhizome-ignore,
+.rhizome-tool {
+  border-color: var(--rhizome-neutral-border);
+  background: var(--rhizome-neutral-bg);
+}
+
+.rhizome-ignore .rhizome-head,
+.rhizome-tool .rhizome-head {
+  background: var(--rhizome-neutral-head-bg);
+  color: var(--rhizome-neutral-head-fg);
+}
+
+.rhizome-tool .rhizome-msg {
+  margin: 0;
+  padding: 0.5rem 0.8rem;
+  color: var(--rhizome-neutral-fg);
+}
+
+/* ── interactive project embeds (rhizome-project) ─────────────────────── */
+
+.rhizome-project {
+  margin: 0.9rem 0 1.4rem;
+}
+
+.rhizome-project iframe {
+  display: block;
+  background: var(--quote-bg, #f4f6f7);
+  border: none !important;
+}

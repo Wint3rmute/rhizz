@@ -48,32 +48,32 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - run: nix build .#rhizz-wasm-pkg
+      - run: nix build .#rhizome-wasm-pkg
 
       # Mirrors the tail of `just wasm` (see Justfile): the derivation's
       # output is a read-only store path, so it has to be dereferenced and
       # made writable to land in the tree the artifact upload reads from.
-      # Nothing under crates/rhizz-wasm/pkg/ is committed (the pkg ships its
+      # Nothing under crates/rhizome-wasm/pkg/ is committed (the pkg ships its
       # own `*` .gitignore, so git hides it), and a fresh checkout has no such
       # directory at all — hence the mkdir rather than a plain copy.
       - run: |
-          rm -rf crates/rhizz-wasm/pkg
-          mkdir -p crates/rhizz-wasm/pkg
-          cp -rL result/. crates/rhizz-wasm/pkg/
-          chmod -R u+w crates/rhizz-wasm/pkg
+          rm -rf crates/rhizome-wasm/pkg
+          mkdir -p crates/rhizome-wasm/pkg
+          cp -rL result/. crates/rhizome-wasm/pkg/
+          chmod -R u+w crates/rhizome-wasm/pkg
 
       - uses: actions/upload-artifact@v7
         with:
-          name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          name: rhizome-wasm
+          path: crates/rhizome-wasm/pkg/
 
   # The app build, via its Nix derivation (nix/frontend.nix): the same `web/build`
-  # rhizz-server's build.rs embeds. This is the only place the real frontend is
+  # rhizome-server's build.rs embeds. This is the only place the real frontend is
   # built in CI — nothing else embeds it, so a broken build here would otherwise
   # only surface in the docker workflow.
   #
   # Runs on its own so a frontend failure is unambiguous, with no Rust
-  # toolchain in the way. `needs: wasm` so the shared rhizz-wasm-pkg
+  # toolchain in the way. `needs: wasm` so the shared rhizome-wasm-pkg
   # derivation is a cache hit rather than being built twice in parallel.
   #
   # The derivation only, for the same reason as `wasm` above — the recipe's
@@ -95,7 +95,7 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - run: nix build .#rhizz-frontend
+      - run: nix build .#rhizome-frontend
 
   lint:
     needs: wasm
@@ -113,8 +113,8 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          name: rhizome-wasm
+          path: crates/rhizome-wasm/pkg/
 
       - run: nix run .#install-web
 
@@ -157,8 +157,8 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          name: rhizome-wasm
+          path: crates/rhizome-wasm/pkg/
 
       - run: nix run .#install-web
 
@@ -183,8 +183,8 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          name: rhizome-wasm
+          path: crates/rhizome-wasm/pkg/
 
       - run: nix run .#install-web
 
@@ -223,8 +223,8 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-wasm
-          path: crates/rhizz-wasm/pkg/
+          name: rhizome-wasm
+          path: crates/rhizome-wasm/pkg/
 
       - run: nix run .#install-web
 

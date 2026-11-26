@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Annotation } from "../../../../rhizz_wasm_wrapper";
+  import type { Annotation } from "../../../../rhizome_wasm_wrapper";
   import { annotationSvgLines } from "./annotationMarkdown";
   import {
     MAX_ANNOTATION_SCALE,

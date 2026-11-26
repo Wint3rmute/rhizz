@@ -43,7 +43,7 @@ jobs:
       # the Rust toolchain (no Node/browsers/mdbook).
       - run: nix run .#lint-rust
       # Single instrumented pass: runs all tests (incl. doctests) + writes
-      # lcov + enforces the 80% line-coverage gate. rhizz-wasm is excluded
+      # lcov + enforces the 80% line-coverage gate. rhizome-wasm is excluded
       # (wasm cdylib, no host tests) and crates/*/tests are not counted as
       # source. --doctests is unstable, hence RUSTC_BOOTSTRAP=1; the cobertura
       # report is generated from the same saved data (no re-test) for when
@@ -57,8 +57,8 @@ jobs:
           path: target/coverage/lcov.info
 
   # Builds the production server through its Nix derivation (nix/backend.nix),
-  # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-frontend →
-  # rhizz-server (with the frontend embedded). The derivation brings its own
+  # which runs the whole pipeline: rhizome-wasm-pkg → rhizome-frontend →
+  # rhizome-server (with the frontend embedded). The derivation brings its own
   # toolchain, so there is no devshell. It builds in the Nix sandbox and never
   # touches the workspace target/, so there is no rust-cache step, only the
   # /nix/store cache.
@@ -70,7 +70,7 @@ jobs:
         with:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
-      - run: nix build .#rhizz-server
+      - run: nix build .#rhizome-server
 
 permissions:
   contents: read

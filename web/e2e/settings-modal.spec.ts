@@ -3,8 +3,8 @@ import { expect, test } from "@playwright/test";
 // Global settings live only in localStorage (see TransitionState,
 // ThemeState, WarningLevelState).
 const THEME_KEY = "THEME";
-const WARNING_KEY = "RHIZZ_WARNING_LEVEL";
-const TRANSITION_KEY = "RHIZZ_TRANSITION_MS";
+const WARNING_KEY = "RHIZOME_WARNING_LEVEL";
+const TRANSITION_KEY = "RHIZOME_TRANSITION_MS";
 
 test("settings modal edits global settings and persists them", async ({
   page,
@@ -76,7 +76,7 @@ test("guided tour starts from settings", async ({ page }) => {
   await expect(page.getByTestId("settings-modal")).toBeHidden();
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible({ timeout: 20000 });
-  await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
+  await expect(dialog.getByText("Welcome to Rhizome 👋")).toBeVisible();
 });
 
 test("escape dismisses the settings modal", async ({ page }) => {

@@ -27,18 +27,18 @@ describe("pageLabelForPath", () => {
 });
 
 describe("formatPageTitle", () => {
-  it("reads Rhizz: <project> - <page> on workspace pages", () => {
+  it("reads Rhizome: <project> - <page> on workspace pages", () => {
     expect(formatPageTitle("Drone", "Inventory")).toBe(
-      "Rhizz: Drone - Inventory",
+      "Rhizome: Drone - Inventory",
     );
   });
 
   it("falls back to the project when the page is unknown", () => {
-    expect(formatPageTitle("Drone", null)).toBe("Rhizz: Drone");
+    expect(formatPageTitle("Drone", null)).toBe("Rhizome: Drone");
   });
 
-  it("falls back to bare Rhizz with no project", () => {
-    expect(formatPageTitle(null, null)).toBe("Rhizz");
-    expect(formatPageTitle(null, "Inventory")).toBe("Rhizz");
+  it("falls back to bare Rhizome with no project", () => {
+    expect(formatPageTitle(null, null)).toBe("Rhizome");
+    expect(formatPageTitle(null, "Inventory")).toBe("Rhizome");
   });
 });

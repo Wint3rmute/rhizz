@@ -31,15 +31,15 @@ describe("renderMarkdown", () => {
   });
 
   it("renders links", () => {
-    const html = renderMarkdown("[rhizz](https://example.com)");
+    const html = renderMarkdown("[rhizome](https://example.com)");
     expect(html).toContain(
-      '<a target="_blank" rel="noopener" href="https://example.com">rhizz</a>',
+      '<a target="_blank" rel="noopener" href="https://example.com">rhizome</a>',
     );
   });
 
   it("opens links in a new tab", () => {
-    const html = renderMarkdown("[rhizz](https://example.com)");
-    const link = /<a [^>]*>rhizz<\/a>/.exec(html)?.[0] ?? "";
+    const html = renderMarkdown("[rhizome](https://example.com)");
+    const link = /<a [^>]*>rhizome<\/a>/.exec(html)?.[0] ?? "";
     expect(link).toContain('target="_blank"');
     expect(link).toContain('rel="noopener"');
   });
@@ -50,7 +50,7 @@ describe("renderMarkdown", () => {
   });
 
   it("keeps link titles when opening in a new tab", () => {
-    const html = renderMarkdown('[rhizz](https://example.com "home")');
+    const html = renderMarkdown('[rhizome](https://example.com "home")');
     expect(html).toContain('title="home"');
     expect(html).toContain('target="_blank"');
   });

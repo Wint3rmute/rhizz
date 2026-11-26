@@ -47,7 +47,7 @@ export function projectSlug(name: string): string {
  * A slug that is already taken by another project. The slug is the project's
  * address, so a second project claiming it would collide in the URL and in the
  * server-side `&lt;slug&gt;/` directory — refused in the store, not just in the UI
- * (and, for a network backend, again on save: rhizz-server rejects a payload
+ * (and, for a network backend, again on save: rhizome-server rejects a payload
  * with two projects at one id).
  */
 export class DuplicateProjectError extends Error {

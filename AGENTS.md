@@ -1,4 +1,4 @@
-# AI coding agents instructions for Rhizz
+# AI coding agents instructions for Rhizome
 
 When reading this file for the first time, follow introductory instructions and
 read linked documentation and spec.
@@ -8,7 +8,7 @@ start chatting with you to discuss something project-related.
 
 ## Project Overview
 
-**Rhizz** is a code-first Model-Based Systems Engineering (MBSE) tool written in
+**Rhizome** is a code-first Model-Based Systems Engineering (MBSE) tool written in
 Rust, with a frontend in Svelte. Systems are described in `.hcl` files (HCL
 syntax, same as Terraform) that can be version-controlled, diffed, and reviewed
 with or without a GUI. Read `SPEC.md` (and `SPEC/` if needed) for the full
@@ -27,7 +27,7 @@ SPEC.md              – full specification (single file)
 SPEC/                – specification split by topic (cli.md, models.md, …)
 TASKS/TODO.md        – ordered implementation tasks
 TASKS/FINISHED.md    – completed tasks (most recent first)
-book/                – the Rhizz book
+book/                – the Rhizome book
 ```
 
 ## Development Workflow
@@ -131,7 +131,7 @@ manually replayed steps — makes the bug reproducible and quickly fixable.
 - Use `anyhow::Result` for fallible functions that surface errors to the caller.
 - Prefer `thiserror` for library-facing error types when type-safe matching is
   needed.
-- Rhizz compiler diagnostics use the `Diagnostic` type with fields `code`,
+- Rhizome compiler diagnostics use the `Diagnostic` type with fields `code`,
   `file`, `line` (optional), and `message`.
   - Error codes start with `E` (blocking), warning codes start with `W`
     (non-blocking).

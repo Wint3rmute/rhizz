@@ -68,7 +68,7 @@ export async function expectInViewport(target: Locator): Promise<void> {
     .toEqual({ left: true, top: true, right: true, bottom: true });
 }
 
-const VFS_KEY = "rhizz:vfs:v1";
+const VFS_KEY = "rhizome:vfs:v1";
 
 /** Every file in the VFS, keyed by its project-relative path. */
 export async function storedFiles(page: import("@playwright/test").Page) {

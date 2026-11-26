@@ -15,7 +15,7 @@
     type ExampleProject,
     get_empty_project,
     get_example_projects,
-  } from "../rhizz_wasm_wrapper";
+  } from "../rhizome_wasm_wrapper";
   import type { Project } from "../vfs/types";
   import type { BuildInfo as BuildInfoData } from "../buildInfo";
 
@@ -179,7 +179,7 @@
       >
         <div class="card-body items-center text-center p-8 sm:p-12">
           <div class="text-5xl mb-4">🗂️</div>
-          <h1 class="text-3xl font-bold text-base-content">Rhizz</h1>
+          <h1 class="text-3xl font-bold text-base-content">Rhizome</h1>
           <p class="text-base-content py-4 max-w-xl">
             Model your system architecture and verify it. Build your system in
             an interactive diagrams editor or write it as code (or have AI write
@@ -233,7 +233,7 @@
               <div class="text-2xl mb-2">📖</div>
               <div class="font-semibold text-base-content">Read the book</div>
               <p class="text-xs text-base-content/70 mt-1">
-                A guided tour of modeling in Rhizz - from basic to advanced
+                A guided tour of modeling in Rhizome - from basic to advanced
                 concepts.
               </p>
             </a>

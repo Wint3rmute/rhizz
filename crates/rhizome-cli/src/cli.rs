@@ -1,0 +1,1176 @@
+//! Command-line interface: argument parsing, pipeline orchestration, and output
+//! formatting.
+
+use std::fs;
+use std::io::{IsTerminal, Write as _};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
+use std::time::{Duration, Instant};
+
+use anyhow::Context as _;
+use clap::{Parser, Subcommand};
+use walkdir::WalkDir;
+
+use rhizome_core::{
+    Diagnostic, DiagnosticCode, Source, WarningLevel, is_view_source, serialize_model,
+};
+
+// ── CLI argument types ───────────────────────────────────────────────────────
+
+/// MBSE model checker.
+#[derive(Parser, Debug)]
+#[command(name = "rhizome", version, about = "MBSE model checker")]
+pub struct Cli {
+    /// Subcommand to run (defaults to `build`).
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    /// Path to project directory containing .hcl files (used when no subcommand given).
+    #[arg(default_value = ".")]
+    pub path: PathBuf,
+
+    /// Treat warnings as errors.
+    #[arg(long, global = true)]
+    pub strict: bool,
+
+    /// JSON output for CI/CD.
+    #[arg(long, global = true)]
+    pub json: bool,
+
+    /// Disable colored output.
+    #[arg(long, global = true)]
+    pub no_color: bool,
+
+    /// Minimum warning level to report: `business`, `architectural`, or
+    /// `component`. Warnings are cumulative, so a lower level reports fewer of
+    /// them; errors are always reported. Ignored by `fmt`.
+    #[arg(long, global = true, value_name = "LEVEL", default_value_t = WarningLevel::Component)]
+    pub warning_level: WarningLevel,
+}
+
+/// Available subcommands.
+#[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
+pub enum Command {
+    /// Parse all .hcl files, validate, print errors/warnings.
+    Check {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Run check, then print the completion report.
+    Score {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Run check + score in sequence (default).
+    Build {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Canonically format the model .hcl files in place (or, with --check,
+    /// only verify formatting without writing).
+    Fmt {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+        /// Verify formatting without making any filesystem changes; exit
+        /// non-zero if files need formatting.
+        #[arg(long)]
+        check: bool,
+    },
+    /// Run check + score, then watch for .hcl changes and re-run.
+    Watch {
+        /// Path to project directory containing .hcl files.
+        #[arg(default_value = ".")]
+        path: PathBuf,
+    },
+    /// Serve the web editor over HTTP (frontend + VFS persistence API).
+    Web {
+        /// Address to bind the HTTP server to.
+        #[arg(long, env = "RHIZOME_ADDR", default_value = "127.0.0.1:3000")]
+        addr: String,
+        /// Directory holding one sub-directory per project.
+        #[arg(long, env = "RHIZOME_DATA_DIR", default_value = "rhizome-data")]
+        data_dir: PathBuf,
+    },
+}
+
+/// Effective command kind (without the path).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CommandKind {
+    /// Parse all .hcl files, validate, print errors/warnings.
+    Check,
+    /// Run check, then print the completion report.
+    Score,
+    /// Run check + score in sequence (default).
+    Build,
+    /// Canonically format the model .hcl files (or verify with --check).
+    Fmt,
+    /// Watch for .hcl changes and re-run Build automatically.
+    Watch,
+}
+
+impl Cli {
+    /// Returns the effective command kind and the project path.
+    const fn effective(&self) -> (CommandKind, &PathBuf) {
+        match &self.command {
+            Some(Command::Check { path }) => (CommandKind::Check, path),
+            Some(Command::Score { path }) => (CommandKind::Score, path),
+            Some(Command::Build { path }) => (CommandKind::Build, path),
+            Some(Command::Fmt { path, .. }) => (CommandKind::Fmt, path),
+            Some(Command::Watch { path }) => (CommandKind::Watch, path),
+            Some(Command::Web { .. }) | None => (CommandKind::Build, &self.path),
+        }
+    }
+}
+
+// ── I/O helpers ───────────────────────────────────────────────────────────────
+
+/// Recursively walk `dir` and return a [`Source`] for every `.hcl` file
+/// found, plus every Markdown file under a `docs/` directory (which the
+/// compiler checks for W018 by filename only — their content is loaded
+/// verbatim but never parsed).
+///
+/// Files are sorted by path so that the compilation order is deterministic.
+fn load_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
+    let mut files: Vec<PathBuf> = WalkDir::new(dir)
+        .into_iter()
+        .filter_map(std::result::Result::ok)
+        .filter(|e| {
+            if !e.file_type().is_file() {
+                return false;
+            }
+            let path = e.path();
+            if path.extension().is_some_and(|ext| ext == "hcl") {
+                return true;
+            }
+            rhizome_core::is_docs_source(&path.to_string_lossy())
+        })
+        .map(|e| e.path().to_path_buf())
+        .collect();
+    files.sort();
+
+    if !files
+        .iter()
+        .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+    {
+        anyhow::bail!("no .hcl files found in {}", dir.display());
+    }
+
+    let mut sources = Vec::new();
+    for path in &files {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("cannot read {}", path.display()))?;
+        sources.push(Source {
+            filename: path.display().to_string(),
+            content,
+        });
+    }
+    Ok(sources)
+}
+
+// ── Color helper ─────────────────────────────────────────────────────────────
+
+/// Returns `true` when ANSI colors should be used.
+fn use_color(cli: &Cli) -> bool {
+    if cli.no_color {
+        return false;
+    }
+    if std::env::var_os("NO_COLOR").is_some() {
+        return false;
+    }
+    std::io::stdout().is_terminal()
+}
+
+// ── Diagnostic formatting ────────────────────────────────────────────────────
+
+use owo_colors::OwoColorize;
+
+/// Format a single [`Diagnostic`] as a human-readable line.
+fn format_diagnostic(d: &Diagnostic, color: bool) -> String {
+    let location = match (&d.file, d.line) {
+        (Some(f), Some(l)) => format!("{}:{}", f.display(), l),
+        (Some(f), None) => format!("{}", f.display()),
+        _ => String::new(),
+    };
+
+    if !color {
+        let icon = if d.is_error() { "✗" } else { "⚠" };
+        return if location.is_empty() {
+            format!("{} {}  {}", icon, d.code, d.message)
+        } else {
+            format!("{} {}  {}  {}", icon, d.code, location, d.message)
+        };
+    }
+
+    // Colourise: red for errors, yellow for warnings.
+    if d.is_error() {
+        if location.is_empty() {
+            format!("{} {}  {}", "✗".red(), d.code.red(), d.message)
+        } else {
+            format!(
+                "{} {}  {}  {}",
+                "✗".red(),
+                d.code.red(),
+                location,
+                d.message
+            )
+        }
+    } else if location.is_empty() {
+        format!("{} {}  {}", "⚠".yellow(), d.code.yellow(), d.message)
+    } else {
+        format!(
+            "{} {}  {}  {}",
+            "⚠".yellow(),
+            d.code.yellow(),
+            location,
+            d.message
+        )
+    }
+}
+
+/// Serialise `value` as pretty JSON on stdout. If serialisation fails (which
+/// should be impossible for our output types), fall back to a minimal valid
+/// JSON error payload instead of panicking.
+fn print_json<T: serde::Serialize>(value: &T, warning_level: WarningLevel) {
+    match serde_json::to_string_pretty(value) {
+        Ok(s) => println!("{s}"),
+        Err(e) => println!(
+            "{{\"errors\": [{{\"code\": \"E000\", \"file\": \"\", \"line\": null, \"message\": \"JSON serialisation failed: {e}\"}}], \"warnings\": [], \"warning_level\": \"{warning_level}\", \"score\": null}}"
+        ),
+    }
+}
+
+/// Print the summary line, e.g. `1 error, 2 warnings — aborting (fix errors to continue)`.
+fn format_summary(errors: usize, warnings: usize, has_errors: bool) -> String {
+    let e_word = if errors == 1 { "error" } else { "errors" };
+    let w_word = if warnings == 1 { "warning" } else { "warnings" };
+    let base = format!("{errors} {e_word}, {warnings} {w_word}");
+    if has_errors {
+        format!("{base} — aborting (fix errors to continue)")
+    } else {
+        base
+    }
+}
+
+// ── JSON output types ────────────────────────────────────────────────────────
+
+/// JSON representation of a diagnostic.
+#[derive(serde::Serialize)]
+struct JsonDiagnostic {
+    /// Diagnostic code.
+    code: String,
+    /// Source file path.
+    file: String,
+    /// Source line number.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u32>,
+    /// Human-readable message.
+    message: String,
+}
+
+/// JSON representation of a category score.
+#[derive(serde::Serialize)]
+struct JsonCategoryScore {
+    /// Number of complete entities.
+    complete: usize,
+    /// Total number of entities.
+    total: usize,
+}
+
+/// JSON representation of the overall score.
+#[derive(serde::Serialize)]
+struct JsonOverallScore {
+    /// Number of complete entities.
+    complete: usize,
+    /// Total number of entities.
+    total: usize,
+    /// Percentage complete (0.0 – 100.0).
+    percent: f64,
+}
+
+/// JSON representation of the score report.
+#[derive(serde::Serialize)]
+struct JsonScore {
+    /// Project/system name.
+    system: String,
+    /// Component scoring.
+    components: JsonCategoryScore,
+    /// Port scoring.
+    ports: JsonCategoryScore,
+    /// Connection scoring.
+    connections: JsonCategoryScore,
+    /// Message scoring.
+    messages: JsonCategoryScore,
+    /// Overall scoring.
+    overall: JsonOverallScore,
+}
+
+/// Top-level JSON output object.
+#[derive(serde::Serialize)]
+struct JsonOutput {
+    /// Error diagnostics.
+    errors: Vec<JsonDiagnostic>,
+    /// Warning diagnostics.
+    warnings: Vec<JsonDiagnostic>,
+    /// Warning level the warnings were filtered to.
+    warning_level: String,
+    /// Score report (present only if check passed).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    score: Option<JsonScore>,
+}
+
+/// Convert a [`Diagnostic`] to its JSON representation.
+fn to_json_diagnostic(d: &Diagnostic) -> JsonDiagnostic {
+    JsonDiagnostic {
+        code: d.code.to_string(),
+        file: d
+            .file
+            .as_ref()
+            .map(|f| f.display().to_string())
+            .unwrap_or_default(),
+        line: d.line,
+        message: d.message.clone(),
+    }
+}
+
+// ── Pipeline ─────────────────────────────────────────────────────────────────
+
+/// Run the CLI pipeline and return the process exit code.
+fn run_pipeline(cli: &Cli, cmd: CommandKind, path: &Path, color: bool) -> i32 {
+    // ── Load sources ──────────────────────────────────────────────────────────
+    let sources = match load_sources(path) {
+        Ok(s) => s,
+        Err(e) => {
+            if cli.json {
+                let out = JsonOutput {
+                    errors: vec![JsonDiagnostic {
+                        code: "E000".to_owned(),
+                        file: String::new(),
+                        line: None,
+                        message: format!("{e:#}"),
+                    }],
+                    warnings: vec![],
+                    warning_level: cli.warning_level.to_string(),
+                    score: None,
+                };
+                print_json(&out, cli.warning_level);
+            } else {
+                let d = Diagnostic::error(DiagnosticCode::E000, format!("{e:#}"));
+                eprintln!("{}", format_diagnostic(&d, color));
+                eprintln!("{}", format_summary(1, 0, true));
+            }
+            return 1;
+        }
+    };
+
+    // ── Compile (parse + resolve + validate) ──────────────────────────────────
+    // Warnings below the requested level are dropped here, not at print time, so
+    // every downstream count (summary line, `--strict`, JSON) sees one set.
+    let result = rhizome_core::compile_with_warning_level(&sources, cli.warning_level);
+    let model = result.model;
+    let diagnostics = result.diagnostics;
+
+    let errors: Vec<&Diagnostic> = diagnostics.iter().filter(|d| d.is_error()).collect();
+    let warnings: Vec<&Diagnostic> = diagnostics.iter().filter(|d| d.is_warning()).collect();
+    let has_errors = !errors.is_empty();
+    let has_warnings = !warnings.is_empty();
+
+    // Under --strict, warnings count as errors for exit code purposes.
+    let effective_failure = has_errors || (cli.strict && has_warnings);
+
+    // ── Score (if check passed and command requires it) ────────────────────────
+    let score_report = if !has_errors && matches!(cmd, CommandKind::Score | CommandKind::Build) {
+        model.as_ref().map(rhizome_core::score)
+    } else {
+        None
+    };
+
+    // ── Output ────────────────────────────────────────────────────────────────
+    if cli.json {
+        let json_out = JsonOutput {
+            errors: errors.iter().map(|d| to_json_diagnostic(d)).collect(),
+            warnings: warnings.iter().map(|d| to_json_diagnostic(d)).collect(),
+            warning_level: cli.warning_level.to_string(),
+            score: score_report.as_ref().map(|r| JsonScore {
+                system: r.project_name.clone(),
+                components: JsonCategoryScore {
+                    complete: r.components.complete,
+                    total: r.components.total(),
+                },
+                ports: JsonCategoryScore {
+                    complete: r.ports.complete,
+                    total: r.ports.total(),
+                },
+                connections: JsonCategoryScore {
+                    complete: r.connections.complete,
+                    total: r.connections.total(),
+                },
+                messages: JsonCategoryScore {
+                    complete: r.messages.complete,
+                    total: r.messages.total(),
+                },
+                overall: JsonOverallScore {
+                    complete: r.overall_complete(),
+                    total: r.overall_total(),
+                    // Round to one decimal place for clean JSON output.
+                    percent: (r.overall_percentage() * 10.0).round() / 10.0,
+                },
+            }),
+        };
+        print_json(&json_out, cli.warning_level);
+    } else {
+        // Print diagnostics.
+        for d in &diagnostics {
+            eprintln!("{}", format_diagnostic(d, color));
+        }
+
+        // Summary line.
+        if has_errors || has_warnings {
+            eprintln!(
+                "{}",
+                format_summary(errors.len(), warnings.len(), has_errors)
+            );
+        }
+
+        // Score report.
+        if let Some(ref report) = score_report {
+            println!("{report}");
+        }
+    }
+
+    i32::from(effective_failure)
+}
+
+// ── fmt ───────────────────────────────────────────────────────────────────────
+
+/// Canonically format the system model in `project_dir` (or, with `--check`,
+/// verify it without writing).
+///
+/// Loads the project's `.hcl` files, compiles the system model, and rewrites
+/// the canonical `system.hcl` in place (atomic, will not clobber on compile
+/// errors). View files (`views/*.hcl` and legacy `views.hcl`) are ignored:
+/// `rhizome fmt` neither reads, writes, nor reformats them. Returns an exit code:
+/// 0 formatted/already-correct, 1 if `--check` found the file unformatted (or a
+/// hard error occurred).
+fn run_fmt(cli: &Cli, path: &Path, _color: bool) -> i32 {
+    let check = matches!(cli.command, Some(Command::Fmt { check: true, .. }));
+    let Some(out) = format_project(path) else {
+        eprintln!("rhizome fmt: compile failed; no files modified");
+        return 1;
+    };
+
+    let model_path = path.join("system.hcl");
+    let needs_model = read_if_absent(&model_path).is_none_or(|cur| cur != out.system);
+
+    if !needs_model {
+        if check {
+            // Already formatted.
+            return 0;
+        }
+        println!("rhizome fmt: already formatted");
+        return 0;
+    }
+
+    if check {
+        // Print a human-readable diff of the changes that would be made.
+        eprintln!("rhizome fmt: files would be reformatted:");
+        let cur = read_if_absent(&model_path).unwrap_or_default();
+        eprintln!("{}", unified_diff("system.hcl", &cur, &out.system));
+        return 1;
+    }
+
+    // Write atomically.
+    if atomic_write(&model_path, &out.system).is_err() {
+        eprintln!("rhizome fmt: cannot write {}", model_path.display());
+        return 1;
+    }
+
+    println!("rhizome fmt: 1 file reformatted (system.hcl)");
+    0
+}
+
+/// Canonical output of a project's system model.
+struct FormattedProject {
+    /// Canonical system model HCL.
+    system: String,
+}
+
+/// Compile a project's system model and produce its canonical (formatted)
+/// projection. View files are excluded from compilation entirely.
+fn format_project(path: &Path) -> Option<FormattedProject> {
+    let sources: Vec<Source> = load_sources(path)
+        .ok()?
+        .into_iter()
+        .filter(|source| !is_view_source(&source.filename))
+        .collect();
+    let result = rhizome_core::compile(&sources);
+    if result.diagnostics.iter().any(Diagnostic::is_error) || result.model.is_none() {
+        return None;
+    }
+    let model = result.model?;
+    Some(FormattedProject {
+        system: serialize_model(&model),
+    })
+}
+
+/// Atomically write `content` to `path` (temp file + rename).
+fn atomic_write(path: &Path, content: &str) -> anyhow::Result<()> {
+    let tmp = path.with_extension("hcl.tmp");
+    fs::write(&tmp, content).with_context(|| format!("write {}", tmp.display()))?;
+    fs::rename(&tmp, path).with_context(|| format!("rename {} into place", path.display()))?;
+    Ok(())
+}
+
+/// Read `path` if it exists, else `None`.
+fn read_if_absent(path: &Path) -> Option<String> {
+    fs::read_to_string(path).ok()
+}
+
+/// Build a git-style unified diff between `old` and `new` for `filename`.
+fn unified_diff(filename: &str, old: &str, new: &str) -> String {
+    similar::TextDiff::from_lines(old, new)
+        .unified_diff()
+        .header(filename, filename)
+        .to_string()
+}
+
+// ── Public entry point ────────────────────────────────────────────────────────
+
+/// Dispatch to the appropriate pipeline based on the parsed CLI command.
+#[must_use]
+pub fn run(cli: &Cli) -> i32 {
+    if let Some(Command::Web { addr, data_dir }) = &cli.command {
+        return run_web(addr, data_dir);
+    }
+
+    let color = use_color(cli);
+    let (cmd, path) = cli.effective();
+
+    if cmd == CommandKind::Watch {
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+        // Best-effort: a second call (e.g. in parallel tests) returns an error we can ignore.
+        let _ = ctrlc::set_handler(move || r.store(false, Ordering::SeqCst));
+        return run_watch(cli, path, color, &running);
+    }
+
+    if cmd == CommandKind::Fmt {
+        return run_fmt(cli, path, color);
+    }
+
+    run_pipeline(cli, cmd, path, color)
+}
+
+/// Run the HTTP server (the `rhizome web` subcommand).
+fn run_web(addr: &str, data_dir: &Path) -> i32 {
+    let runtime = match tokio::runtime::Runtime::new() {
+        Ok(runtime) => runtime,
+        Err(err) => {
+            eprintln!("failed to start tokio runtime: {err}");
+            return 1;
+        }
+    };
+
+    match runtime.block_on(rhizome_server::server::run(addr, data_dir.to_path_buf())) {
+        Ok(()) => 0,
+        Err(err) => {
+            tracing::error!(%err, "server exited with an error");
+            1
+        }
+    }
+}
+
+// ── Watch ─────────────────────────────────────────────────────────────────────
+
+/// Run the build pipeline once, then re-run it every time an `.hcl` file in
+/// `path` is created, modified, or deleted.  Exits cleanly on Ctrl-C.
+fn run_watch(cli: &Cli, path: &Path, color: bool, running: &Arc<AtomicBool>) -> i32 {
+    use notify::{RecursiveMode, Watcher};
+    // Debounce window: events arriving within this period count as one save.
+    const DEBOUNCE: Duration = Duration::from_millis(200);
+    // Poll interval used when no events arrive.
+    const POLL: Duration = Duration::from_millis(100);
+
+    if color {
+        use owo_colors::OwoColorize as _;
+        eprintln!("Watching {} for changes…", path.display().cyan());
+    } else {
+        eprintln!("Watching {} for changes…", path.display());
+    }
+
+    // Initial build.
+    run_pipeline(cli, CommandKind::Build, path, color);
+
+    // Set up the file-system watcher.
+    let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+
+    let mut watcher = match notify::recommended_watcher(tx) {
+        Ok(w) => w,
+        Err(e) => {
+            eprintln!("Error: cannot create file watcher: {e}");
+            return 1;
+        }
+    };
+    if let Err(e) = watcher.watch(path, RecursiveMode::NonRecursive) {
+        eprintln!("Error: cannot watch {}: {e}", path.display());
+        return 1;
+    }
+
+    while running.load(Ordering::SeqCst) {
+        match rx.recv_timeout(POLL) {
+            Ok(Ok(event)) if is_hcl_event(&event) => {
+                // Consume any additional events that arrive within the debounce window
+                // so a single logical save does not trigger multiple rebuilds.
+                drain_debounce(&rx, DEBOUNCE);
+                // Clear the terminal before each rebuild for a clean view.
+                // Flush stdout immediately so the clear fires before any stderr
+                // diagnostic output (stderr is unbuffered; stdout is not).
+                print!("\x1B[2J\x1B[1;1H");
+                let _ = std::io::stdout().flush();
+                run_pipeline(cli, CommandKind::Build, path, color);
+            }
+            Ok(_) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+
+    if color {
+        use owo_colors::OwoColorize as _;
+        eprintln!("{}", "Stopped watching.".dimmed());
+    } else {
+        eprintln!("Stopped watching.");
+    }
+    0
+}
+
+/// Return `true` if `event` is a create/modify/remove on an `.hcl` file.
+fn is_hcl_event(event: &notify::Event) -> bool {
+    use notify::EventKind::{Create, Modify, Remove};
+    matches!(event.kind, Create(_) | Modify(_) | Remove(_))
+        && event
+            .paths
+            .iter()
+            .any(|p| p.extension().is_some_and(|ext| ext == "hcl"))
+}
+
+/// Drain the watch receiver for `window` to batch rapid successive events.
+/// Returns the count of additional events consumed.
+fn drain_debounce(rx: &mpsc::Receiver<notify::Result<notify::Event>>, window: Duration) -> usize {
+    let Some(deadline) = Instant::now().checked_add(window) else {
+        return 0;
+    };
+    let mut count: usize = 0;
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            break;
+        }
+        match rx.recv_timeout(remaining) {
+            Ok(_) => count = count.saturating_add(1),
+            Err(_) => break,
+        }
+    }
+    count
+}
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use std::path::PathBuf;
+
+    /// Helper: path to an example directory.
+    fn example_dir(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples")
+            .join(name)
+    }
+
+    /// Helper: build a [`Cli`] from a list of string arguments.
+    fn parse_args(args: &[&str]) -> Cli {
+        let mut full = vec!["rhizome"];
+        full.extend_from_slice(args);
+        Cli::parse_from(full)
+    }
+
+    // ── diagnostic formatting ─────────────────────────────────────────────
+
+    #[test]
+    fn format_error_no_color() {
+        let d = Diagnostic::error(DiagnosticCode::E002, "test error message");
+        let out = format_diagnostic(&d, false);
+        assert!(out.contains("✗"));
+        assert!(out.contains("E002"));
+        assert!(out.contains("test error message"));
+    }
+
+    #[test]
+    fn format_warning_no_color() {
+        let d = Diagnostic::warning(DiagnosticCode::W001, "test warning");
+        let out = format_diagnostic(&d, false);
+        assert!(out.contains("⚠"));
+        assert!(out.contains("W001"));
+        assert!(out.contains("test warning"));
+    }
+
+    #[test]
+    fn format_diagnostic_with_file_and_line() {
+        let d = Diagnostic {
+            code: DiagnosticCode::E002,
+            file: Some(PathBuf::from("connections.hcl")),
+            line: Some(14),
+            message: "test message".to_owned(),
+        };
+        let out = format_diagnostic(&d, false);
+        assert!(out.contains("connections.hcl:14"));
+    }
+
+    #[test]
+    fn format_summary_with_errors() {
+        let out = format_summary(1, 2, true);
+        assert!(out.contains("1 error, 2 warnings"));
+        assert!(out.contains("aborting"));
+    }
+
+    #[test]
+    fn format_summary_no_errors() {
+        let out = format_summary(0, 3, false);
+        assert!(out.contains("0 errors, 3 warnings"));
+        assert!(!out.contains("aborting"));
+    }
+
+    // ── CLI parsing ───────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_default_command() {
+        let cli = parse_args(&["examples/drone"]);
+        assert!(cli.command.is_none());
+        assert_eq!(cli.path, PathBuf::from("examples/drone"));
+    }
+
+    #[test]
+    fn parse_build_subcommand() {
+        let cli = parse_args(&["build", "examples/drone"]);
+        assert!(
+            matches!(cli.command, Some(Command::Build { .. })),
+            "expected Build subcommand"
+        );
+    }
+
+    #[test]
+    fn parse_check_subcommand_with_strict() {
+        let cli = parse_args(&["check", "examples/drone", "--strict"]);
+        assert!(matches!(cli.command, Some(Command::Check { .. })));
+        assert!(cli.strict);
+    }
+
+    #[test]
+    fn parse_fmt_subcommand() {
+        let cli = parse_args(&["fmt", "examples/drone"]);
+        assert!(matches!(
+            cli.command,
+            Some(Command::Fmt { check: false, .. })
+        ));
+        assert!(
+            matches!(cli.command, Some(Command::Fmt { .. })),
+            "expected Fmt subcommand"
+        );
+    }
+
+    #[test]
+    fn parse_fmt_check_flag() {
+        let cli = parse_args(&["fmt", "examples/drone", "--check"]);
+        assert!(matches!(
+            cli.command,
+            Some(Command::Fmt { check: true, .. })
+        ));
+    }
+
+    #[test]
+    fn parse_json_flag() {
+        let cli = parse_args(&["--json", "examples/drone"]);
+        assert!(cli.json);
+    }
+
+    #[test]
+    fn parse_web_subcommand() {
+        let cli = parse_args(&["web"]);
+        let Some(Command::Web { addr, data_dir }) = &cli.command else {
+            panic!("expected Web subcommand");
+        };
+        assert_eq!(addr, "127.0.0.1:3000");
+        assert_eq!(data_dir, &PathBuf::from("rhizome-data"));
+
+        let cli = parse_args(&["web", "--addr", "0.0.0.0:8080", "--data-dir", "/data"]);
+        let Some(Command::Web { addr, data_dir }) = &cli.command else {
+            panic!("expected Web subcommand");
+        };
+        assert_eq!(addr, "0.0.0.0:8080");
+        assert_eq!(data_dir, &PathBuf::from("/data"));
+    }
+
+    // ── pipeline (unit-level) ─────────────────────────────────────────────
+
+    #[test]
+    fn run_build_examples_exit_0() {
+        // Table-driven consolidation of the former run_build_{drone,
+        // social_media, software_house}_exit_0 tests: same build + exit 0
+        // assertion, only the example name differs.
+        for example in ["drone", "social-media", "software-house"] {
+            let cli = parse_args(&[
+                "build",
+                example_dir(example).to_str().unwrap(),
+                "--no-color",
+            ]);
+            let code = run(&cli);
+            assert_eq!(code, 0, "{example} build should exit 0");
+        }
+    }
+
+    #[test]
+    fn run_check_drone_exit_0() {
+        let cli = parse_args(&[
+            "check",
+            example_dir("drone").to_str().unwrap(),
+            "--no-color",
+        ]);
+        let code = run(&cli);
+        assert_eq!(code, 0, "drone check should exit 0 (warnings only)");
+    }
+
+    #[test]
+    fn run_strict_drone_exit_1() {
+        let cli = parse_args(&[
+            "check",
+            example_dir("drone").to_str().unwrap(),
+            "--strict",
+            "--no-color",
+        ]);
+        let code = run(&cli);
+        assert_eq!(code, 1, "drone check --strict should exit 1 (has warnings)");
+    }
+
+    #[test]
+    fn run_invalid_path_exit_1() {
+        let cli = parse_args(&[
+            "check",
+            "/nonexistent/path/that/does/not/exist",
+            "--no-color",
+        ]);
+        let code = run(&cli);
+        assert_eq!(code, 1, "invalid path should exit 1");
+    }
+
+    // ── warning levels ────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_warning_level_defaults_to_component() {
+        let cli = parse_args(&["examples/drone"]);
+        assert_eq!(cli.warning_level, WarningLevel::Component);
+    }
+
+    #[test]
+    fn parse_warning_level_accepts_every_level() {
+        for level in WarningLevel::ALL {
+            let level_arg = level.to_string();
+            let cli = parse_args(&["check", "examples/drone", "--warning-level", &level_arg]);
+            assert_eq!(cli.warning_level, level, "--warning-level {level_arg}");
+        }
+    }
+
+    #[test]
+    fn parse_warning_level_rejects_unknown_level() {
+        let result = Cli::try_parse_from(["rhizome", "check", "--warning-level", "verbose", "."]);
+        assert!(
+            result.is_err(),
+            "an unknown warning level must be rejected at parse time"
+        );
+    }
+
+    /// Writes `hcl` as the only `system.hcl` of a fresh temporary project.
+    fn project_with_system_hcl(hcl: &str) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("system.hcl"), hcl).expect("write system.hcl");
+        dir
+    }
+
+    /// Runs `check --strict` at `level`; warnings alone decide the exit code.
+    fn check_strict_at(dir: &Path, level: WarningLevel) -> i32 {
+        let level_arg = level.to_string();
+        let cli = parse_args(&[
+            "check",
+            dir.to_str().expect("test paths are UTF-8"),
+            "--strict",
+            "--no-color",
+            "--warning-level",
+            &level_arg,
+        ]);
+        run(&cli)
+    }
+
+    /// Raises exactly one architectural warning: W003 for the unwired instance.
+    const ARCHITECTURAL_ONLY: &str = r#"component "c" {
+  leaf        = true
+  full_name = "d"
+}
+
+system "s" {
+  full_name = "d"
+  instance "i" { source = "c" }
+}
+"#;
+
+    /// Raises only component-level warnings: a protocol without messages
+    /// (W011). Both instances are wired, so no W003. The connection names
+    /// ports on a leaf protocol with matching protocols, so it is complete
+    /// and raises no architectural W019.
+    const COMPONENT_ONLY: &str = r#"protocol "bus" {
+  full_name = "d"
+  leaf      = true
+}
+
+component "c" {
+  full_name = "d"
+  leaf        = true
+
+  port "p" {
+    protocol = "bus"
+    role     = "r"
+  }
+}
+
+system "s" {
+  full_name = "d"
+
+  instance "i" { source = "c" }
+  instance "j" { source = "c" }
+
+  connection "l" {
+    full_name = "d"
+    from        = "i/p"
+    to          = "j/p"
+  }
+}
+"#;
+
+    #[test]
+    fn business_level_suppresses_everything_below_it() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Business),
+            0,
+            "business level must hide W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Business),
+            0,
+            "business level must hide W011"
+        );
+    }
+
+    #[test]
+    fn architectural_level_reports_architectural_but_not_component_warnings() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Architectural),
+            1,
+            "architectural level must report W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Architectural),
+            0,
+            "architectural level must hide W011"
+        );
+    }
+
+    #[test]
+    fn component_level_reports_every_warning() {
+        let architectural = project_with_system_hcl(ARCHITECTURAL_ONLY);
+        let component = project_with_system_hcl(COMPONENT_ONLY);
+        assert_eq!(
+            check_strict_at(architectural.path(), WarningLevel::Component),
+            1,
+            "component level must report W003"
+        );
+        assert_eq!(
+            check_strict_at(component.path(), WarningLevel::Component),
+            1,
+            "component level must report W011"
+        );
+    }
+
+    #[test]
+    fn errors_are_reported_regardless_of_warning_level() {
+        let dir = project_with_system_hcl(
+            "system \"s\" {\n  instance \"a\" {\n    source = \"missing\"\n  }\n}\n",
+        );
+        for level in WarningLevel::ALL {
+            assert_eq!(
+                check_strict_at(dir.path(), level),
+                1,
+                "E014 must survive the {level} warning level"
+            );
+        }
+    }
+
+    // ── fmt command ───────────────────────────────────────────────────────
+
+    /// Write a minimal project into a temp dir (system.hcl with messy
+    /// whitespace) and return its path.
+    fn messy_project() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "project {\n  name = \"fmt-test\"\n}\n\nprotocol \"sig\" {\n  \n  full_name = \"x\"\n}\n\n\ncomponent \"a\" {\n  \t\tleaf = true\nfull_name = \"A\"\n}\n",
+        )
+        .expect("write messy system.hcl");
+        dir
+    }
+
+    #[test]
+    fn fmt_check_no_op_when_already_formatted() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        // This is the canonical output of serializer for a minimal project
+        // (note the aligned `name    =`). An already-formatted project must
+        // make `--check` exit 0.
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "project {\n  name    = \"fmt-test\"\n}\n",
+        )
+        .expect("write clean system.hcl");
+        std::fs::write(dir.path().join("views.hcl"), "").expect("write empty views.hcl");
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        // Should not fail (exit 0) because the input is already canonical.
+        let code = run(&cli);
+        assert_eq!(code, 0, "--check on formatted project should exit 0");
+    }
+
+    #[test]
+    fn fmt_check_detects_messy_and_formats() {
+        let dir = messy_project();
+        let check_cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        let code = run(&check_cli);
+        assert_eq!(code, 1, "--check should fail on messy formatting");
+
+        // Now actually format.
+        let fmt_cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        let code = run(&fmt_cli);
+        assert_eq!(code, 0, "fmt should exit 0 after writing");
+
+        // And check should pass now.
+        let check_cli2 =
+            parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        assert_eq!(run(&check_cli2), 0, "--check should pass after formatting");
+
+        // The canonical file should round-trip: reformatting is idempotent.
+        let again = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        assert_eq!(run(&again), 0);
+        let check3 = parse_args(&["fmt", dir.path().to_str().unwrap(), "--check", "--no-color"]);
+        assert_eq!(run(&check3), 0, "second check after second fmt stays clean");
+    }
+
+    #[test]
+    fn fmt_does_not_write_on_compile_error() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::write(dir.path().join("system.hcl"), "this is not hcl").expect("write broken hcl");
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        let code = run(&cli);
+        assert_eq!(code, 1, "fmt on compile error should exit 1");
+        // No views.hcl should have been created (fmt refuses on errors).
+        assert!(
+            !dir.path().join("views.hcl").exists(),
+            "views.hcl should not be created"
+        );
+    }
+
+    #[test]
+    fn fmt_ignores_view_files() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        std::fs::create_dir_all(dir.path().join("views")).expect("mkdir views");
+        // A diagram file holding two views would fail compilation, but `fmt`
+        // must ignore view files entirely.
+        let diagram = "view \"a\" { system = \"s\" }\nview \"b\" { system = \"s\" }\n";
+        std::fs::write(dir.path().join("views/overview.hcl"), diagram).expect("write diagram");
+        std::fs::write(
+            dir.path().join("system.hcl"),
+            "system \"s\" { full_name = \"d\" }\n",
+        )
+        .expect("write system");
+
+        let cli = parse_args(&["fmt", dir.path().to_str().unwrap(), "--no-color"]);
+        assert_eq!(
+            run(&cli),
+            0,
+            "fmt must succeed despite an invalid view file"
+        );
+        assert!(
+            !dir.path().join("views.hcl").exists(),
+            "fmt must not create views.hcl"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("views/overview.hcl")).unwrap(),
+            diagram,
+            "fmt must not touch diagram files"
+        );
+    }
+
+    // ── watch command ─────────────────────────────────────────────────────
+
+    #[test]
+    fn parse_watch_subcommand() {
+        let cli = parse_args(&["watch", "examples/drone"]);
+        assert!(
+            matches!(cli.command, Some(Command::Watch { .. })),
+            "expected Watch subcommand"
+        );
+    }
+
+    #[test]
+    fn debounce_drains_rapid_events() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+
+        // Pre-fill the channel with 5 events before the window starts.
+        for _ in 0..5 {
+            tx.send(Ok(notify::Event::new(notify::EventKind::Any)))
+                .unwrap();
+        }
+        drop(tx); // close sender so recv_timeout returns Disconnected when empty
+
+        let drained = drain_debounce(&rx, Duration::from_millis(50));
+        assert_eq!(drained, 5, "all 5 rapid events should be consumed");
+        assert!(
+            rx.try_recv().is_err(),
+            "channel should be empty after drain"
+        );
+    }
+
+    #[test]
+    fn debounce_does_not_block_past_window() {
+        use std::sync::mpsc;
+        use std::time::{Duration, Instant};
+
+        // Empty channel — drain should return promptly after the window.
+        let (_tx, rx) = mpsc::channel::<notify::Result<notify::Event>>();
+        let start = Instant::now();
+        let drained = drain_debounce(&rx, Duration::from_millis(50));
+        let elapsed = start.elapsed();
+
+        assert_eq!(drained, 0, "nothing to drain");
+        // Should exit in roughly the window duration (allow generous slack).
+        assert!(
+            elapsed < Duration::from_millis(500),
+            "drain took too long: {elapsed:?}"
+        );
+    }
+}

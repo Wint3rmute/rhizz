@@ -13,7 +13,7 @@ import { createFromExample, skipTourIfPresent } from "./helpers";
 // loss is in the layout projection, not in any backend, so the guard needs no
 // server. What a server-backed run adds is only visibility: there the change
 // lands in real, git-tracked files.
-const VFS_KEY = "rhizz:vfs:v1";
+const VFS_KEY = "rhizome:vfs:v1";
 
 /** Every file in the VFS, keyed by its project-relative path. */
 async function storedFiles(page: import("@playwright/test").Page) {

@@ -16,7 +16,7 @@ export const sveltekitConfig: Config = {
   adapter: adapter({ fallback: "404.html" }),
   paths: {
     // BASE_PATH is set when the app is served under a sub-path (see
-    // rhizz-server); a dev server is always mounted at the root.
+    // rhizome-server); a dev server is always mounted at the root.
     base: process.argv.includes("dev") ? "" : process.env.BASE_PATH,
   },
 };

@@ -8,7 +8,7 @@ export function postExampleHeight(element: HTMLElement | null): void {
   if (element === null || typeof window === "undefined") return;
   if (window.parent === window) return;
   window.parent.postMessage(
-    { source: "rhizz-book-example", height: element.offsetHeight },
+    { source: "rhizome-book-example", height: element.offsetHeight },
     "*",
   );
 }

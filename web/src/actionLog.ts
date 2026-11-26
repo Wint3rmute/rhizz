@@ -8,7 +8,7 @@
 // report becomes a reproduction: copy the console block into a `*.test.ts`,
 // run it, and the failing state is rebuilt deterministically.
 //
-// The `ModelAction` union mirrors rhizz-core's `LoggedAction` variant for
+// The `ModelAction` union mirrors rhizome-core's `LoggedAction` variant for
 // variant — Rust owns the write path (`applyModelMutation` → `apply_model_op`)
 // and reports what it did, so a variant here that Rust never emits would be
 // dead weight.
@@ -50,7 +50,7 @@ export interface SystemPatch {
 // Address of one connection: the container it is visible in plus its label.
 // `scopePath` follows the connection ops: a system label,
 // an instance path (`banking/bank-a`) or a top-level definition label. Rust
-// writes it as `ConnectionRef` in rhizz-core `model.rs`.
+// writes it as `ConnectionRef` in rhizome-core `model.rs`.
 export interface ConnectionRef {
   scopePath: string;
   label: string;
@@ -328,7 +328,7 @@ export function asTestScript(
   const baseline = opts.baselineHcl ?? "";
   const lines: string[] = [
     `import { beforeAll, describe, expect, it } from "vitest";`,
-    `import init from "rhizz";`,
+    `import init from "rhizome";`,
     `import * as nodeFs from "node:fs/promises";`,
     `import * as nodePath from "node:path";`,
     `import { applyModelMutation } from "./history/applyMutation";`,
@@ -336,7 +336,7 @@ export function asTestScript(
     `beforeAll(async () => {`,
     `  const wasmPath = nodePath.resolve(`,
     `    __dirname,`,
-    `    "../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",`,
+    `    "../../crates/rhizome-wasm/pkg/rhizome_wasm_bg.wasm",`,
     `  );`,
     `  const buffer = await nodeFs.readFile(wasmPath);`,
     `  await init({ module_or_path: buffer });`,

@@ -1,9 +1,9 @@
 ---
 name: steward
-description: Conventions for driving a Rhizz PR to green after it is opened - CI fixes, review comments, changelog and shallow-clone gotchas.
+description: Conventions for driving a Rhizome PR to green after it is opened - CI fixes, review comments, changelog and shallow-clone gotchas.
 ---
 
-# Stewarding a Rhizz PR
+# Stewarding a Rhizome PR
 
 Applies on top of `AGENTS.md`; that file's workflow still holds.
 

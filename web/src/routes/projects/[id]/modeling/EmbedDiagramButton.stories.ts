@@ -31,7 +31,7 @@ export const Disabled: Story = {
 
 export const PinnedBaseUrl: Story = {
   args: {
-    baseUrl: "https://rhizz.example.dev",
+    baseUrl: "https://rhizome.example.dev",
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
@@ -49,7 +49,7 @@ export const PinnedBaseUrl: Story = {
     // <input>, since the iframe <textarea> value starts with `<iframe`
     // instead. `getByDisplayValue` throws if absent.
     canvas.getByDisplayValue(
-      /^https:\/\/rhizz\.example\.dev\/(?:.*\/)?projects\/demo-project\/embed\/overview\.hcl$/,
+      /^https:\/\/rhizome\.example\.dev\/(?:.*\/)?projects\/demo-project\/embed\/overview\.hcl$/,
     );
   },
 };

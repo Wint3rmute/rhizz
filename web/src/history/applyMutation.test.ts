@@ -1,10 +1,10 @@
-import init from "rhizz";
+import init from "rhizome";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { subscribeToMutations } from "../mutationObserver";
 import type { ModelAction } from "../actionLog";
-import { compile_system } from "../rhizz_wasm_wrapper";
+import { compile_system } from "../rhizome_wasm_wrapper";
 import {
   applyModelMutation,
   checkModelMutation,
@@ -14,7 +14,7 @@ import {
 beforeAll(async () => {
   const wasmPath = path.resolve(
     __dirname,
-    "../../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",
+    "../../../crates/rhizome-wasm/pkg/rhizome_wasm_bg.wasm",
   );
   const buffer = await fs.readFile(wasmPath);
   await init({ module_or_path: buffer });

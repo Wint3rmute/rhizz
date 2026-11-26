@@ -1,7 +1,7 @@
 // Force-directed auto-layout for the diagrams canvas (web/src/routes/
 // views/ModelingPage.svelte). Deliberately has zero Svelte/DOM dependency —
 // and, per TASKS/FINISHED.md Task 50's explicit constraint, zero dependency on
-// `rhizz-wasm`/`rhizz-core` types — so it can be unit tested directly
+// `rhizome-wasm`/`rhizome-core` types — so it can be unit tested directly
 // (see forceLayout.test.ts) and stays a pure "diagram data model"
 // concern, not a domain-model one. Named forceLayout.ts rather than
 // layout.ts to avoid colliding with SvelteKit's reserved `+layout.ts`

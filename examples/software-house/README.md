@@ -5,7 +5,7 @@ processes are interfaces.
 
 ## What it demonstrates
 
-- **rhizz beyond tech systems** — shows that rhizz can model any hierarchical
+- **rhizome beyond tech systems** — shows that rhizome can model any hierarchical
   system with interactions, not just hardware or software
 - **Departments as components** — Engineering, Product, QA, Sales, and
   Operations, each decomposed into teams

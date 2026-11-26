@@ -27,7 +27,7 @@ export default {
     config.server.fs = config.server.fs || {};
     config.server.fs.allow = [
       ...(config.server.fs.allow || ["."]),
-      "../crates/rhizz-wasm/pkg",
+      "../crates/rhizome-wasm/pkg",
     ];
     // `$app/paths` reads a `__SVELTEKIT_PAYLOAD__` global that SvelteKit's
     // compile plugin normally supplies via Vite's `define` — and that plugin is

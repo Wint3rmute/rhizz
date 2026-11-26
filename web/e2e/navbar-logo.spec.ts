@@ -1,16 +1,16 @@
 import { expect, test } from "@playwright/test";
 
-// The navbar brand is the logo mark followed by the "Rhizz" wordmark. The
+// The navbar brand is the logo mark followed by the "Rhizome" wordmark. The
 // mark is a mask over currentColor, so what matters here is placement (left
 // of the text, vertically aligned with it) and that it takes the text colour
 // in both themes rather than staying black on a dark navbar.
 
-test("navbar shows the logo left of the Rhizz text, aligned with it", async ({
+test("navbar shows the logo left of the Rhizome text, aligned with it", async ({
   page,
 }) => {
   await page.goto("/");
   const logo = page.getByTestId("navbar-logo");
-  const brand = page.getByRole("link", { name: "Rhizz", exact: true });
+  const brand = page.getByRole("link", { name: "Rhizome", exact: true });
   await expect(logo).toBeVisible();
 
   const logoBox = await logo.boundingBox();
@@ -22,7 +22,8 @@ test("navbar shows the logo left of the Rhizz text, aligned with it", async ({
   const textBox = await brand.evaluate((el) => {
     const range = document.createRange();
     const text = [...el.childNodes].find(
-      (n) => n.nodeType === Node.TEXT_NODE && n.textContent?.trim() === "Rhizz",
+      (n) =>
+        n.nodeType === Node.TEXT_NODE && n.textContent?.trim() === "Rhizome",
     );
     if (!text) throw new Error("wordmark text node missing");
     range.selectNodeContents(text);

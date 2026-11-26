@@ -17,11 +17,11 @@ import {
   DEFAULT_WARNING_LEVEL,
   WARNING_LEVELS,
   type WarningLevel,
-} from "./rhizz_wasm_wrapper";
+} from "./rhizome_wasm_wrapper";
 import { safeGetItem, safeSetItem } from "./safeStorage";
 
 /** localStorage key holding the JSON-encoded warning level. */
-export const WARNING_LEVEL_STORAGE_KEY = "RHIZZ_WARNING_LEVEL";
+export const WARNING_LEVEL_STORAGE_KEY = "RHIZOME_WARNING_LEVEL";
 
 /** Narrows an arbitrary string to a known `WarningLevel`, or `null`. */
 export function parseWarningLevel(value: string | null): WarningLevel | null {

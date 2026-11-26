@@ -2,7 +2,7 @@
 
 [Introduction](intro.md)
 
-- [Basics of Rhizz Syntax](01_basics.md)
+- [Basics of Rhizome Syntax](01_basics.md)
 - [Introduction to Views](02_views_intro.md)
 - [Connections & Ports](03_connections_ports.md)
 - [Warnings & Errors](04_warnings_errors.md)
@@ -16,7 +16,7 @@
 
 - [Index](proposals/README.md)
 - [Template](proposals/0000-template.md)
-- [0001 Rhizz v0.6 Baseline](proposals/0001-baseline.md)
+- [0001 Rhizome v0.6 Baseline](proposals/0001-baseline.md)
 - [0002 Protocol Modeling](proposals/0002-protocol-modeling.md)
 - [0003 MCP Introduction](proposals/0003-mcp-introduction.md)
 - [0004 Locking and Collaboration](proposals/0004-locking-and-collab.md)

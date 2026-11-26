@@ -480,7 +480,7 @@ test("the navbar's button opens the palette", async ({ page }) => {
 test("no project open means no palette", async ({ page }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("link", { name: "Rhizz", exact: true }),
+    page.getByRole("link", { name: "Rhizome", exact: true }),
   ).toBeVisible();
   await page.keyboard.press("Control+p");
   await expect(page.getByTestId(PALETTE)).toHaveCount(0);

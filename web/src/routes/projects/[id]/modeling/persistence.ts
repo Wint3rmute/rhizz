@@ -1,8 +1,8 @@
 // Schema + projection for the diagram data persisted into the active
 // project's VFS (web/src/routes/projects/[id]/modeling/ModelingPage.svelte's
 // `checked`).
-// Converts views to/from canonical HCL using rhizz-core's `serialize_views`
-// and `parse_views` (backed by hcl-rs). rhizz-core owns parsing and view
+// Converts views to/from canonical HCL using rhizome-core's `serialize_views`
+// and `parse_views` (backed by hcl-rs). rhizome-core owns parsing and view
 // validation, so this module only projects `ViewDefinition` to/from the
 // canvas shape.
 import { type Dirent, type ProjectFs, VfsError } from "../../../../vfs/fs";
@@ -14,7 +14,7 @@ import {
   serialize_views,
   type ViewDefinition,
   type ViewFilterDefinition,
-} from "../../../../rhizz_wasm_wrapper";
+} from "../../../../rhizome_wasm_wrapper";
 import type { Box, ConnectionSide, PortSpot, TextAlign } from "./geometry";
 
 // Re-export the canvas's alignment/side unions so persistence consumers share
@@ -186,7 +186,7 @@ export function viewPathTaken(
 }
 
 /**
- * Converts a DiagramLayout into a canonical HCL view block using rhizz-core's `serialize_views`.
+ * Converts a DiagramLayout into a canonical HCL view block using rhizome-core's `serialize_views`.
  */
 export function layoutToHcl(
   layout: DiagramLayout,
@@ -361,7 +361,7 @@ export async function writeDiagramLayoutFile(
   const hclContent = layoutToHcl(layout, viewName, systemName);
   const annotationBlocks = (hclContent.match(/annotation \{/g) ?? []).length;
   // Data-loss guard: if annotations exist in memory but the compiled wasm
-  // serializer emitted none, the wasm pkg (crates/rhizz-wasm/pkg, a gitignored
+  // serializer emitted none, the wasm pkg (crates/rhizome-wasm/pkg, a gitignored
   // build artifact) is stale and would silently erase annotations from disk.
   // Abort the write loudly instead of overwriting the file.
   const layoutAnnotationCount = layout.annotations?.length ?? 0;
@@ -370,8 +370,8 @@ export async function writeDiagramLayoutFile(
       `[PERSIST] DATALOSS-GUARD: ${String(
         layoutAnnotationCount,
       )} annotation(s) in memory ` +
-        `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
-        `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
+        `but 0 serialized into ${path}. The compiled rhizome wasm pkg is STALE — ` +
+        `rebuild it (wasm-pack build crates/rhizome-wasm --target web --release or ` +
         `\`just build\`), then restart the dev server and hard-refresh the browser.`,
     );
   }
@@ -388,8 +388,8 @@ export async function writeDiagramLayoutFile(
       `[PERSIST] DATALOSS-GUARD: ${String(
         layoutPortCount,
       )} port spot(s) in memory ` +
-        `but 0 serialized into ${path}. The compiled rhizz wasm pkg is STALE — ` +
-        `rebuild it (wasm-pack build crates/rhizz-wasm --target web --release or ` +
+        `but 0 serialized into ${path}. The compiled rhizome wasm pkg is STALE — ` +
+        `rebuild it (wasm-pack build crates/rhizome-wasm --target web --release or ` +
         `\`just build\`), then restart the dev server and hard-refresh the browser.`,
     );
   }

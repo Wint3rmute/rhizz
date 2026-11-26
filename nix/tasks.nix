@@ -25,7 +25,7 @@ let
   playwrightEnv = ''
     export PLAYWRIGHT_BROWSERS_PATH="${browsers}"
     export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-    export RHIZZ_VRT_FONTCONFIG_FILE="${fontsConf}"
+    export RHIZOME_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
 
   # Shared body of the landing-hero pipeline (`assets` + the tail of
@@ -288,8 +288,8 @@ let
         export RUSTC_BOOTSTRAP=1
         export LLVM_COV="${pkgs.llvmPackages_23.llvm}/bin/llvm-cov"
         export LLVM_PROFDATA="${pkgs.llvmPackages_23.llvm}/bin/llvm-profdata"
-        ${pkgs.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizz-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
-        exec ${pkgs.cargo}/bin/cargo llvm-cov report -p rhizz-core -p rhizz-cli -p rhizz-server -p rhizz-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
+        ${pkgs.cargo}/bin/cargo llvm-cov --workspace --all-features --exclude rhizome-wasm --ignore-filename-regex "crates/.*/tests/" --doctests --fail-under-lines 80 --lcov --output-path target/coverage/lcov.info
+        exec ${pkgs.cargo}/bin/cargo llvm-cov report -p rhizome-core -p rhizome-cli -p rhizome-server -p rhizome-book --ignore-filename-regex "crates/.*/tests/" --cobertura --output-path target/coverage/cobertura.xml
       '';
     };
 
@@ -311,7 +311,7 @@ let
       runtimeInputs = taskInputs.book;
       text = ''
         set -euo pipefail
-        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
+        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizome-book
         exec ${pkgs.mdbook}/bin/mdbook build book
       '';
     };
@@ -321,7 +321,7 @@ let
       runtimeInputs = taskInputs."book-accept";
       text = ''
         set -euo pipefail
-        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizz-book
+        ${pkgs.cargo}/bin/cargo build --quiet --bin rhizome-book
         export BOOKLOCK_ACCEPT_CHANGES=1
         exec ${pkgs.mdbook}/bin/mdbook build book
       '';
@@ -378,12 +378,12 @@ let
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
         INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
         BG="web/assets/landing-gradient.jpg"
-        OUTPUT="book/src/rhizz_landing.png"
+        OUTPUT="book/src/rhizome_landing.png"
       '' + landingLib;
     };
 
     # Regenerates every declaratively generated graphic:
-    #   - the README/book landing hero (book/src/rhizz_landing.png), from a
+    #   - the README/book landing hero (book/src/rhizome_landing.png), from a
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
     #   - the logo SVGs (logo/renders/molecule/: mark, lockup and construction
@@ -399,7 +399,7 @@ let
         echo "== landing hero"
         INPUT="''${1:-web/vrt/__screenshots__/pages-projects--empty-landing--light.png}"
         BG="web/assets/landing-gradient.jpg"
-        OUTPUT="book/src/rhizz_landing.png"
+        OUTPUT="book/src/rhizome_landing.png"
       '' + landingLib + ''
 
         echo "== logo"
@@ -429,15 +429,15 @@ let
         OUTDIR=$(mktemp -d)
         INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
         BG="web/assets/landing-gradient.jpg"
-        OUTPUT="$OUTDIR/rhizz_landing.png"
+        OUTPUT="$OUTDIR/rhizome_landing.png"
       '' + landingLib + ''
         # landingLib installed its own EXIT trap; replace it with one for both dirs.
         trap 'rm -rf "$TMPDIR" "$OUTDIR"' EXIT
         # ImageMagick 7 prints "<count> (<fraction>)", e.g. "0 (0)"; keep the count.
-        diff_px=$(magick compare -metric AE "$OUTPUT" book/src/rhizz_landing.png null: 2>&1 || true)
+        diff_px=$(magick compare -metric AE "$OUTPUT" book/src/rhizome_landing.png null: 2>&1 || true)
         diff_px=''${diff_px%% *}
         if [ "$diff_px" != "0" ]; then
-          echo "book/src/rhizz_landing.png is out of date ($diff_px differing pixels)" >&2
+          echo "book/src/rhizome_landing.png is out of date ($diff_px differing pixels)" >&2
           stale=1
         fi
 
@@ -536,8 +536,8 @@ let
       runtimeInputs = taskInputs.serve;
       text = ''
         set -euo pipefail
-        ${pkgs.cargo}/bin/cargo build --release -p rhizz-cli
-        RHIZZ_DATA_DIR=examples exec ${pkgs.cargo}/bin/cargo run --release -p rhizz-cli -- web
+        ${pkgs.cargo}/bin/cargo build --release -p rhizome-cli
+        RHIZOME_DATA_DIR=examples exec ${pkgs.cargo}/bin/cargo run --release -p rhizome-cli -- web
       '';
     };
   };

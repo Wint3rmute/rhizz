@@ -94,7 +94,7 @@
 
   let project = $derived(getCurrentProject());
 
-  // Browser tab: "Rhizz: <project> - <page>", reactive to navigation and
+  // Browser tab: "Rhizome: <project> - <page>", reactive to navigation and
   // renames. Falls back to the static <title> in app.html off project pages.
   let tabTitle = $derived(
     formatPageTitle(project?.name ?? null, pageLabelForPath(page.url.pathname)),

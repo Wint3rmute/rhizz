@@ -6,7 +6,7 @@
 
 ## Motivation
 
-Rhizz can describe connections between components and define reusable protocol
+Rhizome can describe connections between components and define reusable protocol
 schemas, but it cannot express whether a connection has been modeled down to a
 sufficiently concrete level.
 

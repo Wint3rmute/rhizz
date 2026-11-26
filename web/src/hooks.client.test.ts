@@ -53,10 +53,10 @@ vi.mock("@sentry/sveltekit", () => mocks.sentry);
 // lines it printed (joined the way the browser would show them) alongside the
 // ordered call log the Sentry mock recorded.
 async function loadHooks(env: {
-  VITE_RHIZZ_DEPLOYMENT?: string;
+  VITE_RHIZOME_DEPLOYMENT?: string;
 }): Promise<{ lines: string[]; calls: string[]; options: unknown }> {
   vi.resetModules();
-  vi.stubEnv("VITE_RHIZZ_DEPLOYMENT", env.VITE_RHIZZ_DEPLOYMENT);
+  vi.stubEnv("VITE_RHIZOME_DEPLOYMENT", env.VITE_RHIZOME_DEPLOYMENT);
   mocks.calls.length = 0;
   mocks.initOptions.length = 0;
   mocks.sentry.init.mockClear();
@@ -98,8 +98,8 @@ function initConfig(options: unknown): Record<string, unknown> {
   return options as Record<string, unknown>;
 }
 
-const prod = { VITE_RHIZZ_DEPLOYMENT: "prod" };
-const dev = { VITE_RHIZZ_DEPLOYMENT: "dev" };
+const prod = { VITE_RHIZOME_DEPLOYMENT: "prod" };
+const dev = { VITE_RHIZOME_DEPLOYMENT: "dev" };
 
 afterEach(() => {
   vi.unstubAllEnvs();

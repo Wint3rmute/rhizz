@@ -25,7 +25,7 @@ export const Commit: Story = {
   args: { buildInfo: { git_sha: "07265fb" } },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const link = canvas.getByRole("link", { name: /rhizz build 07265fb/ });
+    const link = canvas.getByRole("link", { name: /rhizome build 07265fb/ });
     await expect(link).toHaveAttribute(
       "href",
       "https://github.com/Wint3rmute/rhizz/commit/07265fb",
@@ -39,7 +39,7 @@ export const Tagged: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole("link", {
-      name: /rhizz build 0\.10\.0 \(a37bd15\)/,
+      name: /rhizome build 0\.10\.0 \(a37bd15\)/,
     });
     await expect(link).toHaveAttribute(
       "href",
@@ -55,6 +55,6 @@ export const Hidden: Story = {
   args: { buildInfo: null },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.queryByText(/rhizz build/)).toBeNull();
+    await expect(canvas.queryByText(/rhizome build/)).toBeNull();
   },
 };

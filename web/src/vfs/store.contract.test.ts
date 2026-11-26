@@ -559,7 +559,7 @@ function makeTestClock(): () => string {
   return () => new Date(2024, 0, 1, 0, 0, 0, counter++).toISOString();
 }
 
-// A fake rhizz-server over fetch: keeps one in-memory data dir behind the
+// A fake rhizome-server over fetch: keeps one in-memory data dir behind the
 // per-project protocol (`GET /api/vfs`, `PUT .../files`, `DELETE ...`),
 // so the ServerProjectStore contract run below never touches a real
 // network. Locks are permissive here — contention is the Rust side's job
@@ -728,7 +728,7 @@ runProjectStoreContractTests(
 runProjectStoreContractTests(
   "ServerProjectStore",
   () =>
-    new ServerProjectStore("http://rhizz-server", {
+    new ServerProjectStore("http://rhizome-server", {
       fetch: makeFakeServerFetch(),
       now: makeTestClock(),
     }),

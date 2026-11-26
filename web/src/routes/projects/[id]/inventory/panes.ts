@@ -5,5 +5,5 @@
 import { createPaneLayout } from "../../../../components/modular_ui/paneLayout";
 
 export const inventoryPanes = createPaneLayout({
-  key: "rhizz-inventory-layout:v1",
+  key: "rhizome-inventory-layout:v1",
 });

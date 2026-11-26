@@ -87,9 +87,9 @@
         target="_blank"
         rel="noopener noreferrer"
         class="btn btn-primary btn-xs rounded-full px-2.5 font-medium flex items-center gap-1"
-        title="Open full interactive diagram in Rhizz"
+        title="Open full interactive diagram in Rhizome"
       >
-        <span>Open in Rhizz</span>
+        <span>Open in Rhizome</span>
         <span aria-hidden="true">↗</span>
       </a>
     {/if}

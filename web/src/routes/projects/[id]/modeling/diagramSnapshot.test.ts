@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Annotation } from "../../../../rhizz_wasm_wrapper";
+import type { Annotation } from "../../../../rhizome_wasm_wrapper";
 import {
   createHistoryStack,
   pushHistory,

@@ -1,7 +1,7 @@
 import type { FetchLike } from "./vfs/vfsStore";
 
 /**
- * Commit the rhizz server was built from, as reported by `GET /api/version`.
+ * Commit the rhizome server was built from, as reported by `GET /api/version`.
  * `dev` for local builds; `unknown` when the flake had no git revision.
  * `git_tag` is the release tag (e.g. `"0.10.0"`), present only when built
  * from a tagged commit.

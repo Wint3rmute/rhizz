@@ -84,10 +84,10 @@ export type CompletionBadge =
   | { kind: "draft"; percent: 0 };
 
 /**
- * Derives a per-definition completion badge, mirroring `rhizz-core`'s
+ * Derives a per-definition completion badge, mirroring `rhizome-core`'s
  * documented `score_component` semantics (a leaf is complete iff it has a
  * full_name; ports are optional detail; a composite is complete iff all
- * children are complete). `rhizz-wasm` only exposes aggregate category
+ * children are complete). `rhizome-wasm` only exposes aggregate category
  * scores, so this is computed locally from the definition tree.
  */
 export function completionBadge(def: InventoryDefinition): CompletionBadge {
@@ -99,7 +99,7 @@ export function completionBadge(def: InventoryDefinition): CompletionBadge {
 }
 
 // Scores a definition subtree as 0 / 0.5 / 1.0, exactly like `score_component`
-// in crates/rhizz-core/src/score.rs.
+// in crates/rhizome-core/src/score.rs.
 function completionScore(def: InventoryDefinition): number {
   if (def.leaf) {
     return def.full_name.trim().length > 0 ? 1 : 0.5;

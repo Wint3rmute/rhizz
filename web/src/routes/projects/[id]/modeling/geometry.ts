@@ -26,7 +26,7 @@ export type ConnectionOrientation = "horizontal" | "vertical";
 export type ConnectionSide = "top" | "bottom" | "left" | "right";
 
 // A view annotation as stored in persisted layouts (the structural subset
-// both rhizz-wasm's Annotation and DiagramStaticAnnotation share).
+// both rhizome-wasm's Annotation and DiagramStaticAnnotation share).
 export interface AnnotationLike {
   text: string;
   x: number;

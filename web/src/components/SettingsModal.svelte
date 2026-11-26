@@ -12,7 +12,7 @@
     TRANSITION_MS_MAX,
     TRANSITION_MS_MIN,
   } from "../TransitionState.svelte";
-  import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+  import { WARNING_LEVELS } from "../rhizome_wasm_wrapper";
   import { resolveIcon } from "../iconHelper";
 
   let {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DiagnosticJS } from "rhizz";
+  import type { DiagnosticJS } from "rhizome";
   import DiagnosticRow from "../../components/DiagnosticRow.svelte";
 
   export type VerdictStatus = "ok" | "warn" | "error";

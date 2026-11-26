@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { confirmNewConnection, createNewProject } from "./helpers";
 
-const VFS_KEY = "rhizz:vfs:v1";
+const VFS_KEY = "rhizome:vfs:v1";
 
 /** Every file in the VFS, keyed by its project-relative path. */
 async function storedFiles(page: import("@playwright/test").Page) {

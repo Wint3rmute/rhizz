@@ -4,7 +4,7 @@
 // Dragging an arrow between two components opens the dialog, which creates the
 // connection *and* one port on each end in a single `connect_components` op.
 // This module owns what the dialog prefills, what it refuses and the op it
-// finally sends. Everything model-shaped is decided in rhizz-core; the checks
+// finally sends. Everything model-shaped is decided in rhizome-core; the checks
 // here only exist to explain a refusal before the user presses Create.
 import type { ConnectEnd } from "../../../../actionLog";
 import type { ModelMutationOp } from "../../../../history/applyMutation";

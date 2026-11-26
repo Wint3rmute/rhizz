@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   # Builds the mdBook with the current compiler and verifies that the
-  # compiled ```rhizz blocks still match book/book.lock. Any drift in the
+  # compiled ```rhizome blocks still match book/book.lock. Any drift in the
   # book's examples or the compiler's diagnostics fails this job.
   book:
     runs-on: ubuntu-latest
@@ -47,7 +47,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: rhizz-book
+          name: rhizome-book
           path: book-artifact/
 
   # API reference (`cargo doc`). Was `docs` in the old monolithic workflow;
@@ -73,7 +73,7 @@ jobs:
           cmd-format: nix develop -c {0}
 
       - run: nix run .#doc
-      - run: echo '<meta http-equiv="refresh" content="0; url=rhizz_core/index.html">' > target/doc/index.html
+      - run: echo '<meta http-equiv="refresh" content="0; url=rhizome_core/index.html">' > target/doc/index.html
 
       - run: |
           mkdir -p docs-artifact
@@ -81,7 +81,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: rhizz-docs
+          name: rhizome-docs
           path: docs-artifact/
 
   # Pages carries the book and the API docs only. The app is no longer
@@ -97,12 +97,12 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-docs
+          name: rhizome-docs
           path: pages/docs/
 
       - uses: actions/download-artifact@v8
         with:
-          name: rhizz-book
+          name: rhizome-book
           path: pages/book/
 
       - uses: actions/upload-pages-artifact@v3

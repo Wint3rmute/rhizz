@@ -6,14 +6,14 @@
 # AA) cannot leak in either.
 { writeText, dejavu_fonts, liberation_ttf, noto-fonts-color-emoji }:
 
-writeText "rhizz-vrt-fonts.conf" ''
+writeText "rhizome-vrt-fonts.conf" ''
   <?xml version="1.0"?>
   <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
   <fontconfig>
     <dir>${dejavu_fonts}/share/fonts</dir>
     <dir>${liberation_ttf}/share/fonts</dir>
     <dir>${noto-fonts-color-emoji}/share/fonts</dir>
-    <cachedir>/tmp/rhizz-vrt-fontcache</cachedir>
+    <cachedir>/tmp/rhizome-vrt-fontcache</cachedir>
     <alias binding="strong"><family>sans-serif</family><prefer><family>DejaVu Sans</family></prefer></alias>
     <alias binding="strong"><family>system-ui</family><prefer><family>DejaVu Sans</family></prefer></alias>
     <alias binding="strong"><family>serif</family><prefer><family>DejaVu Serif</family></prefer></alias>

@@ -16,11 +16,11 @@
 // reads) nor diagram layouts/docs (pages read those from `fs` themselves).
 import { createContext } from "svelte";
 import { SvelteMap } from "svelte/reactivity";
-import type { CompileResultJS } from "rhizz";
+import type { CompileResultJS } from "rhizome";
 import type { RawModelPayload } from "./modelView";
 import { getWarningLevel } from "./WarningLevelState.svelte";
 import { projectStore } from "./ProjectState.svelte";
-import { compile_system } from "./rhizz_wasm_wrapper";
+import { compile_system } from "./rhizome_wasm_wrapper";
 import { readProjectSources, type Source } from "./vfs/compile";
 import { openProjectFs, type ProjectFs } from "./vfs/fs";
 

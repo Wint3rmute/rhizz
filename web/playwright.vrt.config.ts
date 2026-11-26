@@ -9,10 +9,10 @@ const PORT = 6199;
 // Host fonts differ between machines (e.g. local vs CI runner), which shows
 // up as anti-aliasing diffs on every text glyph. The Nix dev shell exports
 // a fontconfig file listing only a pinned font set; the browser uses it.
-const fontconfig = process.env.RHIZZ_VRT_FONTCONFIG_FILE;
+const fontconfig = process.env.RHIZOME_VRT_FONTCONFIG_FILE;
 if (!fontconfig) {
   throw new Error(
-    "RHIZZ_VRT_FONTCONFIG_FILE is unset: run VRT via `just vrt` (Nix dev " +
+    "RHIZOME_VRT_FONTCONFIG_FILE is unset: run VRT via `just vrt` (Nix dev " +
       "shell) so screenshots use the pinned fonts.",
   );
 }

@@ -1,7 +1,7 @@
 project {
   name    = "apollo-11"
   version = "1.0.0"
-  authors = ["NASA / rhizz-showcase"]
+  authors = ["NASA / rhizome-showcase"]
 }
 
 protocol "cryo-reactant-supply" {

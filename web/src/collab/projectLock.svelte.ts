@@ -32,7 +32,7 @@ export type LockFetch = (
 export class ProjectLock {
   /** The open project, or null when no project layout is mounted. */
   projectId: string | null = $state(null);
-  /** The rhizz-server origin, or null for local/memory backends. */
+  /** The rhizome-server origin, or null for local/memory backends. */
   serverUrl: string | null = $state(null);
   /** Our username, resolved once per session. */
   me: string | null = $state(null);
@@ -193,7 +193,7 @@ export class ProjectLock {
         `${serverUrl.replace(/\/+$/, "")}/api/projects/${projectId}/release`,
         {
           method: "POST",
-          headers: { "x-rhizz-user": me },
+          headers: { "x-rhizome-user": me },
           keepalive: true,
         },
       );
@@ -222,7 +222,7 @@ export class ProjectLock {
     try {
       response = await this.fetchImpl(
         `${serverUrl.replace(/\/+$/, "")}/api/projects/${projectId}/heartbeat`,
-        { method: "POST", headers: { "x-rhizz-user": me } },
+        { method: "POST", headers: { "x-rhizome-user": me } },
       );
     } catch {
       return;
