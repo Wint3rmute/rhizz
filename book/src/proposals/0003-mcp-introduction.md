@@ -172,6 +172,23 @@ text-oriented interface rather than `ModelOp`s. The tools were:
   CAS stays mandatory (`version` required on overwrite/edit, ignored for
   brand-new files).
 
+### Step 4: creating projects
+
+| Tool | Purpose |
+| ---- | ------- |
+| `create_project` | Create a new project from an explicit id. |
+
+`create_file` and the `ModelOp` tools need an existing project, so without
+this tool an AI client could not start one. `create_project` takes only the
+project's id (an explicit slug: lowercase letters and digits joined by single
+hyphens, which is also the directory name) and seeds the same layout the web
+editor's "new project" writes: a root `main.hcl` holding a `main` system, plus
+an empty `docs/` folder. The layout lives once, in `rhizz-core`
+(`rhizz_core::empty_project`), and the web editor reads it through the WASM
+bindings (`get_empty_project`), so the two cannot drift. An id that is already
+taken is refused without touching it; the write takes the project lock as `AI`
+like every other write tool. Deleting projects is deliberately not exposed.
+
 ## Diagnostics
 
 None.
