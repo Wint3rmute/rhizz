@@ -8,6 +8,7 @@ RHIZZ_DATA_DIR) are now `RHIZOME_*`. The default data dir is `rhizome-data`.
 
 ### Feat
 
+- **web**: show project logo on landing page
 - **logo**: poster stills for the videos, dark variants on GitHub's canvas
 - **logo**: 5-second intro animation that settles into the lockup
 - **logo**: dark-background variants, swapped in by the brandbook
@@ -16,42 +17,17 @@ RHIZZ_DATA_DIR) are now `RHIZOME_*`. The default data dir is `rhizome-data`.
 - **logo**: construction sheet with generator-derived helper lines
 - **mcp**: add create_project tool
 - **web**: show the logo mark in the navbar next to the Rhizz text
-- **logo**: esoteric concept set (tree of life, Metatron graph, seed of life, mandala, kamea sigil, natal chart)
-- **logo**: hairline concept set after the Thousand Plateaus covers
-- **logo**: second-round concepts (refined plateau/mesh, R monogram, zz network, nested systems, rhizome stem)
-- **logo**: fixed-tangent notch fillets and stronger dot-joint fillets
-- **palette**: add open-settings and toggle-theme actions
-- **web**: dock network status at bar far right, hide below sm
-- **web**: ring spinner plus idle Project Saved pill
-- **web**: network activity tracker and bottom-bar widget
-- **web**: move theme toggle and tour entry into settings
-- **web**: add global settings modal with theme, warning level and transition
 
 ### Fix
 
 - **web**: apply navbar logo mask via quoted style directives
 - **ci**: parse ImageMagick 7 AE output in assets-check
-- **web**: clip modeling toolbar so it cannot overlap sidebars
-- **web**: satisfy typescript-eslint 8.74 rules
-- **deps**: bump minimatch via npm audit fix
-- **web**: dismiss settings modal with Escape
-- **web**: wrap settings help text instead of truncating
-- **nix**: drop pinned coverage toolchain, Rust 1.99.1 with LLVM 23 tools
 
 ### Refactor
 
 - rename the application from Rhizz to Rhizome
 - share the empty-project seed between core, wasm and web
 - **web**: unify zoom-to-fill margin at 0.9 via FIT_FRACTION
-- **nix**: inline landing pipeline into task scripts, drop scripts/ dir
-- **nix**: drop vestigial coverage and wasm tooling from default devshell
-- **nix**: single-source task toolchains for scripts and devshell
-- **nix**: point CI at runnable task scripts instead of the devshell
-- **nix**: runnable task scripts instead of one big devshell
-
-### Perf
-
-- **vrt**: stop modal stories waiting out Storybook's animation cap
 
 ## 0.14.0 (2026-11-23)
 
