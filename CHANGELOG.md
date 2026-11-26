@@ -8,6 +8,10 @@ RHIZZ_DATA_DIR) are now `RHIZOME_*`. The default data dir is `rhizome-data`.
 
 ### Feat
 
+- **web**: round the corners of the browser tab icon
+- **web**: show the browser tab icon as a dark logo on a white background
+- **web**: show the Rhizome logo in tabs of browsers without SVG icon support
+- **web**: show the Rhizome logo as the browser tab icon
 - **web**: show project logo on landing page
 - **logo**: poster stills for the videos, dark variants on GitHub's canvas
 - **logo**: 5-second intro animation that settles into the lockup
