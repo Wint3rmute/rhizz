@@ -176,9 +176,11 @@ function lineX(p1, d1, p2, d2) {
  * bridged the remainder with a straight line — a hard corner exactly where the
  * reference is softest. Handling B natively is what restores the organic look.
  *
- * Returns an SVG path `d` string (single closed loop).
+ * Returns an SVG path `d` string (single closed loop). When `guides` is an
+ * array, every fillet circle is pushed onto it as construction geometry
+ * ({ kind: 'dot' | 'notch', c, r, ... }) — the outline itself is unaffected.
  */
-export function traceOutline(graph, cfg) {
+export function traceOutline(graph, cfg, guides = null) {
   const { nodes, edges } = graph;
   if (!edges.length) return '';
   const adj = nodes.map(() => []);
@@ -267,6 +269,10 @@ export function traceOutline(graph, cfg) {
         const rf = t * Math.tan(half);
         const pIn = add(X, mul(A.u, -t));
         const pOut = add(X, mul(B.u, t));
+        if (guides) {
+          const bis = norm(add(back, B.u));
+          guides.push({ kind: 'notch', node: e1.to, x: X, c: add(X, mul(bis, rf / Math.sin(half))), r: rf, from: pIn, to: pOut });
+        }
         return { in: pIn, out: pOut, cmds: [arcCmd(rf, pIn, pOut, 0)] };
       }
       return { in: X, out: X, cmds: [] }; // collinear bars: no corner at all
@@ -292,6 +298,10 @@ export function traceOutline(graph, cfg) {
     const tanB = fDot > 0 ? add(m, mul(norm(sub(cB, m)), r))
                           : outPt;
 
+    if (guides && fDot > 0) {
+      guides.push({ kind: 'dot', node: e1.to, c: cA, r: fDot, from: inPt, to: tanA });
+      guides.push({ kind: 'dot', node: e1.to, c: cB, r: fDot, from: tanB, to: outPt });
+    }
     const delta = wrap(ang(sub(tanB, m)) - ang(sub(tanA, m)));
     const cmds = [];
     if (fDot > 0) cmds.push(arcCmd(fDot, inPt, tanA, 0));
@@ -340,7 +350,8 @@ export function renderMolecule({ seed = 1, preset = null, ...overrides } = {}) {
     cfg.fillet *= fit; cfg.jointFillet *= fit; cfg.hubR *= fit; cfg.barW *= fit;
   }
 
-  const d = traceOutline(graph, cfg);
+  const guides = [];
+  const d = traceOutline(graph, cfg, guides);
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const nd of graph.nodes) {
@@ -354,7 +365,7 @@ export function renderMolecule({ seed = 1, preset = null, ...overrides } = {}) {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cfg.size} ${cfg.size}">\n` +
     `<path d="${d}" fill="#000"/>\n</svg>\n`;
-  return { svg, bounds, graph, cfg };
+  return { svg, bounds, graph, cfg, d, guides };
 }
 
 // ------------------------------------------------------------------ CLI ---
