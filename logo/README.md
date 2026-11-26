@@ -122,8 +122,8 @@ just assets
 ```
 
 This also regenerates the landing hero image and the web app's favicon
-(`web/static/favicon.svg`, black on light tabs and white on dark ones, plus
-a legacy `favicon.ico` fallback with the white mark on a dark square). The font comes from nixpkgs, so
+(`web/static/favicon.svg`, the black mark on a white square, plus a matching
+legacy `favicon.ico` fallback). The font comes from nixpkgs, so
 run it through `just`/nix rather than calling the scripts directly. CI runs
 `just assets-check` and fails if a committed SVG differs from what the
 generators produce.
