@@ -3,7 +3,7 @@
 // Six soft colour blobs drift on closed Lissajous paths (integer frequencies),
 // so the last frame flows straight back into the first and the video loops
 // seamlessly. Frames are drawn on a <canvas> in headless Chromium (the mark is
-// the exact Path2D from molecule.mjs) and piped as PNGs into ffmpeg (H.264).
+// the exact Path2D from molecule.mjs) and encoded by video.mjs.
 //
 // Run through `just logo-video`: it provides Chromium and ffmpeg from nixpkgs.
 //
@@ -11,15 +11,9 @@
 //   node src/gradient.mjs --variant dark --seconds 4 --fps 60 --outdir /tmp/x
 
 import { renderMolecule } from './molecule.mjs';
-import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
+import { encodeVideo } from './video.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-
-// Playwright comes from web/: that copy is the one pinned to the browsers
-// nixpkgs provides (see nix/tasks.nix), so logo/ doesn't pin a second one.
-const require = createRequire(new URL('../../web/package.json', import.meta.url));
-const { chromium } = require('playwright');
 
 export const VARIANTS = {
   // Deeper, saturated hues so the gradient holds up against white.
@@ -71,28 +65,10 @@ export async function renderVideo({ variant, out, width = 1920, height = 1080, f
   const { d, bounds } = renderMolecule({ preset: 'reference' });
   const n = Math.round(fps * seconds);
 
-  const ffmpeg = spawn('ffmpeg', [
-    '-y', '-loglevel', 'error',
-    '-f', 'image2pipe', '-framerate', String(fps), '-i', '-',
-    '-c:v', 'libx264', '-preset', 'slow', '-crf', '14', '-tune', 'grain',
-    '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
-    out,
-  ], { stdio: ['pipe', 'inherit', 'inherit'] });
-  const done = new Promise((res, rej) => ffmpeg.on('close', (code) => (code ? rej(new Error(`ffmpeg exited ${code}`)) : res())));
-
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage({ viewport: { width, height } });
-    for (let k = 0; k < n; k++) {
-      const url = await page.evaluate(drawFrame, { d, v, W: width, H: height, k, n, markH: height * markScale, bounds });
-      const png = Buffer.from(url.slice(url.indexOf(',') + 1), 'base64');
-      if (!ffmpeg.stdin.write(png)) await new Promise((r) => ffmpeg.stdin.once('drain', r));
-    }
-  } finally {
-    ffmpeg.stdin.end();
-    await browser.close();
-  }
-  await done;
+  await encodeVideo({
+    out, width, height, fps, frames: n, draw: drawFrame,
+    frameArg: (k) => ({ d, v, W: width, H: height, k, n, markH: height * markScale, bounds }),
+  });
 }
 
 // ------------------------------------------------------------------ CLI ---

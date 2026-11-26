@@ -117,6 +117,7 @@ let
     assets = [ imagemagick nodejs coreutils bash ];
     "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
     "logo-video" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
+    "logo-intro" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
     serve = [ cargo rustc lld coreutils bash ];
@@ -487,6 +488,24 @@ let
         fi
         cd logo
         node src/gradient.mjs --outdir renders/video "$@"
+      '';
+    };
+
+    # Renders the logo intro (logo/renders/video/rhizome-intro-*.mp4): the
+    # network sprouts, breathes and settles into the mark, then the wordmark
+    # appears and the lockup holds. Full HD, 5 s, light + dark. Same toolchain
+    # and same caveat as `logo-video`: not part of `assets`.
+    logo-intro = write {
+      name = "logo-intro";
+      runtimeInputs = taskInputs."logo-intro";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        if [ ! -d web/node_modules/playwright ]; then
+          npm ci --prefix web --no-audit --no-fund
+        fi
+        cd logo
+        node src/intro.mjs --outdir renders/video "$@"
       '';
     };
 
