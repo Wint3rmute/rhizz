@@ -36,26 +36,19 @@ nix/                 – task scripts behind every `just` recipe (tasks.nix)
 
 ## Development Workflow
 
-### Direct commands
+The user either gives you a direct request or asks you to work on a task from
+`TASKS/TODO.md` (follow the instructions in that file).
 
 1. Analyze the task and make an implementation plan.
 2. Implement it using red/green TDD.
 3. Run `just format`, then `just test`, `just lint`, and `just build` until
    everything passes. Format first: CI's lint job fails on unformatted files
    (Prettier), so `just lint` is not green until `just format` has run.
-4. Commit your code, use conventional commits (see
-   [Commit messages are the changelog](#commit-messages-are-the-changelog)).
-5. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
-
-### Tasks from `TASKS/TODO.md`
-
-1. Follow the instructions from `TODO.md`.
-2. Implement it using red/green TDD.
-3. Run `just format`, then `just test`, `just lint`, and `just build` until
-   everything passes (format first, as above).
-4. Move the completed task to `TASKS/FINISHED.md` and report that you are
-   finished.
-5. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
+4. For a task from `TODO.md`: move it to `TASKS/FINISHED.md`.
+5. Commit your code, use conventional commits (see
+   [Commit messages are the changelog](#commit-messages-are-the-changelog)),
+   and report that you are finished.
+6. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
 
 ### Before pushing
 
