@@ -29,7 +29,7 @@ import path from 'node:path';
 
 export const VARIANTS = {
   light: { bg: '#ffffff', ink: '#000000' },
-  dark: { bg: '#111318', ink: '#ffffff' },
+  dark: { bg: '#0d1117', ink: '#ffffff' },
 };
 
 const T = {
@@ -345,6 +345,7 @@ export async function renderIntro({ variant, out, width = 1920, height = 1080, f
     out, width, height, fps, frames: sim.frames.length,
     setup: setupPage, setupArg: { W: width, H: height },
     draw: drawPage, frameArg,
+    poster: 1.8, // mid-growth: the chaotic network, before it settles
   });
 }
 

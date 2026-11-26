@@ -2,7 +2,9 @@
 //
 // `setup` runs once in the page (with `setupArg`); `draw` runs per frame with
 // `frameArg(k)` and must return a PNG data URL. Frames are piped straight into
-// ffmpeg (H.264, yuv420p), so nothing is written to disk but the MP4.
+// ffmpeg (H.264, yuv420p), so nothing is written to disk but the MP4. With
+// `poster` (seconds), a 960px-wide JPEG still of that moment is written next
+// to the MP4, for places that can't play video (e.g. a GitHub README).
 
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
@@ -12,7 +14,7 @@ import { spawn } from 'node:child_process';
 const require = createRequire(new URL('../../web/package.json', import.meta.url));
 const { chromium } = require('playwright');
 
-export async function encodeVideo({ out, width, height, fps, frames, setup = null, setupArg = null, draw, frameArg, crf = 14 }) {
+export async function encodeVideo({ out, width, height, fps, frames, setup = null, setupArg = null, draw, frameArg, crf = 14, poster = null }) {
   const ffmpeg = spawn('ffmpeg', [
     '-y', '-loglevel', 'error',
     '-f', 'image2pipe', '-framerate', String(fps), '-i', '-',
@@ -36,4 +38,10 @@ export async function encodeVideo({ out, width, height, fps, frames, setup = nul
     await browser.close();
   }
   await done;
+  if (poster !== null) {
+    await new Promise((res, rej) => spawn('ffmpeg', [
+      '-y', '-loglevel', 'error', '-ss', String(poster), '-i', out,
+      '-frames:v', '1', '-vf', 'scale=960:-1', '-q:v', '3', out.replace(/\.mp4$/, '.jpg'),
+    ], { stdio: 'inherit' }).on('close', (c) => (c ? rej(new Error(`ffmpeg exited ${c}`)) : res())));
+  }
 }

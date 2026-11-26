@@ -19,7 +19,7 @@ export const VARIANTS = {
   // Deeper, saturated hues so the gradient holds up against white.
   light: { bg: '#ffffff', base: '#7fb6e6', blobs: ['#3fcf86', '#2fb0c2', '#5f7fe0', '#9a6fe0', '#ec7fb4', '#f0c94a'] },
   // Brighter pastels for a near-black background.
-  dark: { bg: '#111318', base: '#8fc8f0', blobs: ['#6ff0a6', '#4fd8e8', '#7f9cff', '#c09cff', '#ff9fcf', '#ffe27a'] },
+  dark: { bg: '#0d1117', base: '#8fc8f0', blobs: ['#6ff0a6', '#4fd8e8', '#7f9cff', '#c09cff', '#ff9fcf', '#ffe27a'] },
 };
 
 // Runs inside the page: draws frame k of n onto the canvas, returns a PNG data URL.
@@ -66,7 +66,7 @@ export async function renderVideo({ variant, out, width = 1920, height = 1080, f
   const n = Math.round(fps * seconds);
 
   await encodeVideo({
-    out, width, height, fps, frames: n, draw: drawFrame,
+    out, width, height, fps, frames: n, draw: drawFrame, poster: 0,
     frameArg: (k) => ({ d, v, W: width, H: height, k, n, markH: height * markScale, bounds }),
   });
 }
