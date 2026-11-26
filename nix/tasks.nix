@@ -388,7 +388,8 @@ let
     #     the first argument: `nix run .#assets -- my-shot.png`)
     #   - the logo SVGs (logo/renders/molecule/: mark, lockup and construction
     #     drawing, each with a dark-background variant, plus the navbar's copy of the
-    #     mark at web/assets/logo-mark.svg), with Roboto Bold from nixpkgs
+    #     mark at web/assets/logo-mark.svg, and the favicon at
+    #     web/static/favicon.svg), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
       name = "assets";
@@ -409,6 +410,8 @@ let
         # The web build (nix `src = ./web`) cannot see logo/, so the navbar's
         # copy of the mark lives under web/assets.
         cp logo/renders/molecule/molecule-ref.svg web/assets/logo-mark.svg
+        # Browser-tab favicon (served from web/static), same reason.
+        (cd logo && npm run -s gen:favicon)
       '';
     };
 
@@ -460,6 +463,11 @@ let
         done
         if ! cmp -s "$OUTDIR/molecule-ref.svg" web/assets/logo-mark.svg; then
           echo "web/assets/logo-mark.svg is out of date" >&2
+          stale=1
+        fi
+        node logo/src/favicon.mjs --mark "$OUTDIR/molecule-ref.svg" --out "$OUTDIR/favicon.svg"
+        if ! cmp -s "$OUTDIR/favicon.svg" web/static/favicon.svg; then
+          echo "web/static/favicon.svg is out of date" >&2
           stale=1
         fi
 

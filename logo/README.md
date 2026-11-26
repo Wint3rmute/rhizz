@@ -121,7 +121,9 @@ regenerate:
 just assets
 ```
 
-This also regenerates the landing hero image. The font comes from nixpkgs, so
+This also regenerates the landing hero image and the web app's favicon
+(`web/static/favicon.svg`, black on light tabs and white on dark ones; the
+legacy `favicon.ico` next to it is a hand-kept fallback). The font comes from nixpkgs, so
 run it through `just`/nix rather than calling the scripts directly. CI runs
 `just assets-check` and fails if a committed SVG differs from what the
 generators produce.
