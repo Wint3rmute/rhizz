@@ -103,14 +103,14 @@
     <div class="flex items-center gap-2 min-w-0">
       <a
         href={resolve("/projects")}
-        class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold gap-2"
+        class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold gap-2 ps-1"
       >
         <!-- The mark is a single-colour shape used as a mask over
              currentColor, so it follows the theme's text colour (light and
              dark) without a second asset. -->
         <span
           data-testid="navbar-logo"
-          class="inline-block size-7 sm:size-8 bg-current"
+          class="inline-block size-5 sm:size-6 bg-current"
           style:mask-image={maskImage}
           style:-webkit-mask-image={maskImage}
           style:mask-position="center"
