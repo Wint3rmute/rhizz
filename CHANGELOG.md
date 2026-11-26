@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **mcp**: add create_project tool
 - **web**: show the logo mark in the navbar next to the Rhizz text
 - **logo**: esoteric concept set (tree of life, Metatron graph, seed of life, mandala, kamea sigil, natal chart)
 - **logo**: hairline concept set after the Thousand Plateaus covers
@@ -27,6 +28,7 @@
 
 ### Refactor
 
+- share the empty-project seed between core, wasm and web
 - **web**: unify zoom-to-fill margin at 0.9 via FIT_FRACTION
 - **nix**: inline landing pipeline into task scripts, drop scripts/ dir
 - **nix**: drop vestigial coverage and wasm tooling from default devshell
