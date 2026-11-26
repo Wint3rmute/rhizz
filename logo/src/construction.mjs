@@ -8,18 +8,21 @@
 // frame or text: just the mark and its geometry.
 //
 //   node src/construction.mjs --out renders/molecule/construction-ref.svg
+//   node src/construction.mjs --theme dark --out renders/molecule/construction-ref-dark.svg
 
 import { renderMolecule } from './molecule.mjs';
 
 const f2 = (v) => +v.toFixed(2);
 
-const PALETTE = {
-  paper: '#ffffff',
-  ink: '#1a1a1a',
-  fill: '#8c8c8c',
+export const THEMES = {
+  light: { paper: '#ffffff', ink: '#1a1a1a', fill: '#8c8c8c' },
+  // GitHub's dark canvas, so the drawing sits flush in a dark-mode README.
+  dark: { paper: '#0d1117', ink: '#e6edf3', fill: '#6e7681' },
 };
 
-export function renderConstruction() {
+export function renderConstruction({ theme = 'light' } = {}) {
+  const PALETTE = THEMES[theme];
+  if (!PALETTE) throw new Error(`unknown theme ${theme}`);
   const { d, guides, graph, bounds } = renderMolecule({ preset: 'reference' });
   const PAD = 48; // white space around the enclosing circle
 
@@ -113,7 +116,7 @@ if (isCLI) {
   };
   const fs = await import('node:fs');
   const path = await import('node:path');
-  const { svg } = renderConstruction();
+  const { svg } = renderConstruction({ theme: get('theme', 'light') });
   const file = get('out', null);
   if (!file) { process.stdout.write(svg); process.exit(0); }
   fs.mkdirSync(path.dirname(file) || '.', { recursive: true });
