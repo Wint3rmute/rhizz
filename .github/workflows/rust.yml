@@ -58,13 +58,27 @@ jobs:
           name: rust-coverage
           path: target/coverage/lcov.info
 
-      # The production server goes through its Nix derivation (nix/backend.nix),
-      # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-frontend → rhizz-server.
-      # This replaces the devshell's `cargo build --release`, which had no
-      # frontend to embed (web/build is gitignored and this job has no Node
-      # toolchain), so it only ever produced the placeholder shell page — the
-      # release build was never actually verified. No devshell here: the
-      # derivation brings its own toolchain.
+  # Split out of `check` so the slowest step (~5 min) runs in parallel with
+  # lint + coverage instead of after them. No rust-cache here: the Nix
+  # derivation builds in its own sandbox and never touches the workspace
+  # target/, so only the /nix/store cache helps.
+  #
+  # The production server goes through its Nix derivation (nix/backend.nix),
+  # which runs the whole pipeline: rhizz-wasm-pkg → rhizz-frontend → rhizz-server.
+  # This replaces the devshell's `cargo build --release`, which had no
+  # frontend to embed (web/build is gitignored and this job has no Node
+  # toolchain), so it only ever produced the placeholder shell page — the
+  # release build was never actually verified. No devshell here: the
+  # derivation brings its own toolchain.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Upstream Nix, see the note in `check`.
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix build .#rhizz-server
 
 # The `audit` job moved to its own workflow (audit.yml) so it can be gated on
