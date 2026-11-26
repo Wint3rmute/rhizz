@@ -10,6 +10,9 @@
 - **palette**: add open-settings and toggle-theme actions
 - **web**: dock network status at bar far right, hide below sm
 - **web**: ring spinner plus idle Project Saved pill
+- **web**: network activity tracker and bottom-bar widget
+- **web**: move theme toggle and tour entry into settings
+- **web**: add global settings modal with theme, warning level and transition
 
 ### Fix
 
@@ -19,11 +22,17 @@
 - **web**: satisfy typescript-eslint 8.74 rules
 - **deps**: bump minimatch via npm audit fix
 - **web**: dismiss settings modal with Escape
+- **web**: wrap settings help text instead of truncating
+- **nix**: drop pinned coverage toolchain, Rust 1.99.1 with LLVM 23 tools
 
 ### Refactor
 
 - **web**: unify zoom-to-fill margin at 0.9 via FIT_FRACTION
 - **nix**: inline landing pipeline into task scripts, drop scripts/ dir
+- **nix**: drop vestigial coverage and wasm tooling from default devshell
+- **nix**: single-source task toolchains for scripts and devshell
+- **nix**: point CI at runnable task scripts instead of the devshell
+- **nix**: runnable task scripts instead of one big devshell
 
 ### Perf
 
