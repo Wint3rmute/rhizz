@@ -17,7 +17,9 @@ import type {
 import type { DiagramStaticPort } from "./types";
 
 export const TRANSITION_MS = 320;
-export const FIT_FRACTION = 0.8;
+// Fraction of the viewport a fitted diagram fills. The single source of truth
+// for every zoom-to-fill / fit-on-switch path (modeling, explore, inventory).
+export const FIT_FRACTION = 0.9;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 4;
 
