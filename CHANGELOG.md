@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **logo**: poster stills for the videos, dark variants on GitHub's canvas
 - **logo**: 5-second intro animation that settles into the lockup
 - **logo**: dark-background variants, swapped in by the brandbook
 - **logo**: render the animated-gradient mark as Full HD MP4
