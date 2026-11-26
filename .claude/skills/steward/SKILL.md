@@ -39,7 +39,9 @@ Applies on top of `AGENTS.md`; that file's workflow still holds.
 
 - The repo only allows rebase-style merging, so every commit lands on `main`
   individually: keep messages conventional (`feat`, `fix`, `ci`, `docs`, ...).
-- Never merge for the user; stop at "green and approved".
+- Merge only when the user explicitly asks: "merge now", or "merge once CICD
+  succeeds" (then wait for CI to be green on the PR's current head and merge
+  with the rebase method). Without such an ask, stop at "green and approved".
 
 ## Pace
 
