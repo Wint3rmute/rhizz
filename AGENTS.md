@@ -69,6 +69,27 @@ every `git push`:
 Repeat whenever you add commits after that (e.g. CI or review fixes): the
 changelog must match the branch's final commits.
 
+### Commit messages are the changelog
+
+`CHANGELOG.md` is generated from commit subjects by `cz changelog` (config in
+`cz.toml`). Only `feat`, `fix`, `refactor` and `perf` commits (and breaking
+changes) end up in it, so the subject of those commits is a release note read
+by users of Rhizome, not by its developers.
+
+- Write the subject for the person using the app: say what changes for them
+  ("show the Rhizome logo as the browser tab icon"), not how it is built
+  ("generate favicon.ico in the assets pipeline").
+- Put implementation detail (pipelines, scripts, refactors, why) in the commit
+  body, which the changelog ignores.
+- Use `chore`, `build`, `ci`, `docs`, `style` or `test` for changes users will
+  not notice. They stay out of the changelog.
+- Keep the subject short, in the imperative, with a scope that names the area
+  the user sees (`web`, `cli`, ...). Don't pad one change into several commits
+  that each become their own changelog line.
+- Check the result with `just changelog` before pushing and reword commits
+  (they are yours to rewrite on your own branch) if a line reads like a
+  developer note.
+
 ### Merging
 
 The repository only allows rebase-style merging (no merge commits, no squash),
