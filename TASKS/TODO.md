@@ -16,6 +16,91 @@ How to work on this file:
 
 ---
 
+## Task <N> — Rename the application from "Rhizz" to "Rhizome"
+
+The product is now called **Rhizome** (the logo lockup and `logo/README.md`
+brandbook already use the new name). Every "Rhizz" in the repository becomes
+"Rhizome", in every casing and compound:
+
+| Old | New | Examples |
+| --- | --- | --- |
+| `Rhizz` | `Rhizome` | UI text, docs, book, SPEC, navbar label |
+| `rhizz` | `rhizome` | `rhizz-core` → `rhizome-core`, `rhizz_core`, the `rhizz` CLI binary, `rhizz-server`, `rhizz-wasm`, `x-rhizz-user` |
+| `RHIZZ` | `RHIZOME` | `RHIZZ_ADDR`, `RHIZZ_DATA_DIR`, `RHIZZ_GIT_TAG`, `VITE_RHIZZ_*` |
+| `RhizzX` | `RhizomeX` | `RhizzMcp` → `RhizomeMcp` |
+
+"rhizz" isn't a substring of any other word in the codebase, so a
+case-preserving replace is safe in content. Paths need `git mv`.
+
+Scale (at the time of writing): ~1400 matching lines in ~205 files, mostly
+`web/` (116 files), `crates/` (32), `book/` (16), `SPEC/`, `examples/`, `nix/`,
+`.github/`, plus `Cargo.toml`, `Cargo.lock`, `flake.nix`, `Justfile`,
+`fly.toml`, `README.md` and `AGENTS.md`.
+
+### Steps
+
+1. **Paths first.** Use `git mv` on the crate directories `crates/rhizz-*`
+   (`book`, `cli`, `core`, `server`, `wasm`, …) and on any other file whose
+   path contains `rhizz`: `book/css/rhizz.css`, `book/js/rhizz-embed.js`,
+   `book/src/rhizz_landing.png`, and the rest from `git ls-files | grep -i rhizz`.
+2. **Content.** Run the case-preserving replace above over every tracked text
+   file (see the exceptions below).
+3. **Rust.** Rename the crates (`name =` in each `Cargo.toml`) and the binary
+   (`[[bin]] name = "rhizz"` → `"rhizome"`). Update the workspace members and
+   every `use rhizz_core::…`, then regenerate `Cargo.lock` through `just build`.
+   Check `build.rs`, `env!`/`option_env!` names and the WASM package name
+   (`rhizz_wasm`, `rhizz_wasm_bg`, `rhizz-wasm-pkg`), which also appears in
+   `web/` imports and in `nix/wasm.nix` / `nix/frontend.nix`.
+4. **Nix / CI / deploy.** Update `flake.nix`, `nix/*.nix` (package and attribute
+   names, `RHIZZ_VRT_FONTCONFIG_FILE`, …), `.github/workflows/*`, the Docker
+   image names and the `Justfile`.
+5. **Generated assets.** Run `just assets` (the landing hero is renamed to
+   `rhizome_landing.png`) and `just vrt-accept`: the navbar and every page
+   showing the product name change, so all VRT baselines that include text need
+   re-accepting. Rebuild the book.
+6. **Verify.** Run `just test`, `just lint`, `just build` and `just book`. Then
+   `git grep -i rhizz` must return only the exceptions listed below.
+
+### Exceptions and decisions (check with the maintainer before merging)
+
+- **`CHANGELOG.md` keeps "Rhizz".** It's generated from commit messages by
+  `cz changelog`, and CI fails if it differs, so old entries can't be
+  rewritten. Commits from the rename onwards will say Rhizome.
+- **External infrastructure isn't renamed by a commit.** Change these URLs only
+  once the infrastructure behind them has been renamed:
+  - GitHub repo `Wint3rmute/rhizz` (also GitHub Pages `wint3rmute.github.io/rhizz/book/`)
+  - Fly app `rhizz` (`rhizz.fly.dev`, `app = 'rhizz'` in `fly.toml`)
+
+  Until then, either keep those URLs and add them to the grep allow-list, or do
+  the infrastructure rename first. Historical links to specific commits
+  (`github.com/Wint3rmute/rhizz/commit/…`) keep working after a GitHub rename
+  thanks to its redirect.
+- **The Fly volume `source = 'rhizz_data'` must not be renamed blindly.** A new
+  volume name means an empty volume, so stored projects would be lost. Keep
+  the old name, or migrate the data first.
+- **Browser storage keys change.** Renaming `rhizz-username`,
+  `rhizz-pending-tour`, `rhizz-last-view` and any other localStorage keys
+  resets those settings for existing users. Add a one-time migration that
+  reads the old key, writes the new one and deletes the old one. Cover it with
+  a unit test.
+- **The `x-rhizz-user` header and `RHIZZ_*` env vars** are a clean break.
+  Server and client deploy together, but any deployment config or secret
+  setting `RHIZZ_*` (Fly secrets, CI secrets) must be renamed at the same time.
+  List them in the PR description.
+- **`TASKS/FINISHED.md` is historical.** Rename it too, so the grep check stays
+  simple. It's only a log.
+
+### Definition of done
+
+- `git grep -i rhizz` returns only `CHANGELOG.md` and the agreed
+  external-infrastructure exceptions.
+- No path in `git ls-files` contains `rhizz`.
+- The CLI binary is `rhizome`, and all tests, lints, builds, VRT and
+  `assets-check` pass.
+- The localStorage migration is tested, and the PR description lists every
+  external rename the maintainer has to do (GitHub repo, Fly app and secrets,
+  Pages URL).
+
 ## Task <N> - more advanced connection routing on canvas
 
 Currently, every connection is routed with a "double-knee" elbow
