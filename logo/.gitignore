@@ -2,3 +2,4 @@ node_modules/
 renders/png/
 .playwright-mcp/
 renders/molecule/*-text.svg
+renders/video/

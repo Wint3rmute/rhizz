@@ -116,6 +116,7 @@ let
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
     assets = [ imagemagick nodejs coreutils bash ];
     "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
+    "logo-video" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
     serve = [ cargo rustc lld coreutils bash ];
@@ -460,6 +461,26 @@ let
           exit 1
         fi
         echo "generated assets are up to date"
+      '';
+    };
+
+    # Renders the animated-gradient logo videos (logo/renders/video/, Full HD
+    # H.264, light + dark) with headless Chromium and ffmpeg. Not part of
+    # `assets`: video encodes aren't byte-reproducible, so they can't be
+    # freshness-checked like the SVGs. Extra args go to logo/src/gradient.mjs,
+    # e.g. `nix run .#logo-video -- --variant dark --seconds 4`.
+    logo-video = write {
+      name = "logo-video";
+      runtimeInputs = taskInputs."logo-video";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        # gradient.mjs loads Playwright from web/ (pinned to the nix browsers).
+        if [ ! -d web/node_modules/playwright ]; then
+          npm ci --prefix web --no-audit --no-fund
+        fi
+        cd logo
+        node src/gradient.mjs --outdir renders/video "$@"
       '';
     };
 

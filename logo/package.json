@@ -9,6 +9,7 @@
   "scripts": {
     "gen:mark": "node src/molecule.mjs --preset reference --out renders/molecule/molecule-ref.svg",
     "gen:lockup": "node src/lockup.mjs --mark renders/molecule/molecule-ref.svg --out renders/molecule/lockup-ref.svg",
-    "gen:construction": "node src/construction.mjs --out renders/molecule/construction-ref.svg"
+    "gen:construction": "node src/construction.mjs --out renders/molecule/construction-ref.svg",
+    "gen:video": "node src/gradient.mjs --outdir renders/video"
   }
 }
