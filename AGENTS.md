@@ -28,6 +28,10 @@ SPEC/                – specification split by topic (cli.md, models.md, …)
 TASKS/TODO.md        – ordered implementation tasks
 TASKS/FINISHED.md    – completed tasks (most recent first)
 book/                – the Rhizome book
+logo/                – brand generators (src/) and their renders; see logo/README.md
+nix/                 – task scripts behind every `just` recipe (tasks.nix)
+.github/             – CI workflows
+.claude/skills/      – project skills (e.g. `steward` for driving a PR to green)
 ```
 
 ## Development Workflow
@@ -36,22 +40,22 @@ book/                – the Rhizome book
 
 1. Analyze the task and make an implementation plan.
 2. Implement it using red/green TDD.
-3. Run `just test`, `just lint`, and `just build` until everything passes.
-4. Run `just format` to format the code.
-5. Commit your code, use conventional commits.
-6. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
+3. Run `just format`, then `just test`, `just lint`, and `just build` until
+   everything passes. Format first: CI's lint job fails on unformatted files
+   (Prettier), so `just lint` is not green until `just format` has run.
+4. Commit your code, use conventional commits (see
+   [Commit messages are the changelog](#commit-messages-are-the-changelog)).
+5. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
 
 ### Tasks from `TASKS/TODO.md`
 
 1. Follow the instructions from `TODO.md`.
-2. Get extra context from recently finished tasks (read the first 50 lines of
-   `TASKS/FINISHED.md`).
-3. Implement it using red/green TDD.
-4. Run `just test`, `just lint`, and `just build` until everything passes.
-5. Run `just format` to format the code.
-6. Move the completed task to `TASKS/FINISHED.md` and report that you are
+2. Implement it using red/green TDD.
+3. Run `just format`, then `just test`, `just lint`, and `just build` until
+   everything passes (format first, as above).
+4. Move the completed task to `TASKS/FINISHED.md` and report that you are
    finished.
-7. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
+5. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
 
 ### Before pushing
 
@@ -60,9 +64,12 @@ from its commits. The changelog is built from commits, so this check only works
 **after** you have committed — running it earlier changes nothing. Right before
 every `git push`:
 
-1. Make sure tags are present (`git tag` is non-empty), else run
-   `git fetch --tags origin`. Without tags `just changelog` prints "No tag
-   found…", exits successfully, and leaves the file stale.
+1. Make sure the clone is full and has tags: if
+   `git rev-parse --is-shallow-repository` prints `true` or `git tag` is empty,
+   run `git fetch --unshallow --tags origin` (plain `git fetch --tags origin`
+   when it is not shallow). Without tags `just changelog` prints "No tag
+   found…", and on a shallow clone it silently drops entries; either way it
+   exits successfully and leaves the file stale.
 2. Run `just changelog`.
 3. If `CHANGELOG.md` changed, commit it on its own as `docs: refresh changelog`.
 
@@ -116,6 +123,20 @@ name) rather than entering a devshell.
 
 **NEVER USE `npx`.** Use `npm run <script>` (or `npm ci`) inside `web/`. Do not
 use `npx`, `pnpm`, or `yarn`, so the lockfile stays the single source of truth.
+
+## Generated files and Git LFS
+
+- **Never hand-edit generated assets.** `just assets` regenerates the logo SVGs
+  (`logo/renders/molecule/`), the web app's copies of the mark
+  (`web/assets/logo-mark.svg`), the favicons (`web/static/favicon.svg` and
+  `favicon.ico`) and the landing hero (`book/src/rhizome_landing.png`). Change
+  the generators in `logo/src/` or `nix/tasks.nix`, run `just assets` and commit
+  the result. CI's `assets-check` fails if any of them is stale. Details in
+  `logo/README.md`.
+- **VRT screenshots and logo videos are Git LFS files** (`.gitattributes`). If
+  the checkout has no LFS content they are small text pointers, and anything
+  that reads them (`just assets`, `assets-check`, VRT) fails with errors like
+  "improper image header". Run `git lfs pull` first, or leave that check to CI.
 
 ## Frontend
 
