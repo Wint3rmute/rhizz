@@ -142,6 +142,8 @@ let
     "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
     "logo-video" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     "logo-intro" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
+    "logo-social" = [ nodejs playwright-driver.browsers coreutils bash ];
+    "logo-social-shots" = [ nodejs playwright-driver.browsers curl coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
     serve = [ cargo rustc lld coreutils bash ];
@@ -550,6 +552,49 @@ let
         fi
         cd logo
         node src/intro.mjs --outdir renders/video "$@"
+      '';
+    };
+
+    # Composes the GitHub social preview (logo/renders/social/social-preview.png,
+    # 1280x640): the lockup and tagline on the landing gradient beside the two
+    # committed app screenshots (renders/social/shots/). Chromium output is not
+    # byte-stable, so like the videos it is not part of `assets`.
+    logo-social = write {
+      name = "logo-social";
+      runtimeInputs = taskInputs."logo-social";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        if [ ! -d web/node_modules/playwright ]; then
+          npm ci --prefix web --no-audit --no-fund
+        fi
+        cd logo
+        node src/social.mjs "$@"
+      '';
+    };
+
+    # Re-captures the screenshots `logo-social` composes: starts the web dev
+    # server, drives the Quadcopter Drone example in real Chromium and saves
+    # logo/renders/social/shots/*.png. Needs the wasm package (`just wasm`).
+    logo-social-shots = write {
+      name = "logo-social-shots";
+      runtimeInputs = taskInputs."logo-social-shots";
+      text = ''
+        set -euo pipefail
+      '' + playwrightEnv + ''
+        if [ ! -d web/node_modules/playwright ]; then
+          npm ci --prefix web --no-audit --no-fund
+        fi
+        PORT=5198
+        (cd web && npm run dev -- --port "$PORT" >/dev/null 2>&1) &
+        DEV_PID=$!
+        trap 'kill "$DEV_PID" 2>/dev/null || true; pkill -P "$DEV_PID" 2>/dev/null || true' EXIT
+        for _ in $(seq 1 60); do
+          curl -sf "http://localhost:$PORT" >/dev/null && break
+          sleep 1
+        done
+        cd logo
+        node src/social-shots.mjs --url "http://localhost:$PORT" "$@"
       '';
     };
 

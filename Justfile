@@ -176,6 +176,16 @@ logo-video *args:
 logo-intro *args:
     nix run .#logo-intro -- {{args}}
 
+# Composes the GitHub social preview (1280x640 PNG) into
+# logo/renders/social/ from the committed app screenshots.
+logo-social *args:
+    nix run .#logo-social -- {{args}}
+
+# Re-captures those screenshots from the running app (drone example).
+# Run `just wasm` first. Then `just logo-social` to recompose.
+logo-social-shots *args:
+    nix run .#logo-social-shots -- {{args}}
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     nix run .#dev
