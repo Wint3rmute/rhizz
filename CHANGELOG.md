@@ -2,6 +2,11 @@
 
 ### Feat
 
+- **logo**: 5-second intro animation that settles into the lockup
+- **logo**: dark-background variants, swapped in by the brandbook
+- **logo**: render the animated-gradient mark as Full HD MP4
+- **logo**: strip construction sheet down to the bare drawing
+- **logo**: construction sheet with generator-derived helper lines
 - **mcp**: add create_project tool
 - **web**: show the logo mark in the navbar next to the Rhizz text
 - **logo**: esoteric concept set (tree of life, Metatron graph, seed of life, mandala, kamea sigil, natal chart)
