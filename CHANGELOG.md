@@ -14,6 +14,7 @@
 
 ### Fix
 
+- **web**: apply navbar logo mask via quoted style directives
 - **ci**: parse ImageMagick 7 AE output in assets-check
 - **web**: clip modeling toolbar so it cannot overlap sidebars
 - **web**: satisfy typescript-eslint 8.74 rules
