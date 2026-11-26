@@ -62,6 +62,43 @@ The landing page pairs the mark with a soft pastel gradient
 (`web/assets/landing-gradient.jpg`) in butter, blush, lilac, periwinkle, teal
 and mint. Use it as a background, never inside the wordmark.
 
+## Motion
+
+**Intro.** Five seconds: the network sprouts from the hub, branches grow,
+swell and pull back, then everything settles into the mark. The mark slides
+into place and "Rhizome" rises in letter by letter, and the finished lockup
+holds.
+
+<p align="center">
+  <a href="renders/video/rhizome-intro-light.mp4">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="renders/video/rhizome-intro-dark.jpg">
+      <img src="renders/video/rhizome-intro-light.jpg" alt="Still from the intro: the network mid-growth" width="520">
+    </picture>
+  </a>
+  <br>
+  <a href="renders/video/rhizome-intro-light.mp4">Light</a> ·
+  <a href="renders/video/rhizome-intro-dark.mp4">Dark</a>
+</p>
+
+**Gradient loop.** Eight seconds of a pastel gradient flowing through the mark.
+It loops seamlessly, for backgrounds and holding screens.
+
+<p align="center">
+  <a href="renders/video/rhizome-gradient-light.mp4">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="renders/video/rhizome-gradient-dark.jpg">
+      <img src="renders/video/rhizome-gradient-light.jpg" alt="Still from the gradient loop: the mark filled with a pastel gradient" width="520">
+    </picture>
+  </a>
+  <br>
+  <a href="renders/video/rhizome-gradient-light.mp4">Light</a> ·
+  <a href="renders/video/rhizome-gradient-dark.mp4">Dark</a>
+</p>
+
+Both are Full HD MP4s. GitHub can't play video inline in a README, so these
+are stills: click one to open the video.
+
 ## Usage
 
 - **Clear space:** keep at least one dot diameter free around the mark on every
