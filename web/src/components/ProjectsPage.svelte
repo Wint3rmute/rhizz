@@ -182,20 +182,25 @@
         class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4"
       >
         <div class="card-body items-center text-center p-8 sm:p-12">
-          <span
-            data-testid="landing-logo"
-            class="inline-block size-16 mb-4 bg-current"
-            style:mask-image={maskImage}
-            style:-webkit-mask-image={maskImage}
-            style:mask-position="center"
-            style:mask-size="contain"
-            style:mask-repeat="no-repeat"
-            style:-webkit-mask-position="center"
-            style:-webkit-mask-size="contain"
-            style:-webkit-mask-repeat="no-repeat"
-            aria-hidden="true"
-          ></span>
-          <h1 class="text-3xl font-bold text-base-content">Rhizome</h1>
+          <!-- Mark sits inline before the wordmark, as in the navbar. -->
+          <h1
+            class="flex items-center justify-center gap-3 text-3xl font-bold text-base-content"
+          >
+            <span
+              data-testid="landing-logo"
+              class="inline-block size-9 bg-current"
+              style:mask-image={maskImage}
+              style:-webkit-mask-image={maskImage}
+              style:mask-position="center"
+              style:mask-size="contain"
+              style:mask-repeat="no-repeat"
+              style:-webkit-mask-position="center"
+              style:-webkit-mask-size="contain"
+              style:-webkit-mask-repeat="no-repeat"
+              aria-hidden="true"
+            ></span>
+            Rhizome
+          </h1>
           <p class="text-base-content py-4 max-w-xl">
             Model your system architecture and verify it. Build your system in
             an interactive diagrams editor or write it as code (or have AI write
