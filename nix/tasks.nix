@@ -384,7 +384,7 @@ let
     #   - the README/book landing hero (book/src/rhizz_landing.png), from a
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
-    #   - the logo SVGs (logo/renders/molecule/, plus the navbar's copy of the
+    #   - the logo SVGs (logo/renders/molecule/, incl. the construction sheet, plus the navbar's copy of the
     #     mark at web/assets/logo-mark.svg), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
@@ -402,7 +402,7 @@ let
         echo "== logo"
         export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
         npm ci --prefix logo --ignore-scripts --no-audit --no-fund
-        (cd logo && npm run -s gen:mark && npm run -s gen:lockup)
+        (cd logo && npm run -s gen:mark && npm run -s gen:lockup && npm run -s gen:construction)
         # The web build (nix `src = ./web`) cannot see logo/, so the navbar's
         # copy of the mark lives under web/assets.
         cp logo/renders/molecule/molecule-ref.svg web/assets/logo-mark.svg
@@ -443,7 +443,8 @@ let
         npm ci --prefix logo --ignore-scripts --no-audit --no-fund
         node logo/src/molecule.mjs --preset reference --out "$OUTDIR/molecule-ref.svg"
         node logo/src/lockup.mjs --mark "$OUTDIR/molecule-ref.svg" --out "$OUTDIR/lockup-ref.svg"
-        for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg; do
+        node logo/src/construction.mjs --out "$OUTDIR/construction-ref.svg"
+        for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg construction-ref.svg; do
           if ! cmp -s "$OUTDIR/$f" "logo/renders/molecule/$f"; then
             echo "logo/renders/molecule/$f is out of date" >&2
             stale=1
