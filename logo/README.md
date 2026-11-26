@@ -12,7 +12,7 @@ generators in `src/` and regenerate. Don't edit the SVGs.
   constant-width bars, traced as a single closed outline.
 - `src/lockup.mjs` builds the "mark + Rhizome" lockup. The wordmark (Roboto
   Bold) is converted to outlines, so the SVG needs no webfont.
-- `src/construction.mjs` builds a construction sheet: the mark in grey with the
+- `src/construction.mjs` builds a construction drawing: the mark in grey with the
   tracer's real geometry over it (dot circles, bar axes and sides, every fillet
   circle, hub notch vertices, bounding square and enclosing circle).
 - `renders/molecule/` holds the committed SVGs.
