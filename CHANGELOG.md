@@ -30,6 +30,7 @@ RHIZZ_DATA_DIR) are now `RHIZOME_*`. The default data dir is `rhizome-data`.
 
 ### Fix
 
+- **web**: align landing logo inline with the Rhizome wordmark
 - **web**: apply navbar logo mask via quoted style directives
 - **ci**: parse ImageMagick 7 AE output in assets-check
 - **web**: clip modeling toolbar so it cannot overlap sidebars
