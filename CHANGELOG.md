@@ -1,5 +1,11 @@
 ## Unreleased
 
+### BREAKING CHANGE
+
+- the CLI binary is now `rhizome` (was `rhizz`), the crates
+are `rhizome-*`, and the `RHIZZ_*` environment variables (e.g. RHIZZ_ADDR,
+RHIZZ_DATA_DIR) are now `RHIZOME_*`. The default data dir is `rhizome-data`.
+
 ### Feat
 
 - **logo**: poster stills for the videos, dark variants on GitHub's canvas
