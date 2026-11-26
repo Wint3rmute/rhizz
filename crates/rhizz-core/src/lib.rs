@@ -8,6 +8,7 @@
 use tracing::instrument;
 
 pub mod diagnostics;
+pub mod empty_project;
 pub mod examples;
 pub mod model;
 pub mod mutation;

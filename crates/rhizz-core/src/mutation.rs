@@ -1004,9 +1004,9 @@ struct CreateParams<'a> {
     ports: Option<Vec<PortJson>>,
 }
 
-/// Fallback system created when a create has nowhere to place, mirroring
-/// the web editor (`EMPTY_PROJECT_HCL` / the create fallback).
-const FALLBACK_SYSTEM_FULL_NAME: &str = "Main system";
+/// Fallback system created when a create has nowhere to place; the same
+/// `main` system a brand-new empty project is seeded with.
+const FALLBACK_SYSTEM_FULL_NAME: &str = crate::empty_project::MAIN_SYSTEM_FULL_NAME;
 
 fn create_component(
     raw: &mut RawFile,
@@ -1024,8 +1024,12 @@ fn create_component(
         // Both modes need a real container: fall back to the first system,
         // creating a "main" system when the model has none yet.
         if raw.systems.is_empty() {
-            actions.extend(add_system(raw, "main", FALLBACK_SYSTEM_FULL_NAME)?);
-            "main".clone_into(&mut parent);
+            actions.extend(add_system(
+                raw,
+                crate::empty_project::MAIN_SYSTEM_LABEL,
+                FALLBACK_SYSTEM_FULL_NAME,
+            )?);
+            crate::empty_project::MAIN_SYSTEM_LABEL.clone_into(&mut parent);
         } else {
             parent = raw
                 .systems

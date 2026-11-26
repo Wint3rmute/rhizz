@@ -284,6 +284,20 @@ fn model_serialization_via_wasm() {
 }
 
 #[wasm_bindgen_test]
+fn get_empty_project_matches_the_core_seed() {
+    let js_val = rhizz_wasm::get_empty_project().expect("should return the seed");
+    let seed: rhizz_wasm::EmptyProjectJS =
+        serde_wasm_bindgen::from_value(js_val).expect("should deserialize the seed");
+
+    assert_eq!(seed.main_file, "main.hcl");
+    assert_eq!(
+        seed.main_content,
+        rhizz_core::empty_project::EMPTY_PROJECT_HCL
+    );
+    assert_eq!(seed.dirs, vec!["docs".to_owned()]);
+}
+
+#[wasm_bindgen_test]
 fn get_example_projects_returns_all_embedded_examples() {
     let js_val = rhizz_wasm::get_example_projects().expect("should return examples");
     let examples: Vec<rhizz_wasm::ExampleProjectJS> =
