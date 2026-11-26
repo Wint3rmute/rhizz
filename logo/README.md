@@ -91,4 +91,5 @@ generators produce.
 
 `just logo-video` renders the Full HD gradient videos and `just logo-intro` the
 5-second logo intro (the network sprouts and settles into the mark, then the
-wordmark appears), both into `renders/video/` (not committed).
+wordmark appears), both into `renders/video/`. The MP4s are committed through Git LFS: re-render
+and commit them whenever the generators change, since CI does not check them.
