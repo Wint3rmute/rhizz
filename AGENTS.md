@@ -69,6 +69,12 @@ every `git push`:
 Repeat whenever you add commits after that (e.g. CI or review fixes): the
 changelog must match the branch's final commits.
 
+### Merging
+
+The repository only allows rebase-style merging (no merge commits, no squash),
+so every commit on a PR branch lands on `main` individually. Keep each commit
+message conventional.
+
 ## Build, Test & Lint Commands
 
 ```bash
