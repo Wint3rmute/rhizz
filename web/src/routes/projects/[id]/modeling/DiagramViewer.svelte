@@ -2,7 +2,7 @@
   // Shared read-only diagram session for Explore, embed, and Inventory.
   // Loads the project, compiles it, reads one layout, and draws the doc card.
   // Callers own chrome and, when a node click should navigate, onOpenDiagram.
-  import type { ComponentJS, ConnectionJS } from "rhizz";
+  import type { ComponentJS, ConnectionJS } from "rhizome";
   import { type Snippet } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { getProjectModel } from "../../../../ProjectModel.svelte";

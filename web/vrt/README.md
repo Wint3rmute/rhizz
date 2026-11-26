@@ -58,7 +58,7 @@ job running `just vrt` needs `lfs: true` on `actions/checkout`.
 Baselines are only comparable if every machine rasterises identically, so
 `playwright.vrt.config.ts` refuses to run outside the Nix dev shell:
 
-- **Fonts:** the flake exports `RHIZZ_VRT_FONTCONFIG_FILE`, a fontconfig that
+- **Fonts:** the flake exports `RHIZOME_VRT_FONTCONFIG_FILE`, a fontconfig that
   exposes only pinned DejaVu / Liberation / Noto Color Emoji fonts (every
   family, including `system-ui`, falls back to DejaVu Sans) with fixed hinting
   and antialiasing. Host fonts never leak in.

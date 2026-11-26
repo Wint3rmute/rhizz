@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 // localStorage key holding the JSON-encoded warning level (see
 // WARNING_LEVEL_STORAGE_KEY in WarningLevelState.svelte).
-const STORAGE_KEY = "RHIZZ_WARNING_LEVEL";
+const STORAGE_KEY = "RHIZOME_WARNING_LEVEL";
 
 async function openProject(page, name = "E2E strictness") {
   await page.goto("/");

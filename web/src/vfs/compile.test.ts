@@ -111,7 +111,7 @@ describe("readProjectSources", () => {
     expect(rootNames).toContain("project.hcl");
     expect(rootNames).toContain("components");
     expect(rootNames).toContain("views");
-    expect(rootNames).not.toContain(".rhizz");
+    expect(rootNames).not.toContain(".rhizome");
 
     // Check views contains main.hcl
     const views = await projFs.readdir("views");
@@ -122,7 +122,7 @@ describe("readProjectSources", () => {
     expect(compEntries.map((e) => e.name)).toContain("mcu.hcl");
 
     // Compilation sources include model files and diagram layouts alike,
-    // matching rhizz-core's own file discovery.
+    // matching rhizome-core's own file discovery.
     const sources = await readProjectSources(projFs);
     const filenames = sources.map((s) => s.filename);
     expect(filenames).toContain("project.hcl");

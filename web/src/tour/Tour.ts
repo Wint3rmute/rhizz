@@ -8,14 +8,14 @@ function page(projectId: string, page: string): string {
  * The workspace guided tour: welcome dialog, a navbar intro, then per page
  * a preview stop (spotlighting the page's navbar button while staying put)
  * followed by the page itself — modeling gets two (toolbar + sidebar) —
- * closing in code. It talks about elements of every Rhizz project
+ * closing in code. It talks about elements of every Rhizome project
  * (systems, components, views, diagnostics), never about one example.
  */
 export function tourSteps(projectId: string): OnboardingStep[] {
   return [
     {
       id: "tour-welcome",
-      title: "Welcome to Rhizz 👋",
+      title: "Welcome to Rhizome 👋",
       description: `This tour walks a project through every workspace page —
         navigation, overview, modeling, inventory, explore and code. With no
         project open, the tour button opens your first project, or creates an

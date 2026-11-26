@@ -1,6 +1,6 @@
 // Single entry point for all UI-driven model mutations.
 // Execution lives in Rust: the op is sent verbatim to `apply_model_op`
-// (`rhizz-core::mutate_to_hcl` via WASM), which parses the primary file,
+// (`rhizome-core::mutate_to_hcl` via WASM), which parses the primary file,
 // applies the op to the raw tree, resolves, and returns canonical HCL plus
 // logged actions. Refusals (parse errors, guard failures, resolve errors)
 // come back as `{ applied: false, diagnostics }` and leave the file
@@ -20,7 +20,7 @@ import type {
   SystemPatch,
 } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
-import { apply_model_op } from "../rhizz_wasm_wrapper";
+import { apply_model_op } from "../rhizome_wasm_wrapper";
 import { isLockRefusal } from "../vfs/vfsStore";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it

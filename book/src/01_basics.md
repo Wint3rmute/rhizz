@@ -1,8 +1,8 @@
-# Basics of Rhizz syntax
+# Basics of Rhizome syntax
 
-The smallest possible thing you could write in Rhizz looks like this:
+The smallest possible thing you could write in Rhizome looks like this:
 
-```rhizz
+```rhizome
 system "nothing" {
   full_name = "an empty system"
 }
@@ -13,23 +13,23 @@ the basics of the tool we'll be working with.
 
 ## HCL syntax
 
-Rhizz uses
+Rhizome uses
 [HCL - HashiCorp configuration language](https://github.com/hashicorp/hcl)
 to define system models. HCL is easy to write by hand, is much less verbose than
 JSON and is more predictable than YAML. It's already used to define cloud-based
 systems, so it was a natural fit.
 
-## Rhizz Compiler Output
+## Rhizome Compiler Output
 
 Output of the compiler will be frequently mentioned in this book. All code
-blocks in this book containing Rhizz code are run through the Rhizz compiler,
+blocks in this book containing Rhizome code are run through the Rhizome compiler,
 which emits the compilation results - completion metrics for the system model.
 You can see them in the green box in the example above. This way of displaying
 the results of examples will be used across this whole book.
 
 ## Systems
 
-```rhizz
+```rhizome
 system "nothing" {
   full_name = "an empty system"
 }
@@ -48,7 +48,7 @@ related to its manufacturing and utilization:
 2. Components of your plane need their own dedicated harnesses.
     - e.g. a dedicated harness for the engine.
 3. You could picture the same plane in various usage contexts.
-4. You want to re-use components and have Rhizz validate all defined configurations.
+4. You want to re-use components and have Rhizome validate all defined configurations.
 
 That's precisely what systems are for! You can define separate systems for
 different use-cases:
@@ -59,7 +59,7 @@ different use-cases:
 - `system hydraulics-testing-harness`
 
 Those systems will re-use various parts of your overall model. When you have to
-change your design, Rhizz will give you hollistic feedback, not only about the
+change your design, Rhizome will give you hollistic feedback, not only about the
 final use-case (`plane-in-air`), but also how the design change will affect the
 rest of your product's infrastructure.
 
@@ -67,7 +67,7 @@ rest of your product's infrastructure.
 
 ## Components
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "wheel" {
   full_name = "A spinning round object"
 }
@@ -78,7 +78,7 @@ thing as placing the component somewhere in your system model! This is a
 **reusable definition**. Each definition has a unique name, you will soon learn
 how to "place" (instantiate) your `component` definitions in your systems.
 
-You can already see that the Rhizz compiler started warning you about some
+You can already see that the Rhizome compiler started warning you about some
 issues with that definition. More on those issues in the Components in Detail
 page!
 
@@ -89,7 +89,7 @@ page!
 You now know about `systems` and about `components`, lets put this together
 and place a component in a system:
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "wheel" {
   full_name = "A spinning round object"
   leaf = true
@@ -113,7 +113,7 @@ later, you can ignore this fact for now.
 A component can have children (and those children can have their own children). Let's
 add a `tire` to our wheel:
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "tire" {
   full_name = "A 24in bicycle tire"
   leaf = true
@@ -148,7 +148,7 @@ multiple times, let's fix some of them by building a bike with:
 - A bicycle fork
 - Wheels attached
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "tire" {
   full_name = "A 24in bicycle tire"
   leaf = true
@@ -212,18 +212,18 @@ system "bicycle" {
 > TODO: why W003 still appears for standalone components...?
 
 We now have a simple (and incomplete) bicycle model. This model is small enough
-to be visualised with just a single diagram, so Rhizz's diagramming capabilities
+to be visualised with just a single diagram, so Rhizome's diagramming capabilities
 won't shine for such a trivial example.
 
-In the upcoming chapters, you'll see how Rhizz can model complex, nested and
+In the upcoming chapters, you'll see how Rhizome can model complex, nested and
 multi-dimentional systems, which cannot be grasped without looking at them from
 multiple different angles.
 
 ## Full projects
 
-All examples in this book are **actual Rhizz projects**.
+All examples in this book are **actual Rhizome projects**.
 So far we've been only working with single-file examples,
 here you can see a project with a system model and a view.
 
-```rhizz-project src="basics/demo" open="views/main.hcl" level="architectural"
+```rhizome-project src="basics/demo" open="views/main.hcl" level="architectural"
 ```

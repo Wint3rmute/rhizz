@@ -43,7 +43,7 @@ for (const source of ["example", "empty"] as const) {
     // First-run pending start: the welcome dialog opens on its own.
     const dialog = page.getByRole("alertdialog");
     await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("Welcome to Rhizz 👋")).toBeVisible();
+    await expect(dialog.getByText("Welcome to Rhizome 👋")).toBeVisible();
     await expectInViewport(dialog);
 
     // Walk every stop; each step navigates to its page before spotlighting.

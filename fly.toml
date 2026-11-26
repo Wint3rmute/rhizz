@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for rhizz on 2026-08-30T12:02:14Z
+# fly.toml app configuration file generated for rhizome on 2026-08-30T12:02:14Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -7,7 +7,7 @@ app = 'rhizz'
 primary_region = 'fra'
 
 [env]
-  RHIZZ_ADDR = '0.0.0.0:8080'
+  RHIZOME_ADDR = '0.0.0.0:8080'
   RUST_LOG = 'info'
 
 [[mounts]]

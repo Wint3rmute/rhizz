@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
-import init from "rhizz";
+import init from "rhizome";
 import type { Project } from "../vfs/types";
 import { projectSlug } from "../vfs/slug";
 import {
@@ -195,7 +195,7 @@ function stepStory(page: TourWalkPage, stepId: string, title: string): Story {
 export const Welcome: Story = stepStory(
   "overview",
   "tour-welcome",
-  "Welcome to Rhizz 👋",
+  "Welcome to Rhizome 👋",
 );
 export const Navbar: Story = {
   ...stepStory("overview", "tour-navbar", "Navbar"),

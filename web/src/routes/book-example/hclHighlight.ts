@@ -4,7 +4,7 @@
 // a CSS class each. Rendered with Svelte `{text}` interpolation (never
 // `{@html}`), so token text is always HTML-escaped.
 //
-// Covers the rhizz subset: `#`/`//` comments, `"..."` strings with escapes,
+// Covers the rhizome subset: `#`/`//` comments, `"..."` strings with escapes,
 // block keywords, `key =` attributes, numbers and booleans. Multi-line
 // heredocs are not special-cased (none of the book examples use them).
 

@@ -1584,13 +1584,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhizz-book"
+name = "rhizome-book"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
  "flate2",
- "rhizz-core",
+ "rhizome-core",
  "serde",
  "serde_json",
  "sha2",
@@ -1601,7 +1601,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhizz-cli"
+name = "rhizome-cli"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1609,8 +1609,8 @@ dependencies = [
  "ctrlc",
  "notify",
  "owo-colors",
- "rhizz-core",
- "rhizz-server",
+ "rhizome-core",
+ "rhizome-server",
  "serde",
  "serde_json",
  "similar",
@@ -1622,7 +1622,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhizz-core"
+name = "rhizome-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -1636,14 +1636,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhizz-server"
+name = "rhizome-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
  "mime_guess",
  "reqwest",
- "rhizz-core",
+ "rhizome-core",
  "rmcp",
  "rust-embed",
  "schemars",
@@ -1660,10 +1660,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rhizz-wasm"
+name = "rhizome-wasm"
 version = "0.1.0"
 dependencies = [
- "rhizz-core",
+ "rhizome-core",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

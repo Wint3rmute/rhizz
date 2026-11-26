@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import type { DiagnosticJS } from "rhizz";
+import type { DiagnosticJS } from "rhizome";
 import { expect, userEvent, waitFor, within } from "storybook/test";
 import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
 import { forgetDiagnosticsLayout } from "./modular_ui/diagnosticsLayout";

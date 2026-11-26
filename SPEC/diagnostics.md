@@ -2,7 +2,7 @@
 
 ## Overview
 
-Diagnostic codes in rhizz follow a simplified version of the approach used by
+Diagnostic codes in rhizome follow a simplified version of the approach used by
 the Rust compiler (`rustc_error_codes`). Each code has a single source of truth
 in a dedicated Markdown file, eliminating duplication across the spec, doc
 comments, and error messages.
@@ -79,7 +79,7 @@ so `**Warning level:** component` parses identically to `Component.`.
 
 ### 1. Automatic Code & Doc Generation (`build.rs`)
 
-Each `DiagnosticCode` const is generated at build time by `crates/rhizz-core/build.rs`, which scans `SPEC/diagnostics/` and produces the corresponding `pub const` definitions with embedded Markdown doc comments:
+Each `DiagnosticCode` const is generated at build time by `crates/rhizome-core/build.rs`, which scans `SPEC/diagnostics/` and produces the corresponding `pub const` definitions with embedded Markdown doc comments:
 
 ```rust
 #[doc = include_str!(r#"/path/to/SPEC/diagnostics/E001.md"#)]
@@ -108,7 +108,7 @@ This means `cargo doc` renders the full full_name, HCL examples, and fix guidanc
 SPEC.md §4 points to the `SPEC/diagnostics/` directory rather than maintaining
 inline tables. The Markdown files _are_ the spec for each code.
 
-### 3. Future: `rhizz explain E001`
+### 3. Future: `rhizome explain E001`
 
 A CLI subcommand can surface the same `include_str!` content at runtime, giving
 users offline access to the full explanation and example — identical to

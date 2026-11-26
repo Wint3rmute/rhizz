@@ -264,7 +264,7 @@ class GalleryReporter implements Reporter {
 
     return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>Rhizz VRT — ${count("changed")} changed</title>
+<title>Rhizome VRT — ${count("changed")} changed</title>
 <style>${CSS}</style></head>
 <body>
 <header class="top">

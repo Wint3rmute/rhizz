@@ -6,7 +6,7 @@
 // metadata persisted in `views/*.hcl` — they must ride the same
 // layout-only undo stack as node drags, otherwise add/delete/edit/drag/
 // resize of a note can never be undone.
-import type { Annotation } from "../../../../rhizz_wasm_wrapper";
+import type { Annotation } from "../../../../rhizome_wasm_wrapper";
 import type { StoredBox, StoredConnection } from "./persistence";
 
 export interface DiagramContent {

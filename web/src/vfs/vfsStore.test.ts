@@ -35,7 +35,7 @@ interface FakeServerFetch {
   }[];
 }
 
-// A fake rhizz-server standing in for fetch: serves one in-memory data dir
+// A fake rhizome-server standing in for fetch: serves one in-memory data dir
 // with the per-project protocol (`GET /api/vfs`, `POST .../lock`,
 // `PUT .../files`, `DELETE .../project`) and records every call it receives.
 // Locks behave like the real side: free projects auto-acquire for the
@@ -98,7 +98,7 @@ function makeFakeFetch(options: FakeServerFetchOptions = {}): FakeServerFetch {
   const versionOf = (id: string): string => `v${String(versions.get(id) ?? 0)}`;
   const userOf = (init?: RequestInit): string | null => {
     const headers = new Headers(init?.headers);
-    return headers.get("x-rhizz-user");
+    return headers.get("x-rhizome-user");
   };
 
   const fetchImpl = (
@@ -301,19 +301,19 @@ function makeFakeFetch(options: FakeServerFetchOptions = {}): FakeServerFetch {
 describe("ServerProjectStore HTTP behavior", () => {
   it("fetches before a mutation and writes each project on save", async () => {
     const fake = makeFakeFetch();
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
     });
     await store.createProject("drone");
     // Bootstrap, then a version read plus the project write.
     expect(fake.calls.map((c) => c.method)).toEqual(["GET", "GET", "PUT"]);
-    expect(fake.calls[0]?.url).toBe("http://rhizz-server/api/vfs");
+    expect(fake.calls[0]?.url).toBe("http://rhizome-server/api/vfs");
     expect(fake.calls[1]?.url).toBe(
-      "http://rhizz-server/api/projects/drone/state",
+      "http://rhizome-server/api/projects/drone/state",
     );
     expect(fake.calls[2]?.url).toBe(
-      "http://rhizz-server/api/projects/drone/files",
+      "http://rhizome-server/api/projects/drone/files",
     );
     expect(fake.calls[2]?.user).toBe("alice");
 
@@ -329,7 +329,7 @@ describe("ServerProjectStore HTTP behavior", () => {
 
   it("sends the edited project as paths on update", async () => {
     const fake = makeFakeFetch();
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -337,7 +337,7 @@ describe("ServerProjectStore HTTP behavior", () => {
     const project = await store.createProject("drone");
     await store.createFile(project.id, null, "system.hcl", "system {}");
     const put = [...fake.calls].reverse().find((c) => c.method === "PUT");
-    expect(put?.url).toBe("http://rhizz-server/api/projects/drone/files");
+    expect(put?.url).toBe("http://rhizome-server/api/projects/drone/files");
     expect(JSON.parse(put?.body ?? "{}")).toEqual({
       base_version: "v1",
       files: [{ path: "system.hcl", content: "system {}" }],
@@ -346,7 +346,7 @@ describe("ServerProjectStore HTTP behavior", () => {
 
   it("deletes the server directory of a removed project", async () => {
     const fake = makeFakeFetch();
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -355,7 +355,7 @@ describe("ServerProjectStore HTTP behavior", () => {
     await store.deleteProject(project.id);
     const last = fake.calls[fake.calls.length - 1];
     expect(last?.method).toBe("DELETE");
-    expect(last?.url).toBe("http://rhizz-server/api/projects/drone");
+    expect(last?.url).toBe("http://rhizome-server/api/projects/drone");
     // Gone from the next bootstrap too.
     expect(await store.listProjects()).toEqual([]);
   });
@@ -377,11 +377,11 @@ describe("ServerProjectStore HTTP behavior", () => {
     });
     // Someone else takes the project directly against the fake server …
     const locked = await fake.fetch(
-      "http://rhizz-server/api/projects/drone/lock",
-      { method: "POST", headers: { "x-rhizz-user": "bob" } },
+      "http://rhizome-server/api/projects/drone/lock",
+      { method: "POST", headers: { "x-rhizome-user": "bob" } },
     );
     expect(locked.status).toBe(200);
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -399,12 +399,12 @@ describe("ServerProjectStore HTTP behavior", () => {
     // Tab A (alice) and tab B (bob) on one fake server: A's write holds the
     // project, B's write is refused, and B reads A's version afterwards.
     const fake = makeFakeFetch();
-    const tabA = new ServerProjectStore("http://rhizz-server", {
+    const tabA = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
     });
-    const tabB = new ServerProjectStore("http://rhizz-server", {
+    const tabB = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "bob",
       now: () => "t0",
@@ -421,7 +421,7 @@ describe("ServerProjectStore HTTP behavior", () => {
 
   it("versions each write against a freshly read state", async () => {
     const fake = makeFakeFetch();
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -442,7 +442,7 @@ describe("ServerProjectStore HTTP behavior", () => {
 
   it("refuses the write when the state read fails", async () => {
     const fake = makeFakeFetch({ status: 500 });
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -498,7 +498,7 @@ describe("ServerProjectStore HTTP behavior", () => {
         ],
       },
     });
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       getUser: () => "alice",
       now: () => "t0",
@@ -514,8 +514,8 @@ describe("ServerProjectStore HTTP behavior", () => {
       .map((c) => c.url)
       .filter((url) => url.includes("/api/projects/"));
     expect(projectUrls).toEqual([
-      "http://rhizz-server/api/projects/drone/state",
-      "http://rhizz-server/api/projects/drone/files",
+      "http://rhizome-server/api/projects/drone/state",
+      "http://rhizome-server/api/projects/drone/files",
     ]);
     // Apollo's tree is byte-identical on the fake server.
     expect(await store.listNodes("apollo")).toHaveLength(1);
@@ -523,11 +523,11 @@ describe("ServerProjectStore HTTP behavior", () => {
 
   it("strips trailing slashes from the base url", async () => {
     const fake = makeFakeFetch();
-    const store = new ServerProjectStore("http://rhizz-server///", {
+    const store = new ServerProjectStore("http://rhizome-server///", {
       fetch: fake.fetch,
     });
     await store.listProjects();
-    expect(fake.calls[0]?.url).toBe("http://rhizz-server/api/vfs");
+    expect(fake.calls[0]?.url).toBe("http://rhizome-server/api/vfs");
   });
 
   it("keeps one project when a loaded blob has two at the same address", async () => {
@@ -555,7 +555,7 @@ describe("ServerProjectStore HTTP behavior", () => {
         nodes: [],
       },
     });
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
     });
     expect((await store.listProjects()).map((p) => p.name)).toEqual([
@@ -564,7 +564,7 @@ describe("ServerProjectStore HTTP behavior", () => {
   });
 
   it("rejects when the server is unreachable", async () => {
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: makeFakeFetch({ networkDown: true }).fetch,
     });
     await expect(store.listProjects()).rejects.toThrow("network down");
@@ -572,14 +572,14 @@ describe("ServerProjectStore HTTP behavior", () => {
   });
 
   it("rejects on a non-ok load response", async () => {
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: makeFakeFetch({ status: 500 }).fetch,
     });
     await expect(store.listProjects()).rejects.toThrow(/500/);
   });
 
   it("rejects on a non-ok save response", async () => {
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: makeFakeFetch({ status: 500 }).fetch,
     });
     await expect(store.createProject("x")).rejects.toThrow(/500/);
@@ -612,7 +612,7 @@ describe("ServerProjectStore HTTP behavior", () => {
         }),
       );
     };
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch,
     });
     await expect(store.createProject("x")).rejects.toThrow(detail);
@@ -622,7 +622,7 @@ describe("ServerProjectStore HTTP behavior", () => {
     // Two stores sharing one fake fetch share the fake server's blob,
     // just like two browser tabs would share the real server's data dir.
     const fake = makeFakeFetch();
-    const first = new ServerProjectStore("http://rhizz-server", {
+    const first = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       now: () => "t0",
     });
@@ -635,7 +635,7 @@ describe("ServerProjectStore HTTP behavior", () => {
       "component a {}",
     );
 
-    const second = new ServerProjectStore("http://rhizz-server", {
+    const second = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
     });
     const projects = await second.listProjects();
@@ -648,11 +648,11 @@ describe("ServerProjectStore HTTP behavior", () => {
     // Two tabs on one fake server: the follower keeps its cached snapshot
     // until it invalidates, then reads the truth.
     const fake = makeFakeFetch();
-    const first = new ServerProjectStore("http://rhizz-server", {
+    const first = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       now: () => "t0",
     });
-    const second = new ServerProjectStore("http://rhizz-server", {
+    const second = new ServerProjectStore("http://rhizome-server", {
       fetch: fake.fetch,
       now: () => "t0",
     });
@@ -685,7 +685,7 @@ describe("ServerProjectStore HTTP behavior", () => {
         },
       ],
     };
-    const store = new ServerProjectStore("http://rhizz-server", {
+    const store = new ServerProjectStore("http://rhizome-server", {
       fetch: makeFakeFetch({ blob }).fetch,
     });
     const projects = await store.listProjects();

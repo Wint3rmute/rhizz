@@ -2,14 +2,14 @@
 //
 // Everything the frontend renders about a component — its inspector fields,
 // its icon/color/border/font, its ports — is reachable from the compiled
-// model plus rhizz-core's canonical `component_keys()`. There is no second
+// model plus rhizome-core's canonical `component_keys()`. There is no second
 // TypeScript model tree to keep in sync: model *writes* go through
 // `applyModelMutation` (`history/applyMutation.ts`), which executes the op in
 // Rust and persists canonical HCL. This module only reads.
 //
 // Deliberately has zero dependency on Svelte, so it is unit-testable in plain
 // Node (see modelView.test.ts).
-import type { ModelJS } from "rhizz";
+import type { ModelJS } from "rhizome";
 import type { ConnectionRef } from "./actionLog";
 import { componentKeyAt } from "./modelKeys";
 import type { PortSpot } from "./routes/projects/[id]/modeling/geometry";
@@ -116,7 +116,7 @@ export interface DefinitionOption {
 
 /**
  * The `model.to_js()` payload shape. Only the parts the UI reads are typed;
- * rhizz-core's serializer is the source of truth for the rest.
+ * rhizome-core's serializer is the source of truth for the rest.
  */
 export interface RawModelPayload {
   systems?: {

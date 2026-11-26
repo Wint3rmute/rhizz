@@ -1,6 +1,6 @@
 # Warnings & Errors
 
-The Rhizz compiler produces 2 types of diagnostic messages:
+The Rhizome compiler produces 2 types of diagnostic messages:
 
 - Warnings, which inform you about a non-critical issue
 - Errors, which prevent the compiler from building the system model
@@ -11,7 +11,7 @@ entities are missing full names, and the `link` connection is not complete: its
 `serial` protocol is not marked `leaf` and has no `realized_by`. The model still
 compiles and scores — the warnings point at exactly what to finish.
 
-```rhizz
+```rhizome
 protocol "serial" {
   # No messages are defined yet.
 }
@@ -57,7 +57,7 @@ outlines what is incomplete.
 
 ## Warning Levels
 
-The Rhizz compiler can run at different strictness levels, each of them filtering out different warnings. Currently, 3 levels are defined:
+The Rhizome compiler can run at different strictness levels, each of them filtering out different warnings. Currently, 3 levels are defined:
 
 ### Business spec
 
@@ -84,7 +84,7 @@ built. Tutorial snippets often run at `architectural` so you are not nagged
 about leaf-level detail (like missing `docs/` files) before the concepts are
 introduced; warning demos run at `component` so nothing is hidden.
 
-Authors pick the level per fence: append `,level=architectural` to a rhizz
+Authors pick the level per fence: append `,level=architectural` to a rhizome
 code fence, or `level="architectural"` to a full-project embed directive.
 An unknown level fails the book build loudly, so a typo can never silently
 change a verdict.

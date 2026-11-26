@@ -49,9 +49,9 @@ describe("lastView storage", () => {
 
   it("rejects garbage instead of handing it back", () => {
     const data = stubStore();
-    data.set("rhizz-last-view:project-a", "{not json");
+    data.set("rhizome-last-view:project-a", "{not json");
     expect(readLastView("project-a")).toBeNull();
-    data.set("rhizz-last-view:project-a", JSON.stringify(42));
+    data.set("rhizome-last-view:project-a", JSON.stringify(42));
     expect(readLastView("project-a")).toBeNull();
   });
 

@@ -1,5 +1,5 @@
 {
-  description = "rhizz dev environment";
+  description = "rhizome dev environment";
   inputs.nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
 
   outputs = { self, nixpkgs }:
@@ -15,7 +15,7 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           # Build inputs for the Rust stages: the workspace manifests plus
-          # everything `rhizz-core`'s build script reads via include_str! and
+          # everything `rhizome-core`'s build script reads via include_str! and
           # `cargo:rerun-if-changed` (SPEC/diagnostics, examples/).
           rustSrc = pkgs.lib.sourceByRegex ./. [
             "Cargo\\.toml"
@@ -37,32 +37,32 @@
           # "examples" (the server walks each project directory recursively).
           examplesSrc = ./examples;
 
-          rhizz-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
+          rhizome-wasm-pkg = pkgs.callPackage ./nix/wasm.nix { src = rustSrc; };
 
-          rhizz-frontend = pkgs.callPackage ./nix/frontend.nix {
+          rhizome-frontend = pkgs.callPackage ./nix/frontend.nix {
             src = ./web;
-            inherit rhizz-wasm-pkg;
+            inherit rhizome-wasm-pkg;
           };
 
-          rhizz-server = pkgs.callPackage ./nix/backend.nix {
+          rhizome-server = pkgs.callPackage ./nix/backend.nix {
             src = rustSrc;
-            inherit rhizz-frontend;
+            inherit rhizome-frontend;
             # `shortRev` exists only for a clean git tree; `dirtyShortRev`
             # marks a dirty one. Neither exists for a non-git source.
             gitSha = self.shortRev or self.dirtyShortRev or "unknown";
             # Release tag (e.g. `0.10.0`) for tagged builds, shown in the UI
             # via `/api/version`. Flakes evaluate purely, so the tag cannot
-            # be read from git here: CI tag builds pass `RHIZZ_GIT_TAG` with
+            # be read from git here: CI tag builds pass `RHIZOME_GIT_TAG` with
             # `--impure` (see `.github/workflows/docker.yml`). Empty (and
             # therefore omitted from the payload) in every other build.
-            gitTag = builtins.getEnv "RHIZZ_GIT_TAG";
+            gitTag = builtins.getEnv "RHIZOME_GIT_TAG";
           };
 
           # A container image is inherently Linux: on Darwin the same
           # derivation would pack a Mach-O binary into an image that cannot
           # run it, so the attribute is only defined where it means something.
-          rhizz-docker = pkgs.callPackage ./nix/docker.nix {
-            inherit rhizz-server;
+          rhizome-docker = pkgs.callPackage ./nix/docker.nix {
+            inherit rhizome-server;
             examples = examplesSrc;
           };
 
@@ -73,11 +73,11 @@
           tasks = import ./nix/tasks.nix { inherit pkgs; };
         in
         {
-          inherit rhizz-wasm-pkg rhizz-frontend rhizz-server;
+          inherit rhizome-wasm-pkg rhizome-frontend rhizome-server;
         }
         // tasks.scripts
         // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          inherit rhizz-docker;
+          inherit rhizome-docker;
         });
 
       devShells = forAllSystems (system:
@@ -103,7 +103,7 @@
               flyctl
               gh
 
-              # Commented out, not used often enough: verifies `.#rhizz-docker`
+              # Commented out, not used often enough: verifies `.#rhizome-docker`
               # without a Docker daemon: `podman load -i result` then
               # `podman run`. Daemonless and runs in a user namespace, so it
               # needs no privileged service. Note the published port is
@@ -117,7 +117,7 @@
             shellHook = ''
               export PLAYWRIGHT_BROWSERS_PATH="${pkgs.playwright-driver.browsers}"
               export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-              export RHIZZ_VRT_FONTCONFIG_FILE="${vrtFontsConf}"
+              export RHIZOME_VRT_FONTCONFIG_FILE="${vrtFontsConf}"
             '';
           };
         });

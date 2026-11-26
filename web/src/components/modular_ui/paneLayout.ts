@@ -3,7 +3,7 @@
 // serializable object, persisted to localStorage under a per-workspace key.
 //
 // Each workspace defines its store in one line —
-// `createPaneLayout({ key: "rhizz-inventory-layout:v1" })` — and reads it
+// `createPaneLayout({ key: "rhizome-inventory-layout:v1" })` — and reads it
 // back with the same guarded, validated idiom as `lastView.ts`, so garbage
 // never reaches the layout. Deliberately dependency-free so the logic is
 // unit-testable in isolation.

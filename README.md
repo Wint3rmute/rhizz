@@ -1,13 +1,13 @@
-# Rhizz — Rhizomatic Systems Engineering
+# Rhizome — Rhizomatic Systems Engineering
 
-Rhizz strives to be an actually useful architecture tool for software
+Rhizome strives to be an actually useful architecture tool for software
 architects. Express high-level system concepts as code and validate them with a
 compiler accepting different levels of precision, from a business-level
 description, all the way to a byte-by-byte interface definition.
 
 In other words - a code-first [MBSE](https://baczek.me/mbse) tool.
 
-![Landing page screenshot](book/src/rhizz_landing.png)
+![Landing page screenshot](book/src/rhizome_landing.png)
 
 ## Core Ideas
 
@@ -15,7 +15,7 @@ In other words - a code-first [MBSE](https://baczek.me/mbse) tool.
 (same syntax as Terraform). All `.hcl` files in a directory are merged into one
 model, so you can split the description across as many files as you like.
 
-**Completion score** — `rhizz score` measures how fully a system is decomposed.
+**Completion score** — `rhizome score` measures how fully a system is decomposed.
 Sketch a high-level architecture first, fill in details over time, and track
 progress numerically:
 
@@ -40,12 +40,12 @@ view "power-paths" {
 ## Usage
 
 ```
-rhizz check [path]   # parse and validate
-rhizz score [path]   # print completion report
-rhizz build [path]   # check + score (default)
-rhizz fmt [path]     # format .hcl files in place
-rhizz watch [path]   # rebuild on file changes
-rhizz web            # serve the web editor over HTTP
+rhizome check [path]   # parse and validate
+rhizome score [path]   # print completion report
+rhizome build [path]   # check + score (default)
+rhizome fmt [path]     # format .hcl files in place
+rhizome watch [path]   # rebuild on file changes
+rhizome web            # serve the web editor over HTTP
 ```
 
 See `SPEC.md`, `SPEC/`, and `examples/` for the full specification and worked
@@ -53,13 +53,13 @@ examples.
 
 ## Web Server
 
-`rhizz web` is an HTTP server (axum) that serves the compiled web editor and
+`rhizome web` is an HTTP server (axum) that serves the compiled web editor and
 persists the frontend's virtual filesystem:
 
 ```
-rhizz web                         # serves UI on 127.0.0.1:3000
-rhizz web --addr 0.0.0.0:8080     # custom bind address
-rhizz web --data-dir /data        # custom data directory
+rhizome web                         # serves UI on 127.0.0.1:3000
+rhizome web --addr 0.0.0.0:8080     # custom bind address
+rhizome web --data-dir /data        # custom data directory
 ```
 
 ## Development commands

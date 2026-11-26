@@ -2,12 +2,12 @@
 
 ## Binary name
 
-`rhizz` (not `mbse` as in the original spec draft — matches the crate name).
+`rhizome` (not `mbse` as in the original spec draft — matches the crate name).
 
 ## Usage
 
 ```
-rhizz <command> [options] [path]
+rhizome <command> [options] [path]
 ```
 
 `path` defaults to `.` (current directory). The project's system model file (`system.hcl` or `main.hcl`) and any view definition files (`views/*.hcl`) are discovered and compiled.
@@ -33,18 +33,18 @@ everything. Early abort on errors: if `check` finds errors, `score` is skipped.
 ## `web` — Web Server
 
 ```
-rhizz web [--addr ADDR] [--data-dir DIR]
+rhizome web [--addr ADDR] [--data-dir DIR]
 ```
 
 Starts an HTTP server (axum) that serves the compiled web frontend and
 persists the browser-based virtual filesystem (VFS) to disk. The server
-embeds the frontend at compile time (via `rhizz-server`'s `build.rs`), so the
-`rhizz` binary is fully self-contained.
+embeds the frontend at compile time (via `rhizome-server`'s `build.rs`), so the
+`rhizome` binary is fully self-contained.
 
 | Flag         | Env var          | Default          | Description                                     |
 | ------------ | ---------------- | ---------------- | ----------------------------------------------- |
-| `--addr`     | `RHIZZ_ADDR`     | `127.0.0.1:3000` | Address to bind the HTTP server to              |
-| `--data-dir` | `RHIZZ_DATA_DIR` | `rhizz-data`     | Directory holding one sub-directory per project |
+| `--addr`     | `RHIZOME_ADDR`     | `127.0.0.1:3000` | Address to bind the HTTP server to              |
+| `--data-dir` | `RHIZOME_DATA_DIR` | `rhizome-data`     | Directory holding one sub-directory per project |
 
 The server exposes:
 
@@ -54,7 +54,7 @@ The server exposes:
   who holds its lock (`lockedBy`, `lockExpiresAt`), if anyone. Watchers poll
   this to follow the editor.
 - `POST /api/projects/{id}/lock` — take (or renew) the project's lock for
-  the `x-rhizz-user` caller. Held by someone else, the edit is refused with
+  the `x-rhizome-user` caller. Held by someone else, the edit is refused with
   409 naming the holder.
 - `POST /api/projects/{id}/heartbeat` — renew the lease without touching
   the idle timer. Not held by this user, the client must re-acquire (409).
@@ -120,7 +120,7 @@ Use `clap` with derive API. Sketch:
 
 ```rust
 #[derive(Parser)]
-#[command(name = "rhizz", version, about = "MBSE model checker")]
+#[command(name = "rhizome", version, about = "MBSE model checker")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Command>,

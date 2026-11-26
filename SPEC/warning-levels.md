@@ -1,7 +1,7 @@
 # Warning Levels
 
 > **Impl:** the `WarningLevel` enum and the gating rule live in
-> `crates/rhizz-core/src/diagnostics.rs`; the per-code level is declared in
+> `crates/rhizome-core/src/diagnostics.rs`; the per-code level is declared in
 > `SPEC/diagnostics/W*.md` and compiled into `DiagnosticCode` by `build.rs`.
 
 A **warning level** describes how much detail a project is being specified at.
@@ -98,7 +98,7 @@ therefore inert and exists only to satisfy the format.
   `component`), see [cli.md](cli.md). The JSON output echoes the active level.
 - **Web application** — a "Warning level" selector in the navbar, persisted
   across reloads.
-- **`rhizz-core`** — `compile_with_warning_level(&[Source], WarningLevel)`;
+- **`rhizome-core`** — `compile_with_warning_level(&[Source], WarningLevel)`;
   plain `compile` reports every warning.
 
 With `--strict`, warnings are escalated to a failing exit code — but only the

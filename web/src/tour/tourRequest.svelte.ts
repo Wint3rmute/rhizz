@@ -24,7 +24,7 @@ export function requestTourStart(projectId: string | null = null): void {
   request.generation += 1;
 }
 
-const PENDING_TOUR_KEY = "rhizz-pending-tour";
+const PENDING_TOUR_KEY = "rhizome-pending-tour";
 
 /**
  * Arms a one-shot tour start for the next project page mount — set when

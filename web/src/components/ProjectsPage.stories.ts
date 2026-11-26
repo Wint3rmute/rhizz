@@ -109,7 +109,7 @@ export const WithProjects: Story = {
     await expect(canvas.getByText(/single search box/)).toBeInTheDocument();
 
     // The build footer sits at the bottom of the list and links to its commit.
-    const build = canvas.getByRole("link", { name: /rhizz build 07265fb/ });
+    const build = canvas.getByRole("link", { name: /rhizome build 07265fb/ });
     await expect(build).toHaveAttribute(
       "href",
       "https://github.com/Wint3rmute/rhizz/commit/07265fb",

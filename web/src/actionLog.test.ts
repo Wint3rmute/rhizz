@@ -224,7 +224,7 @@ describe("actionLog", () => {
     expect(script).toContain(
       'import { beforeAll, describe, expect, it } from "vitest";',
     );
-    expect(script).toContain('import init from "rhizz";');
+    expect(script).toContain('import init from "rhizome";');
     expect(script).toContain(
       'import { applyModelMutation } from "./history/applyMutation";',
     );

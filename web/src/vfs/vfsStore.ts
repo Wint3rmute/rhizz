@@ -53,7 +53,7 @@ export type FetchLike = (
   init?: RequestInit,
 ) => Promise<Response>;
 
-export const DEFAULT_STORAGE_KEY = "rhizz:vfs:v1";
+export const DEFAULT_STORAGE_KEY = "rhizome:vfs:v1";
 const VFS_ENDPOINT = "/api/vfs";
 
 /** A backend holding the blob in memory: no storage, no serialization. */
@@ -107,7 +107,7 @@ export function localStorageBackend(
 }
 
 /**
- * A backend over the rhizz-server HTTP API. Reads bootstrap from the
+ * A backend over the rhizome-server HTTP API. Reads bootstrap from the
  * whole-VFS `GET /api/vfs`; writes go per project, so one client can never
  * overwrite or delete another's projects the way the old whole-blob PUT
  * could — and a project you never touched is never written at all.
@@ -136,7 +136,7 @@ export function httpBackend(
   let me: string | null = null;
   const userHeaders = (): Record<string, string> => {
     me ??= getUser();
-    return { "x-rhizz-user": me };
+    return { "x-rhizome-user": me };
   };
   // Last-written file set per project, as canonical JSON. Seeded on read;
   // a backend that never read writes everything once.
@@ -557,7 +557,7 @@ export class LocalStorageProjectStore extends VfsProjectStore {
   }
 }
 
-/** Used when `VITE_RHIZZ_SERVER_URL` is set: persistence via rhizz-server. */
+/** Used when `VITE_RHIZOME_SERVER_URL` is set: persistence via rhizome-server. */
 export class ServerProjectStore extends VfsProjectStore {
   constructor(
     baseUrl: string,

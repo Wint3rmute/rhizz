@@ -10,7 +10,7 @@ import { createNewProject } from "./helpers";
 // localStorage (the default e2e backend): what is under test is which file
 // each control writes to, which is a property of the frontend, not of a
 // backend.
-const VFS_KEY = "rhizz:vfs:v1";
+const VFS_KEY = "rhizome:vfs:v1";
 
 /** Every file in the VFS, keyed by its project-relative path. */
 async function storedFiles(page: import("@playwright/test").Page) {

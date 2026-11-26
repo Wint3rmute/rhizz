@@ -1,5 +1,5 @@
 {
-  "name": "rhizz-web",
+  "name": "rhizome-web",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -39,7 +39,7 @@
     "daisyui": "^5.7.21",
     "fuse.js": "^7.5.0",
     "marked": "^14.0.0",
-    "rhizz": "file:../crates/rhizz-wasm/pkg/",
+    "rhizome": "file:../crates/rhizome-wasm/pkg/",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"

@@ -1,13 +1,13 @@
-# `rhizz` Specification
+# `rhizome` Specification
 
-Rhizz is a code-first system architecture modeling tool. It combines:
+Rhizome is a code-first system architecture modeling tool. It combines:
 
 - Architecture modeling
 - Model-based Systems Engineering (MBSE)
 - Code-first approach
 - Gradual compilation (or rather validation) of your model
 
-The goal of Rhizz is to make Software Architecture something more than drawing
+The goal of Rhizome is to make Software Architecture something more than drawing
 diagrams and writing lengthy design documents. It provides a formalized modeling
 language for defining system architectures at various levels of abstraction.
 
@@ -736,7 +736,7 @@ gated, so an incomplete spec still compiles at every level.
 
 ### Locality of Component Verification
 
-Rhizz supports verifying components in isolation (e.g. library components or
+Rhizome supports verifying components in isolation (e.g. library components or
 unit-level checks) vs. verifying a fully instantiated system:
 
 1. **Component in Isolation:**
@@ -805,7 +805,7 @@ entries and every one of them is complete:
   in a realization chain. Its message names the first incomplete connection in
   the chain (the root cause) when there is one.
 
-The computation is `rhizz_core::validate::connection_completeness`, which
+The computation is `rhizome_core::validate::connection_completeness`, which
 returns a `Completeness` value per connection. Consumers such as the web
 inspector read that result rather than reimplementing the rule.
 
@@ -1212,20 +1212,20 @@ Delegation reuses existing blocks — no view format change.
 > **Impl:** see [SPEC/cli.md](SPEC/cli.md) — `clap` struct layout, JSON output
 > schema, pipeline stages, and error formatting.
 
-The CLI is implemented in the `rhizz-cli` crate, which is a thin frontend over
-`rhizz-core`. It is responsible for file discovery, output formatting, and exit
+The CLI is implemented in the `rhizome-cli` crate, which is a thin frontend over
+`rhizome-core`. It is responsible for file discovery, output formatting, and exit
 codes. All model compilation,
-validation, and scoring logic lives in `rhizz-core` — `rhizz-cli` contains no model logic of its own.
+validation, and scoring logic lives in `rhizome-core` — `rhizome-cli` contains no model logic of its own.
 
 ```
-rhizz <command> [options] [path]
+rhizome <command> [options] [path]
 ```
 
 | Command              | Description                                                            |
 | -------------------- | ---------------------------------------------------------------------- |
-| `rhizz check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
-| `rhizz score <path>` | Run `check`, then print the completion report.                         |
-| `rhizz build <path>` | Run `check` + `score` in sequence (default command).                   |
+| `rhizome check <path>` | Parse, validate, and report errors/warnings. Exit code 0 if no errors. |
+| `rhizome score <path>` | Run `check`, then print the completion report.                         |
+| `rhizome build <path>` | Run `check` + `score` in sequence (default command).                   |
 
 ### Options
 
@@ -1239,7 +1239,7 @@ rhizz <command> [options] [path]
 ### Example Session
 
 ```bash
-$ rhizz build ./drone-project/
+$ rhizome build ./drone-project/
 
   Parsing 2 files...
   ✓ Parsed: system.hcl, views/overview.hcl
@@ -1253,7 +1253,7 @@ $ rhizz build ./drone-project/
 ```
 
 ```bash
-$ rhizz build ./drone-project/   # after fix
+$ rhizome build ./drone-project/   # after fix
 
   Parsing 2 files... ✓
 
@@ -1316,7 +1316,7 @@ system "home-monitor" {
 | Port `external` and `required` attributes                       | Enables locality of verification: components can be checked in isolation as reusable units without false unused-port warnings, while ensuring required interfaces are bound when instantiated in a system             |
 | Connections name port paths (`comp/port`)                   | Port paths make protocol, role, and direction inference possible                                                                                                                                                  |
 | Messages live exclusively on protocols, not components or ports | Messages represent communication exchanged between components across protocols; keeping schemas on protocols prevents duplication and makes components purely structural                                                 |
-| Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizz files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
+| Top-level components + `source` label reference                 | Keeps all files as valid, parseable rhizome files (no bare-body format). Reuses the existing flat-merge pipeline — `source` is resolved by label, no file I/O during resolution. Components can be reused across systems. |
 | Direction inferred from port roles, not declared on connections | Eliminates a redundant field and makes role mismatches automatically detectable                                                                                                                                         |
 | `type` on fields is a free-form string                          | Supports gradual specification — no type system to fight during early design                                                                                                                                            |
 | `level` auto-increments from parent                             | Reduces boilerplate; explicit override still available                                                                                                                                                                  |
@@ -1341,9 +1341,9 @@ system "home-monitor" {
 
 ## 10. Frontends
 
-`rhizz` is available as a **command-line tool** (`rhizz-cli`), a **web
+`rhizome` is available as a **command-line tool** (`rhizome-cli`), a **web
 application** (`web/`) for graphical modeling, and a **WebAssembly module**
-(`rhizz-wasm`). All frontends share the same underlying model compiler and
+(`rhizome-wasm`). All frontends share the same underlying model compiler and
 produce identical results; the choice of frontend is purely a matter of
 workflow preference.
 
@@ -1351,7 +1351,7 @@ workflow preference.
 > WebAssembly module in [SPEC/architecture.md](SPEC/architecture.md) for build
 > instructions, JS API, and crate details.
 
-### `rhizz-wasm`
+### `rhizome-wasm`
 
 A WebAssembly frontend that exposes the same compile pipeline to JavaScript
 environments (browsers, Node.js). Callers supply HCL source content as

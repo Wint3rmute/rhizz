@@ -34,7 +34,7 @@ function makeFakeServer(): FakeServer {
           : input.url;
     const method = init?.method ?? "GET";
     const headers = new Headers(init?.headers);
-    calls.push({ method, url, user: headers.get("x-rhizz-user") });
+    calls.push({ method, url, user: headers.get("x-rhizome-user") });
     if (state.down) return Promise.reject(new Error("network down"));
     if (url.endsWith("/state")) {
       return Promise.resolve(
@@ -48,7 +48,7 @@ function makeFakeServer(): FakeServer {
       );
     }
     if (url.endsWith("/heartbeat")) {
-      const user = headers.get("x-rhizz-user");
+      const user = headers.get("x-rhizome-user");
       if (state.lockedBy !== null && state.lockedBy !== user) {
         return Promise.resolve(new Response("conflict", { status: 409 }));
       }
@@ -58,7 +58,7 @@ function makeFakeServer(): FakeServer {
       );
     }
     if (url.endsWith("/release")) {
-      const user = headers.get("x-rhizz-user");
+      const user = headers.get("x-rhizome-user");
       if (state.lockedBy !== null && state.lockedBy !== user) {
         return Promise.resolve(new Response("conflict", { status: 409 }));
       }

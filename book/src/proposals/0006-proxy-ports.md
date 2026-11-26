@@ -6,7 +6,7 @@
 
 ## Motivation
 
-Rhizz can describe peer-to-peer connectivity (assembly) and can lift a
+Rhizome can describe peer-to-peer connectivity (assembly) and can lift a
 low-level connection into a high-level view (projection), but it cannot hide
 internal complexity in the model itself. There is no encapsulation boundary:
 a port is either a dead end or a leak.

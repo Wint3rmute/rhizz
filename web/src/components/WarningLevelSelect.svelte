@@ -4,7 +4,7 @@
     setWarningLevel,
     warningLevelLabel,
   } from "../WarningLevelState.svelte";
-  import { WARNING_LEVELS } from "../rhizz_wasm_wrapper";
+  import { WARNING_LEVELS } from "../rhizome_wasm_wrapper";
 
   // The project-wide warning preset: it gates which warnings the compiler
   // reports (errors are never gated) and persists across reloads.

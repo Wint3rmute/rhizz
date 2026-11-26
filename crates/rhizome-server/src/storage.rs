@@ -1,0 +1,4267 @@
+//! Filesystem persistence for the VFS API.
+//!
+//! The server is a dumb store: it persists exactly what the frontend dumps,
+//! with no schema interpretation of its own (the frontend's zod validation
+//! owns correctness). What it does *not* do is invent its own container
+//! format — a project **is** a directory of ordinary files, so a data dir can
+//! be a git checkout.
+//!
+//! # On-disk layout
+//!
+//! ```text
+//! <data_dir>/
+//!   drone/                     # one directory per project, named by its address
+//!     system.hcl               # the model source (`main.hcl` works too)
+//!     README.md                # any other file is carried through as-is
+//!     views/main.hcl           # diagrams
+//!     docs/battery.md          # per-component documentation
+//! ```
+//!
+//! The directory name *is* the project's address, i.e. the slug of its name
+//! (the frontend's `vfs/slug`), which is also what `/projects/<id>/…` is
+//! addressed by. That keeps the frontend's invariant — an id is always
+//! `projectSlug(name)` — true for projects discovered here as well as for
+//! projects created in the UI.
+//!
+//! # What counts as a project
+//!
+//! A directory in the data dir is a project when its name is a valid address
+//! *and* it contains at least one model source: a `.hcl` file that is not a
+//! view source (`views/**`, or a legacy root-level `views.hcl` — the same
+//! split `rhizome_core::is_view_source` draws). So `examples/` mounted as-is
+//! yields its six project directories and ignores the `README.md` sitting
+//! next to them.
+//!
+//! # What is deliberately not ours
+//!
+//! * **Hidden entries** (any name starting with `.`, at any depth) are skipped
+//!   on read and left alone on write. That covers `.git`, `.DS_Store` and
+//!   editor droppings in one rule, and it is why mounting a checkout does not
+//!   walk into its `.git`.
+//! * **Symlinks** are skipped: following one would serve (or overwrite) a file
+//!   outside the data dir.
+//! * **Directories that are not projects** are neither loaded nor deleted —
+//!   "delete the projects missing from the payload" must not reach past the
+//!   projects.
+//! * **Unreadable entries** (binary files, permission errors) are logged and
+//!   skipped rather than failing the whole data dir, matching the frontend's
+//!   "start from what is usable" parsing.
+//!
+//! Data dir default is `rhizome-data` (relative to the server's cwd);
+//! override with `RHIZOME_DATA_DIR`.
+
+use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
+use std::fs;
+use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use anyhow::{Context as _, Result};
+use rhizome_core::Source;
+use serde_json::{Value, json};
+use thiserror::Error;
+
+/// VFS blob version written into every response, mirroring the frontend's.
+const VFS_VERSION: u64 = 1;
+
+/// Suffix of the temporary file a content write goes through, so a crash
+/// cannot leave a half-written file. The name is hidden (see module docs), so
+/// a concurrent read never sees it.
+const TEMP_SUFFIX: &str = ".tmp";
+
+/// Milliseconds in a day, the unit the timestamp format works in.
+const MILLIS_PER_DAY: i64 = 86_400_000;
+
+/// The whole-VFS shape with empty project/node collections.
+fn empty_vfs() -> Value {
+    json!({
+        "version": VFS_VERSION,
+        "projects": [],
+        "nodes": [],
+    })
+}
+
+/// Whether `name` is hidden — a dotfile, or a dot-directory at any depth.
+fn is_hidden(name: &str) -> bool {
+    name.starts_with('.')
+}
+
+/// Whether `name` is a project address: the shape `projectSlug` produces
+/// (lowercase ASCII alphanumerics in runs joined by single hyphens).
+///
+/// Enforced rather than normalized, so a project's directory name and its id
+/// are always the same string — which is what lets a rename be a directory
+/// rename and lets a payload's id be used as a path segment without ever
+/// normalizing it first.
+fn is_address(name: &str) -> bool {
+    !name.is_empty()
+        && name.split('-').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit())
+        })
+}
+
+/// Whether `name` is usable as one path segment of a node's name — no
+/// separators, no `.`/`..`, no root, no empty.
+fn is_path_segment(name: &str) -> bool {
+    let mut components = Path::new(name).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+}
+
+/// Whether `path` names an HCL file at all.
+///
+/// The model-source test is this *and* not a view: a project directory of
+/// nothing but Markdown is a notes folder, not a system. (Mirrors the CLI's
+/// own discovery in `rhizome-cli`'s `load_sources`, which collects `.hcl` plus
+/// `docs/**.md` and nothing else.)
+fn is_hcl_path(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| ext == "hcl")
+}
+
+/// Whether `path` names a view/diagram source, mirroring
+/// `rhizome_core::is_view_source`: anything under a `views` directory, or a
+/// root-level `views.hcl`.
+fn is_view_path(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == "views")
+        || path.file_name().is_some_and(|name| name == "views.hcl")
+}
+
+/// The `parentId` for an entry at `prefix`, or `None` at the project root.
+///
+/// The root of a project has no parent *node* — its parent is the project
+/// itself, which the node schema does not model.
+fn parent_id_of(project_id: &str, prefix: &Path) -> Option<String> {
+    (!prefix.as_os_str().is_empty()).then(|| node_id(project_id, prefix))
+}
+
+/// A node's id: its project address and project-relative path, `/`-separated
+/// (e.g. `drone/views/main.hcl`).
+///
+/// The qualification is load-bearing, not decoration. The VFS blob is one
+/// flat `nodes` array, and the frontend's store resolves a node *by id across
+/// that whole array*: `findNode` takes the first match, and `updateFileContent`
+/// rewrites every node whose id matches. Ids that are unique only within a
+/// project therefore let a write to `drone/views/main.hcl` land on
+/// `apollo-11/views/main.hcl` as well — which is exactly what happened before
+/// the address was folded in. Deriving the id from the location keeps the
+/// mapping stateless (a save never has to remember what it handed out) while
+/// making it unique across the blob, which is the property the frontend
+/// actually requires of an id.
+fn node_id(project_id: &str, relative: &Path) -> String {
+    let mut segments = vec![project_id.to_owned()];
+    segments.extend(
+        relative
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+    );
+    segments.join("/")
+}
+
+/// The project-relative part of an id built by [`node_id`].
+///
+/// The view/docs classifiers must see the path *inside* the project: a project
+/// directory may itself be called `views`, and an id that starts `views/…`
+/// would then make every one of its model sources look like a view source.
+fn relative_of<'a>(project_id: &str, id: &'a str) -> &'a str {
+    id.strip_prefix(project_id)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .unwrap_or(id)
+}
+
+/// The file name of `entry` as a `String`, or `None` when it is not valid
+/// UTF-8 (which no path this server produces ever is).
+fn utf8_name(entry: &fs::DirEntry) -> Option<String> {
+    entry.file_name().into_string().ok()
+}
+
+/// `dir`'s entries as `(name, entry)` pairs sorted by name.
+///
+/// Sorting is what makes a load deterministic: node order decides which file
+/// the frontend treats as the primary source and which view a diagram page
+/// opens first, neither of which may depend on `readdir` order.
+fn sorted_entries(dir: &Path) -> Result<Vec<(String, fs::DirEntry)>, std::io::Error> {
+    let mut entries: Vec<(String, fs::DirEntry)> = fs::read_dir(dir)?
+        .filter_map(std::result::Result::ok)
+        .filter_map(|entry| utf8_name(&entry).map(|name| (name, entry)))
+        .collect();
+    entries.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(entries)
+}
+
+/// Milliseconds from the Unix epoch to `time`, or `0` for a pre-epoch stamp.
+pub(crate) fn millis_since_epoch(time: SystemTime) -> i64 {
+    // A pre-epoch stamp is representable but outside anything meaningful, so
+    // it clamps to the epoch rather than becoming a negative date.
+    time.duration_since(UNIX_EPOCH).map_or(0, |delta| {
+        i64::try_from(delta.as_millis()).unwrap_or(i64::MAX)
+    })
+}
+
+/// Formats `millis` since the Unix epoch as RFC 3339, e.g.
+/// `2023-11-14T22:13:20.123Z`.
+///
+/// Hand-rolled rather than pulled from a date crate: the VFS needs one string
+/// shape, and the frontend parses it with `new Date(...)`. Every step
+/// saturates rather than panicking, so a nonsensical stamp still yields a
+/// string instead of taking the server down.
+pub(crate) fn format_rfc3339_millis(millis: i64) -> String {
+    let days = millis.div_euclid(MILLIS_PER_DAY);
+    let time_of_day = millis.rem_euclid(MILLIS_PER_DAY);
+
+    // Days-to-civil-date, after Howard Hinnant's `civil_from_days`: shift the
+    // era so the leap day lands at the end of the year, then peel off the
+    // century, year and month in turn.
+    let shifted = days.saturating_add(719_468);
+    let era = if shifted >= 0 {
+        shifted / 146_097
+    } else {
+        shifted.saturating_sub(146_096) / 146_097
+    };
+    let day_of_era = shifted.saturating_sub(era.saturating_mul(146_097));
+    let year_of_era = (day_of_era
+        .saturating_sub(day_of_era / 1_460)
+        .saturating_add(day_of_era / 36_524)
+        .saturating_sub(day_of_era / 146_096))
+        / 365;
+    let mut year = year_of_era.saturating_add(era.saturating_mul(400));
+    let day_of_year = day_of_era.saturating_sub(
+        year_of_era
+            .saturating_mul(365)
+            .saturating_add(year_of_era / 4)
+            .saturating_sub(year_of_era / 100),
+    );
+    let month_position = (day_of_year.saturating_mul(5).saturating_add(2)) / 153;
+    let day = day_of_year
+        .saturating_sub(month_position.saturating_mul(153).saturating_add(2) / 5)
+        .saturating_add(1);
+    let month = month_position.saturating_add(if month_position < 10 { 3 } else { -9 });
+    if month <= 2 {
+        year = year.saturating_add(1);
+    }
+
+    let hour = time_of_day / 3_600_000;
+    let minute = (time_of_day % 3_600_000) / 60_000;
+    let second = (time_of_day % 60_000) / 1_000;
+    let milli = time_of_day % 1_000;
+
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{milli:03}Z")
+}
+
+/// A node of a project's tree, as the loader found it on disk.
+enum Found {
+    /// A directory.
+    Dir {
+        /// The node's project-relative path.
+        id: String,
+        /// The parent's id, or `None` at the project root.
+        parent_id: Option<String>,
+        /// The entry's own name.
+        name: String,
+    },
+    /// A file, with its content and the two fields derived from its mtime.
+    File {
+        /// The node's project-relative path.
+        id: String,
+        /// The parent's id, or `None` at the project root.
+        parent_id: Option<String>,
+        /// The entry's own name.
+        name: String,
+        /// The file's contents, read as UTF-8.
+        content: String,
+        /// Milliseconds since the epoch from the file's mtime, as a JSON-safe
+        /// integer: a raw nanosecond count would not be (~1.8e18, past 2^53).
+        revision: u64,
+        /// The same instant as `revision`, as RFC 3339.
+        updated_at: String,
+    },
+}
+
+impl Found {
+    /// The JSON node the frontend stores.
+    fn to_json(&self, project_id: &str) -> Value {
+        match self {
+            Self::Dir {
+                id,
+                parent_id,
+                name,
+            } => json!({
+                "id": id,
+                "projectId": project_id,
+                "parentId": parent_id,
+                "name": name,
+                "kind": "directory",
+            }),
+            Self::File {
+                id,
+                parent_id,
+                name,
+                content,
+                revision,
+                updated_at,
+            } => json!({
+                "id": id,
+                "projectId": project_id,
+                "parentId": parent_id,
+                "name": name,
+                "kind": "file",
+                "content": content,
+                "revision": revision,
+                "updatedAt": updated_at,
+            }),
+        }
+    }
+}
+
+/// Collects every entry under `dir`, depth-first in sorted order.
+///
+/// `prefix` is `dir`'s own project-relative path (empty at the project root)
+/// and `stats` collects the oldest/newest file stamps seen, for the project's
+/// own `createdAt`/`updatedAt` — seeded wide open so the first file sets both.
+fn walk_project(
+    project_id: &str,
+    dir: &Path,
+    prefix: &Path,
+    found: &mut Vec<Found>,
+    stats: &mut (i64, i64),
+) -> Result<(), std::io::Error> {
+    for (name, entry) in sorted_entries(dir)? {
+        if is_hidden(&name) {
+            continue;
+        }
+        // `symlink_metadata` does not follow, so a symlink classifies as one
+        // here and is dropped below rather than silently followed out of the
+        // data dir.
+        let Ok(metadata) = entry.path().symlink_metadata() else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let relative = prefix.join(&name);
+        if metadata.is_dir() {
+            found.push(Found::Dir {
+                id: node_id(project_id, &relative),
+                parent_id: parent_id_of(project_id, prefix),
+                name,
+            });
+            walk_project(project_id, &entry.path(), &relative, found, stats)?;
+        } else if metadata.is_file() {
+            let Ok(content) = fs::read_to_string(entry.path()) else {
+                tracing::warn!(
+                    path = %entry.path().display(),
+                    "skipping unreadable VFS entry (not valid UTF-8?)"
+                );
+                continue;
+            };
+            let modified = metadata.modified().unwrap_or(UNIX_EPOCH);
+            let millis = millis_since_epoch(modified);
+            *stats = (stats.0.min(millis), stats.1.max(millis));
+            found.push(Found::File {
+                id: node_id(project_id, &relative),
+                parent_id: parent_id_of(project_id, prefix),
+                name,
+                content,
+                revision: u64::try_from(millis).unwrap_or(0),
+                updated_at: format_rfc3339_millis(millis),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Whether a walked tree holds a model source, i.e. whether the directory it
+/// came from is a project at all.
+fn has_model_source(project_id: &str, found: &[Found]) -> bool {
+    found.iter().any(|node| match node {
+        Found::Dir { .. } => false,
+        Found::File { id, .. } => {
+            let path = Path::new(relative_of(project_id, id));
+            is_hcl_path(path) && !is_view_path(path)
+        }
+    })
+}
+
+/// Reads one project directory, or `None` when it is not a project (no model
+/// source inside).
+fn read_project(
+    project_id: &str,
+    dir: &Path,
+) -> Result<Option<(Value, Vec<Value>)>, std::io::Error> {
+    let mut found = Vec::new();
+    let mut stats = (i64::MAX, i64::MIN);
+    walk_project(project_id, dir, Path::new(""), &mut found, &mut stats)?;
+
+    // A project always holds at least one file — the model source that got it
+    // here — so the stamps are always real.
+    if !has_model_source(project_id, &found) {
+        return Ok(None);
+    }
+
+    let project = json!({
+        "id": project_id,
+        // The directory name is the address, and an address is a slug — so the
+        // display name is the slug. A prettier name would need a sidecar file
+        // in every project directory, which would then show up in the user's
+        // repository; not worth it for a label.
+        "name": project_id,
+        "createdAt": format_rfc3339_millis(stats.0),
+        "updatedAt": format_rfc3339_millis(stats.1),
+    });
+    let nodes = found.iter().map(|node| node.to_json(project_id)).collect();
+    Ok(Some((project, nodes)))
+}
+
+/// Reads the data dir and expands it into the whole-VFS shape
+/// `{ "version": 1, "projects": […], "nodes": […] }`, one entry per project
+/// directory.
+///
+/// # Errors
+///
+/// Returns an error if the data dir itself cannot be listed. A project that
+/// cannot be read is logged and skipped rather than failing the whole read.
+pub fn load_vfs(data_dir: &Path) -> Result<Value> {
+    let mut vfs = empty_vfs();
+    if !data_dir.is_dir() {
+        return Ok(vfs);
+    }
+
+    let mut projects: Vec<Value> = Vec::new();
+    let mut nodes: Vec<Value> = Vec::new();
+    for (name, entry) in sorted_entries(data_dir)
+        .with_context(|| format!("cannot read data dir {}", data_dir.display()))?
+    {
+        if is_hidden(&name) || !is_address(&name) {
+            continue;
+        }
+        let path = entry.path();
+        // `symlink_metadata` so a symlinked directory is not descended into.
+        let Ok(metadata) = path.symlink_metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            continue;
+        }
+        match read_project(&name, &path) {
+            Ok(Some((project, project_nodes))) => {
+                projects.push(project);
+                nodes.extend(project_nodes);
+            }
+            Ok(None) => {}
+            Err(err) => tracing::warn!(
+                path = %path.display(),
+                ?err,
+                "skipping unreadable VFS project directory"
+            ),
+        }
+    }
+
+    if let Some(obj) = vfs.as_object_mut() {
+        obj.insert("projects".to_owned(), Value::Array(projects));
+        obj.insert("nodes".to_owned(), Value::Array(nodes));
+    }
+    Ok(vfs)
+}
+
+/// A single entry of a project's tree as seen by the MCP read-only tools.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProjectEntry {
+    /// A directory in the project.
+    Dir {
+        /// The project-relative path of the directory.
+        path: String,
+    },
+    /// A regular file in the project.
+    ///
+    /// Carries the same mtime-derived `revision` the VFS uses plus a
+    /// short content-hash `version`.
+    File {
+        /// The project-relative path of the file.
+        path: String,
+        /// The mtime-derived revision, the same value the VFS reports.
+        revision: u64,
+        /// The short content-hash version (see [`file_version`]).
+        version: String,
+    },
+}
+
+/// Error returned when a directory is not usable as a project root.
+#[derive(Debug, Error)]
+pub enum ProjectError {
+    /// No project with this id: unknown, not a valid address, or not a
+    /// directory.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// The filesystem refused to inspect the directory.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Resolves `project_id` to its directory inside `data_dir`, without judging
+/// whether it holds a model source.
+///
+/// Refuses ids that are not valid addresses and roots that are missing,
+/// symlinks, or not directories. Unlike [`resolve_project`], a directory
+/// without a model source still resolves — locks, versions, and writes must
+/// work on project shells that do not resolve yet (a just-created project
+/// has no files at all).
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the filesystem cannot
+/// be inspected.
+pub fn resolve_project_dir(data_dir: &Path, project_id: &str) -> Result<PathBuf, ProjectError> {
+    if !is_address(project_id) {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    }
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => Ok(root),
+        Ok(_) | Err(_) => Err(ProjectError::Unknown(project_id.to_owned())),
+    }
+}
+
+/// Resolves `project_id` to its directory inside `data_dir`.
+///
+/// Refuses ids that are not valid addresses (which would otherwise be path
+/// traversal) and roots that are missing, symlinks, or not directories.
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the filesystem cannot
+/// be inspected.
+pub fn resolve_project(data_dir: &Path, project_id: &str) -> Result<PathBuf, ProjectError> {
+    if !is_address(project_id) {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    }
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(meta) if meta.is_dir() && !meta.file_type().is_symlink() => {}
+        Ok(_) | Err(_) => return Err(ProjectError::Unknown(project_id.to_owned())),
+    }
+    match has_model_source_on_disk(&root, Path::new("")) {
+        Ok(true) => Ok(root),
+        Ok(false) => Err(ProjectError::Unknown(project_id.to_owned())),
+        Err(err) => Err(ProjectError::Io(err)),
+    }
+}
+
+/// Whether the project at `root` holds a model source, by the same rules as
+/// [`walk_project`] and [`has_model_source`]: a non-hidden, non-symlink `.hcl`
+/// file outside `views`, whose content is valid UTF-8.
+///
+/// Stops at the first match. Only the matching file's content is read, so a
+/// large project is not loaded just to decide whether it exists.
+fn has_model_source_on_disk(root: &Path, prefix: &Path) -> Result<bool, std::io::Error> {
+    for (name, entry) in sorted_entries(&root.join(prefix))? {
+        if is_hidden(&name) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = path.symlink_metadata() else {
+            continue;
+        };
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        let relative = prefix.join(&name);
+        if metadata.is_dir() {
+            if has_model_source_on_disk(root, &relative)? {
+                return Ok(true);
+            }
+        } else if metadata.is_file()
+            && is_hcl_path(&relative)
+            && !is_view_path(&relative)
+            && fs::read_to_string(&path).is_ok()
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Why a project-relative path was refused confinement.
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ConfinedPathError {
+    /// Absolute, or escaping the project through `..`.
+    #[error("path must be relative and stay inside the project")]
+    Outside,
+    /// A segment is hidden or is a symlink.
+    #[error("path traverses a hidden entry or symlink")]
+    Excluded,
+}
+
+/// Resolves `relative` against `root`, refusing paths that leave it.
+///
+/// Applies the same exclusions as the VFS walker — absolute paths, parent
+/// escapes (`..`), hidden entries, and symlinks — so the MCP tools see
+/// exactly what the VFS sees. The final path is not required to exist;
+/// callers decide that.
+///
+/// # Errors
+///
+/// Returns [`ConfinedPathError::Outside`] for absolute or parent-escaping
+/// paths, and [`ConfinedPathError::Excluded`] for hidden entries and
+/// symlinks.
+pub fn resolve_confined_path(root: &Path, relative: &Path) -> Result<PathBuf, ConfinedPathError> {
+    if relative.is_absolute() {
+        return Err(ConfinedPathError::Outside);
+    }
+    let mut resolved = root.to_path_buf();
+    for component in relative.components() {
+        match component {
+            Component::Normal(name) => {
+                if name.to_string_lossy().starts_with('.') {
+                    return Err(ConfinedPathError::Excluded);
+                }
+                let next = resolved.join(name);
+                if fs::symlink_metadata(&next).is_ok_and(|meta| meta.file_type().is_symlink()) {
+                    return Err(ConfinedPathError::Excluded);
+                }
+                resolved = next;
+            }
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+                return Err(ConfinedPathError::Outside);
+            }
+        }
+    }
+    Ok(resolved)
+}
+
+/// Length of every wire `version` string: 16 hex chars, i.e. a 64-bit prefix
+/// of SHA-256.
+///
+/// 8 chars (32-bit, like short git hashes) is collision-prone at scale:
+/// a per-write false-accept rate of 2^-32 (~2.3e-10) and a birthday
+/// collision among ~100k distinct contents with ~1% probability. 16 chars
+/// keeps 75% of the payload saving (64 -> 16) while making collisions
+/// cryptographically negligible: per-write 2^-64 (~5.4e-20), birthday among
+/// 100k contents ~2.7e-10, among 1M historic trees ~2.7e-8. The server is
+/// stateless (no version-history DB for re-expansion), so truncate-and-compare
+/// on 64 bits is the safe wire format.
+pub const VERSION_LEN: usize = 16;
+
+/// Hex-encodes a SHA-256 digest (64 lowercase chars).
+fn hex_digest(digest: &[u8]) -> String {
+    const HEX: [u8; 16] = *b"0123456789abcdef";
+    let mut out = String::with_capacity(64);
+    for byte in digest {
+        let hi = HEX.get(usize::from(byte >> 4)).copied().unwrap_or(b'0');
+        let lo = HEX.get(usize::from(byte & 0x0f)).copied().unwrap_or(b'0');
+        out.push(char::from(hi));
+        out.push(char::from(lo));
+    }
+    out
+}
+
+/// The MCP file `version`: 16-char prefix of hex SHA-256 of the file's content.
+///
+/// Step 3's compare-and-swap edits key off this value, so it is deliberately
+/// not the mtime-based `revision` the VFS uses — a rewrite that preserves
+/// content leaves it unchanged, and any content change flips it (up to a
+/// 2^-64 prefix collision, negligible at this scale — see [`VERSION_LEN`]).
+#[must_use]
+pub fn file_version(content: &str) -> String {
+    use sha2::{Digest, Sha256};
+
+    let full = hex_digest(&Sha256::digest(content.as_bytes()));
+    full.chars().take(VERSION_LEN).collect()
+}
+
+/// Hashes walked entries into the project version: 16-char prefix of SHA-256
+/// over every file's project-relative path and content, sorted by path.
+fn hash_found_entries(project_id: &str, found: &[Found]) -> String {
+    use sha2::{Digest, Sha256};
+
+    let mut files: Vec<(&str, &str)> = found
+        .iter()
+        .filter_map(|entry| match entry {
+            Found::File { id, content, .. } => {
+                Some((relative_of(project_id, id), content.as_str()))
+            }
+            Found::Dir { .. } => None,
+        })
+        .collect();
+    files.sort_by(|a, b| a.0.cmp(b.0));
+
+    let mut hasher = Sha256::new();
+    for (path, content) in files {
+        hasher.update(path.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(content.as_bytes());
+        hasher.update([0u8]);
+    }
+    let full = hex_digest(&hasher.finalize());
+    full.chars().take(VERSION_LEN).collect()
+}
+
+/// The content-hash version of a whole project: 16-char prefix of SHA-256
+/// over every file's project-relative path and content, sorted by path.
+///
+/// Watchers poll this to follow the editor: any outside edit (git, a text
+/// editor on the data dir) flips it, while a content-preserving rewrite
+/// leaves it unchanged. Hidden entries and symlinks are excluded, exactly as
+/// the VFS walker excludes them, so `.git` internals never move the version.
+/// A directory without a model source still has a version (possibly of
+/// nothing at all) — versions must work on project shells that do not
+/// resolve yet.
+///
+/// # Errors
+///
+/// Returns [`ProjectError::Unknown`] for non-address ids and missing or
+/// non-directory roots, and [`ProjectError::Io`] when the project directory
+/// cannot be walked.
+pub fn project_version(data_dir: &Path, project_id: &str) -> Result<String, ProjectError> {
+    let found = collect_dir_entries(data_dir, project_id).map_err(ProjectError::Io)?;
+    let Some(found) = found else {
+        return Err(ProjectError::Unknown(project_id.to_owned()));
+    };
+    Ok(hash_found_entries(project_id, &found))
+}
+
+/// Walks `project_id`'s directory and returns its entries, without judging
+/// whether it is a project at all: missing, not an address, a symlink, or
+/// not a directory yields `None`. Unlike [`collect_project_entries`], a
+/// directory without a model source still yields its entries — writes and
+/// version checks must work on project shells that do not resolve yet.
+fn collect_dir_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Found>>, std::io::Error> {
+    if !is_address(project_id) {
+        return Ok(None);
+    }
+    let dir = data_dir.join(project_id);
+    let Ok(metadata) = fs::symlink_metadata(&dir) else {
+        return Ok(None);
+    };
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        return Ok(None);
+    }
+
+    let mut found = Vec::new();
+    let mut stats = (i64::MAX, i64::MIN);
+    walk_project(project_id, &dir, Path::new(""), &mut found, &mut stats)?;
+    Ok(Some(found))
+}
+
+/// Walks `project_id`'s directory and returns its entries.
+///
+/// Returns `None` when it is not a project at all: missing, not an address,
+/// a symlink, or holding no model source. Mirrors `load_vfs`'s discovery
+/// rules one-to-one.
+fn collect_project_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Found>>, std::io::Error> {
+    let Some(found) = collect_dir_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
+    if !has_model_source(project_id, &found) {
+        return Ok(None);
+    }
+    Ok(Some(found))
+}
+
+/// Lists one project's tree as [`ProjectEntry`] values.
+///
+/// Returns `None` when `project_id` is not a project: missing, not an
+/// address, a symlink, or holding no model source.
+///
+/// # Errors
+///
+/// Returns an [`std::io::Error`] when the project directory cannot be
+/// walked.
+pub fn project_entries(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<ProjectEntry>>, std::io::Error> {
+    let Some(found) = collect_project_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
+
+    let entries = found
+        .into_iter()
+        .map(|entry| match entry {
+            Found::Dir { id, .. } => ProjectEntry::Dir {
+                path: relative_of(project_id, &id).to_owned(),
+            },
+            Found::File {
+                id,
+                content,
+                revision,
+                ..
+            } => ProjectEntry::File {
+                path: relative_of(project_id, &id).to_owned(),
+                revision,
+                version: file_version(&content),
+            },
+        })
+        .collect();
+    Ok(Some(entries))
+}
+
+/// Loads a project's compile-ready sources, or `None` when it is not a
+/// project.
+///
+/// Every `.hcl` file plus docs are collected, as the CLI discovers them.
+/// Filenames are project-relative, so diagnostics carry the same paths a
+/// human sees in the project directory.
+///
+/// # Errors
+///
+/// Returns an [`std::io::Error`] when the project directory cannot be
+/// walked.
+pub fn project_sources(
+    data_dir: &Path,
+    project_id: &str,
+) -> Result<Option<Vec<Source>>, std::io::Error> {
+    let Some(found) = collect_project_entries(data_dir, project_id)? else {
+        return Ok(None);
+    };
+
+    let mut sources = Vec::new();
+    for entry in &found {
+        let Found::File { id, content, .. } = entry else {
+            continue;
+        };
+        let path = relative_of(project_id, id);
+        if is_hcl_path(Path::new(path)) || rhizome_core::is_docs_source(path) {
+            sources.push(Source {
+                filename: path.to_owned(),
+                content: content.clone(),
+            });
+        }
+    }
+    Ok(Some(sources))
+}
+
+/// Error type for [`save_vfs`], letting the caller distinguish a malformed
+/// payload (mapped to HTTP 400) from a filesystem failure (mapped to 500)
+/// without downcasting through the `anyhow` context chain.
+#[derive(Debug, Error)]
+pub enum SaveVfsError {
+    /// The payload does not match the whole-VFS shape, or names a path the
+    /// server refuses to write.
+    #[error("{0}")]
+    Malformed(String),
+    /// The data dir could not be read or written.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// What a project's directory should contain once the payload is applied.
+enum Wanted {
+    /// A directory at this project-relative path.
+    Dir,
+    /// A file at this project-relative path, with this content.
+    File(String),
+}
+
+/// Resolves every node of `project_id` to the path it addresses inside its
+/// project directory, validating as it goes.
+///
+/// Returns a `HashMap` rather than a `BTreeMap` because the caller sorts
+/// before touching the filesystem; what matters here is that every path is
+/// unique, which a map keyed by path gives for free.
+type ProjectPlan = HashMap<PathBuf, Wanted>;
+
+/// Resolves one node's project-relative path by walking its parent chain.
+///
+/// `chain` guards against a payload whose parents form a loop: the walk is
+/// bounded by the node count, so a malformed payload cannot hang the server.
+fn resolve_path(
+    id: &str,
+    nodes: &HashMap<&str, &Value>,
+    chain: &mut Vec<String>,
+) -> Result<PathBuf, SaveVfsError> {
+    if chain.iter().any(|seen| seen == id) {
+        return Err(SaveVfsError::Malformed(format!(
+            "node `{id}` is its own ancestor"
+        )));
+    }
+    let Some(node) = nodes.get(id) else {
+        return Err(SaveVfsError::Malformed(format!(
+            "node `{id}` is referenced as a parent but is not in the payload"
+        )));
+    };
+    let name = node
+        .get("name")
+        .and_then(Value::as_str)
+        .ok_or_else(|| SaveVfsError::Malformed(format!("node `{id}` has no name")))?;
+    if !is_path_segment(name) {
+        return Err(SaveVfsError::Malformed(format!(
+            "node name {name:?} is not a plain file name"
+        )));
+    }
+
+    chain.push(id.to_owned());
+    let resolved = match node.get("parentId") {
+        None | Some(Value::Null) => Ok(PathBuf::from(name)),
+        Some(Value::String(parent_id)) => {
+            let parent = nodes.get(parent_id.as_str()).ok_or_else(|| {
+                SaveVfsError::Malformed(format!("node `{id}` has an unknown parent"))
+            })?;
+            if parent.get("kind").and_then(Value::as_str) != Some("directory") {
+                return Err(SaveVfsError::Malformed(format!(
+                    "node `{id}` is nested under `{parent_id}`, which is not a directory"
+                )));
+            }
+            resolve_path(parent_id, nodes, chain).map(|parent| parent.join(name))
+        }
+        Some(_) => Err(SaveVfsError::Malformed(format!(
+            "node `{id}` has a malformed parentId"
+        ))),
+    };
+    chain.pop();
+    resolved
+}
+
+/// Reads the payload's projects and turns each one's nodes into the tree its
+/// directory should hold.
+///
+/// Rejects anything the server would have to trust to build a path: an
+/// address-shaped project id (which is also what keeps `..` out of a path
+/// segment), plain file names, and parent chains that dangle, cross projects,
+/// loop, or resolve to the same path twice.
+fn plan(payload: &Value) -> Result<Vec<(String, ProjectPlan)>, SaveVfsError> {
+    let obj = payload
+        .as_object()
+        .ok_or_else(|| SaveVfsError::Malformed("payload must be a JSON object".to_owned()))?;
+    let Some(projects) = obj.get("projects").and_then(Value::as_array) else {
+        return Err(SaveVfsError::Malformed(
+            "payload must have a `projects` array".to_owned(),
+        ));
+    };
+    let nodes = obj
+        .get("nodes")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut ids: HashSet<&str> = HashSet::new();
+    for project in projects {
+        let id = project.get("id").and_then(Value::as_str).ok_or_else(|| {
+            SaveVfsError::Malformed("every project must have a string `id`".to_owned())
+        })?;
+        if !is_address(id) {
+            return Err(SaveVfsError::Malformed(format!(
+                "project id {id:?} is not a valid project address"
+            )));
+        }
+        if !ids.insert(id) {
+            return Err(SaveVfsError::Malformed(format!(
+                "duplicate project id `{id}`"
+            )));
+        }
+    }
+
+    let mut by_project: HashMap<&str, HashMap<&str, &Value>> = HashMap::new();
+    for node in &nodes {
+        let project_id = node
+            .get("projectId")
+            .and_then(Value::as_str)
+            .ok_or_else(|| {
+                SaveVfsError::Malformed("every node must have a string `projectId`".to_owned())
+            })?;
+        if !ids.contains(project_id) {
+            return Err(SaveVfsError::Malformed(format!(
+                "node belongs to unknown project `{project_id}`"
+            )));
+        }
+        by_project.entry(project_id).or_default().insert(
+            node.get("id").and_then(Value::as_str).ok_or_else(|| {
+                SaveVfsError::Malformed("every node must have a string `id`".to_owned())
+            })?,
+            node,
+        );
+    }
+
+    let mut plans = Vec::new();
+    for project in projects {
+        // Validated as an address above, so it is a single safe segment.
+        let id = project
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| SaveVfsError::Malformed("project id must be a string".to_owned()))?;
+        let empty = HashMap::new();
+        let project_nodes = by_project.get(id).unwrap_or(&empty);
+
+        let mut plan: ProjectPlan = HashMap::new();
+        // Sorted so a collision is reported the same way every time.
+        let mut ordered: Vec<(&str, &Value)> =
+            project_nodes.iter().map(|(k, v)| (*k, *v)).collect();
+        ordered.sort_by(|a, b| a.0.cmp(b.0));
+        for (node_id, node) in ordered {
+            let mut chain = Vec::new();
+            let path = resolve_path(node_id, project_nodes, &mut chain)?;
+            let wanted = match node.get("kind").and_then(Value::as_str) {
+                Some("directory") => Wanted::Dir,
+                Some("file") => Wanted::File(
+                    node.get("content")
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            SaveVfsError::Malformed(format!("file `{node_id}` has no content"))
+                        })?
+                        .to_owned(),
+                ),
+                _ => {
+                    return Err(SaveVfsError::Malformed(format!(
+                        "node `{node_id}` has no `kind`"
+                    )));
+                }
+            };
+            if plan.insert(path.clone(), wanted).is_some() {
+                return Err(SaveVfsError::Malformed(format!(
+                    "two nodes resolve to the same path `{}`",
+                    path.display()
+                )));
+            }
+        }
+        plans.push((id.to_owned(), plan));
+    }
+    Ok(plans)
+}
+
+/// The entries physically under `root`, deepest first, as
+/// `(relative path, is_dir)`.
+fn disk_entries(root: &Path) -> Vec<(PathBuf, bool)> {
+    fn walk(dir: &Path, prefix: &Path, out: &mut Vec<(PathBuf, bool)>) {
+        let Ok(entries) = sorted_entries(dir) else {
+            return;
+        };
+        for (name, entry) in entries {
+            if is_hidden(&name) {
+                continue;
+            }
+            let Ok(metadata) = entry.path().symlink_metadata() else {
+                continue;
+            };
+            if metadata.file_type().is_symlink() {
+                continue;
+            }
+            let relative = prefix.join(&name);
+            if metadata.is_dir() {
+                walk(&entry.path(), &relative, out);
+                out.push((relative, true));
+            } else if metadata.is_file() {
+                out.push((relative, false));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, Path::new(""), &mut out);
+    // Deepest first, so a removed directory's children are already gone.
+    out.sort_by_key(|(path, is_dir)| (path.components().count(), !*is_dir));
+    out.reverse();
+    out
+}
+
+/// Writes `content` to `path` through a hidden temp file, so a crash cannot
+/// leave a half-written file where a valid one used to be.
+pub(crate) fn write_atomic(path: &Path, content: &str) -> Result<(), SaveVfsError> {
+    let name = path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| SaveVfsError::Malformed(format!("cannot write to {}", path.display())))?;
+    let temp = path.with_file_name(format!(".{name}{TEMP_SUFFIX}"));
+    fs::write(&temp, content)?;
+    if let Err(err) = fs::rename(&temp, path) {
+        // The rename is the only step that can fail after the content is on
+        // disk; do not leave the temp file behind.
+        let _ = fs::remove_file(&temp);
+        return Err(SaveVfsError::Io(err));
+    }
+    Ok(())
+}
+
+/// Makes `root` hold exactly the `plan` tree.
+///
+/// Removal comes first, and treats a *type* mismatch as stale too, so a file
+/// that became a directory (or the reverse) is replaced instead of colliding.
+fn apply_plan(root: &Path, plan: &ProjectPlan) -> Result<(), SaveVfsError> {
+    fs::create_dir_all(root)?;
+
+    for (relative, is_dir) in disk_entries(root) {
+        let stale = match plan.get(&relative) {
+            None => true,
+            Some(Wanted::Dir) => !is_dir,
+            Some(Wanted::File(_)) => is_dir,
+        };
+        if !stale {
+            continue;
+        }
+        let path = root.join(&relative);
+        if is_dir {
+            fs::remove_dir_all(&path)?;
+        } else {
+            fs::remove_file(&path)?;
+        }
+    }
+
+    // Directories first: `create_dir_all` would make the file writes work
+    // anyway, but doing it this way keeps a half-made tree from existing for
+    // longer than it has to.
+    for (relative, entry) in plan {
+        if matches!(entry, Wanted::Dir) {
+            fs::create_dir_all(root.join(relative))?;
+        }
+    }
+    for (relative, entry) in plan {
+        let Wanted::File(content) = entry else {
+            continue;
+        };
+        let path = root.join(relative);
+        // Skip the write when the content already matches: re-serializing an
+        // unchanged file would bump its mtime, and with it the project's
+        // `updatedAt`, on every save — including the ones the frontend's
+        // debounced writers fire while nothing changed.
+        if fs::read_to_string(&path).is_ok_and(|current| current == *content) {
+            continue;
+        }
+        write_atomic(&path, content)?;
+    }
+    Ok(())
+}
+
+/// Persists a whole-VFS payload as one directory tree per project.
+///
+/// The payload is authoritative, as it always has been: every project in it
+/// has its directory brought to exactly the described state, and project
+/// directories that are absent from it are deleted. Anything that is not a
+/// project — hidden entries, files, symlinks, directories without a model
+/// source — is left untouched.
+///
+/// Writes go through a temp file + rename so a crash cannot leave a
+/// half-written file.
+///
+/// Serializes with the generic MCP file tools (`create_file`/`edit_file`)
+/// and the model writer (`mutate_project`): takes
+/// `PROJECT_WRITE_LOCK`, then `FILE_WRITE_LOCK`, then `MODEL_WRITE_LOCK`
+/// when the payload touches model HCL — the same file-first-then-model
+/// order the MCP tools use, so no deadlock. Without the file/model locks a
+/// whole-VFS save could interleave with a generic file write's
+/// read-check-write (both pass their version checks, last writer wins
+/// silently, and sharing the same temp file can even fail with `NotFound`).
+///
+/// # Errors
+///
+/// Returns [`SaveVfsError::Malformed`] for payloads that do not describe a
+/// writable tree (the caller maps it to 400) or [`SaveVfsError::Io`] when the
+/// filesystem refuses (maps to 500).
+pub fn save_vfs(data_dir: &Path, payload: &Value) -> Result<(), SaveVfsError> {
+    let plans = plan(payload)?;
+    let needs_model = plans.iter().any(|(_, project_plan)| {
+        project_plan.iter().any(|(relative, wanted)| {
+            matches!(wanted, Wanted::File(_)) && is_hcl_path(relative) && !is_view_path(relative)
+        })
+    });
+    let _project_guard = PROJECT_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _model_guard = needs_model.then(|| {
+        MODEL_WRITE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+    let ids: HashSet<&str> = plans.iter().map(|(id, _)| id.as_str()).collect();
+
+    fs::create_dir_all(data_dir)?;
+    for (id, project_plan) in &plans {
+        apply_plan(&data_dir.join(id), project_plan)?;
+    }
+
+    // Delete the project directories the payload no longer mentions. Only
+    // real projects are considered, so a stray directory in the data dir is
+    // not the server's to delete.
+    let existing = fs::read_dir(data_dir)?;
+    for entry in existing {
+        let entry = entry?;
+        let Some(name) = utf8_name(&entry) else {
+            continue;
+        };
+        if is_hidden(&name) || !is_address(&name) || ids.contains(name.as_str()) {
+            continue;
+        }
+        let path = entry.path();
+        let Ok(metadata) = path.symlink_metadata() else {
+            continue;
+        };
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            continue;
+        }
+        if read_project(&name, &path).is_ok_and(|read| read.is_some()) {
+            fs::remove_dir_all(&path)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Why a model mutation was not persisted.
+#[derive(Debug, Error)]
+pub enum MutateProjectError {
+    /// No project with this id.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project is locked by `{holder}`")]
+    Locked {
+        /// The username holding the project.
+        holder: String,
+    },
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    /// The op input or the mutated model was rejected; the file was left
+    /// untouched.
+    #[error("refused")]
+    Refused(Vec<rhizome_core::Diagnostic>),
+    /// The op was a guard refusal (`applied: false`): unknown path, no
+    /// change, or a collision. The file was left untouched.
+    #[error("op refused: no change applied")]
+    NotApplied,
+}
+
+/// Applies one [`rhizome_core::mutation::ModelOp`] to a project's single
+/// primary model file (`system.hcl`, falling back to `main.hcl`).
+///
+/// The project lock is taken first (free projects are auto-acquired by the
+/// writer; held-by-other is refused with [`MutateProjectError::Locked`]),
+/// then the file is read, passed through `rhizome_core::mutate_to_hcl`, and on
+/// success the canonical HCL is written back through `write_atomic`. On
+/// refusal — a guard refusal (`applied: false`) or resolver diagnostics —
+/// the file is left untouched and the diagnostics are returned for the
+/// caller to report. A successful write resets the lock's idle timer.
+///
+/// Confinement mirrors the read-only tools: the project is resolved with
+/// [`resolve_project`] and the primary file with [`resolve_confined_path`],
+/// so the path never escapes the project and hidden entries or symlinks are
+/// refused.
+///
+/// # Errors
+///
+/// Returns [`MutateProjectError::Unknown`] for unknown projects,
+/// [`MutateProjectError::Locked`] when someone else holds the lock,
+/// [`MutateProjectError::Io`] when the filesystem fails,
+/// [`MutateProjectError::Refused`] with the resolver diagnostics, and
+/// [`MutateProjectError::NotApplied`] for guard refusals.
+pub fn mutate_project(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    op: &rhizome_core::mutation::ModelOp,
+) -> Result<rhizome_core::mutation::MutationResult, MutateProjectError> {
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => MutateProjectError::Unknown(id),
+        ProjectError::Io(err) => MutateProjectError::Io(err),
+    })?;
+    match locks.acquire(project_id, user) {
+        crate::locks::AcquireOutcome::Acquired | crate::locks::AcquireOutcome::Renewed => {}
+        crate::locks::AcquireOutcome::Refused { holder } => {
+            return Err(MutateProjectError::Locked { holder });
+        }
+    }
+
+    let _guard = MODEL_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let mut primary: Option<(PathBuf, String)> = None;
+    for candidate in ["system.hcl", "main.hcl"] {
+        let Ok(absolute) = resolve_confined_path(&root, Path::new(candidate)) else {
+            continue;
+        };
+        let Ok(metadata) = std::fs::symlink_metadata(&absolute) else {
+            continue;
+        };
+        if metadata.is_file() && !metadata.file_type().is_symlink() {
+            primary = Some((absolute, candidate.to_owned()));
+            break;
+        }
+    }
+    let Some((absolute, filename)) = primary else {
+        return Err(MutateProjectError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no system.hcl (or main.hcl) in project",
+        )));
+    };
+
+    let content = std::fs::read_to_string(&absolute)?;
+    match rhizome_core::mutate_to_hcl(&filename, &content, op) {
+        Ok(result) if result.applied => {
+            let Some(hcl) = result.hcl.as_ref() else {
+                return Err(MutateProjectError::NotApplied);
+            };
+            write_atomic(&absolute, hcl).map_err(|e| match e {
+                SaveVfsError::Malformed(message) => {
+                    MutateProjectError::Io(std::io::Error::other(message))
+                }
+                SaveVfsError::Io(err) => MutateProjectError::Io(err),
+            })?;
+            // The model changed: the idle timer restarts. (Always held here —
+            // the acquire above succeeded.)
+            let _ = locks.note_edit(project_id, user);
+            Ok(result)
+        }
+        Ok(_) => Err(MutateProjectError::NotApplied),
+        Err(diagnostics) => Err(MutateProjectError::Refused(diagnostics)),
+    }
+}
+
+/// One entry of a per-project write: `content` set means a file, absent
+/// means a directory. Paths are project-relative (`system.hcl`,
+/// `views/main.hcl`).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ProjectFileJson {
+    /// The project-relative path of the file or directory.
+    pub path: String,
+    /// The file content, or `None` for a directory.
+    #[serde(default)]
+    pub content: Option<String>,
+}
+
+/// Why a per-project write was not persisted. Every variant leaves the
+/// project exactly as it was.
+#[derive(Debug, Error)]
+pub enum WriteProjectError {
+    /// No project with this id (and it could not be created from the
+    /// payload): unknown, not a valid address, or not a directory.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project `{project}` is locked by `{holder}`")]
+    Locked {
+        /// The project that was written.
+        project: String,
+        /// The username holding the project.
+        holder: String,
+    },
+    /// `base_version` did not match the version on disk; carries the current
+    /// version so the client can re-read and retry.
+    #[error("version mismatch: project changed (current version {current})")]
+    StaleVersion {
+        /// The version on disk.
+        current: String,
+    },
+    /// A payload entry is not a writable path (absolute, escaping, hidden,
+    /// duplicate, or a file whose parent directory is not listed).
+    #[error("{0}")]
+    Malformed(String),
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Serializes per-project writes within this process, so two writes sent
+/// with the same base version cannot both pass the check. The project lock
+/// (proposal 0004) is the outer admission check; this is the inner
+/// compare-and-swap, mirroring [`MODEL_WRITE_LOCK`] and [`FILE_WRITE_LOCK`].
+static PROJECT_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Replaces one project's directory tree with `files`, creating the project
+/// when it does not exist yet.
+///
+/// The project lock is taken first (free projects are auto-acquired by the
+/// writer; held-by-other is refused with [`WriteProjectError::Locked`]).
+/// Then, under `PROJECT_WRITE_LOCK` + `FILE_WRITE_LOCK` (+ `MODEL_WRITE_LOCK`
+/// when the payload touches model HCL), the on-disk version is compared
+/// against `base_version` (a mismatch is refused with
+/// [`WriteProjectError::StaleVersion` carrying the current version; `None`
+/// skips the check), the payload is validated, and the directory is brought
+/// to exactly the described state through `write_atomic` — entries absent
+/// from the payload are deleted. A successful write resets the lock's idle
+/// timer and the new version is returned for chaining.
+///
+/// The extra file/model locks serialize with the generic MCP file tools
+/// (`create_file`/`edit_file`) and the model writer
+/// (`mutate_project`): without them a browser save could
+/// interleave with a generic file write's read-check-write (both pass their
+/// version checks, last writer wins silently). File-then-model is the same
+/// acquisition order the MCP tools use, so no deadlock.
+///
+/// Only this project's directory is ever touched: sibling projects (and
+/// non-project directories, hidden entries, and symlinks) are never listed,
+/// written, or deleted. Parent directories of files must be listed as
+/// directory entries, mirroring how whole-VFS payloads carry them.
+///
+/// # Errors
+///
+/// Returns [`WriteProjectError::Unknown`] for non-address ids and roots that
+/// cannot become a project directory, [`WriteProjectError::Locked`] when
+/// someone else holds the lock, [`WriteProjectError::StaleVersion`] on a
+/// base-version mismatch, [`WriteProjectError::Malformed`] for unwritable
+/// paths, and [`WriteProjectError::Io`] when the filesystem fails.
+pub fn write_project(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    base_version: Option<&str>,
+    files: &[ProjectFileJson],
+) -> Result<String, WriteProjectError> {
+    use crate::locks::AcquireOutcome;
+
+    if !is_address(project_id) {
+        return Err(WriteProjectError::Unknown(project_id.to_owned()));
+    }
+    let _project_guard = PROJECT_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(WriteProjectError::Locked {
+                project: project_id.to_owned(),
+                holder,
+            });
+        }
+    }
+
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let needs_model = files
+        .iter()
+        .any(|file| file.content.is_some() && is_model_hcl_filename(&file.path));
+    let _model_guard = needs_model.then(|| {
+        MODEL_WRITE_LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+
+    let root = data_dir.join(project_id);
+    match fs::symlink_metadata(&root) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => {
+            return Err(WriteProjectError::Unknown(project_id.to_owned()));
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            fs::create_dir_all(&root)?;
+        }
+        Err(err) => return Err(WriteProjectError::Io(err)),
+    }
+
+    if let Some(expected) = base_version {
+        let current = hash_dir_version(data_dir, project_id)?;
+        if current != expected {
+            return Err(WriteProjectError::StaleVersion { current });
+        }
+    }
+
+    let plan = plan_project_files(&root, files)?;
+
+    apply_plan(&root, &plan).map_err(|err| match err {
+        SaveVfsError::Malformed(message) => WriteProjectError::Malformed(message),
+        SaveVfsError::Io(err) => WriteProjectError::Io(err),
+    })?;
+
+    // The tree changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
+    hash_dir_version(data_dir, project_id)
+}
+
+/// Why a project was not created. Every variant leaves the data dir without
+/// a new project.
+#[derive(Debug, Error)]
+pub enum CreateProjectError {
+    /// The id is not a project address (lowercase ASCII alphanumerics in runs
+    /// joined by single hyphens).
+    #[error(
+        "`{0}` is not a valid project id: use lowercase letters and digits joined by single hyphens"
+    )]
+    InvalidId(String),
+    /// A project directory with this id already exists.
+    #[error("project `{0}` already exists")]
+    Exists(String),
+    /// Someone else holds the lock on this id; carries their username.
+    #[error("project `{project}` is locked by `{holder}`")]
+    Locked {
+        /// The project that was to be created.
+        project: String,
+        /// The username holding the lock.
+        holder: String,
+    },
+    /// The filesystem refused to create or write the project.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Creates a brand-new project `project_id` seeded with the rhizome-core
+/// empty-project layout ([`rhizome_core::empty_project`]) — the same files the
+/// web editor writes for "new project".
+///
+/// Refuses an id that is already taken instead of overwriting it. The
+/// directory is claimed with a non-recursive `create_dir`, so two concurrent
+/// creations of one id cannot both succeed.
+///
+/// Returns the new project's content-hash version.
+///
+/// # Errors
+///
+/// Returns [`CreateProjectError::InvalidId`] for non-address ids,
+/// [`CreateProjectError::Exists`] when the id is taken,
+/// [`CreateProjectError::Locked`] when someone else holds the lock, and
+/// [`CreateProjectError::Io`] when the filesystem fails.
+pub fn create_project(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+) -> Result<String, CreateProjectError> {
+    use rhizome_core::empty_project::{
+        EMPTY_PROJECT_DIRS, EMPTY_PROJECT_HCL, EMPTY_PROJECT_MAIN_FILE,
+    };
+
+    if !is_address(project_id) {
+        return Err(CreateProjectError::InvalidId(project_id.to_owned()));
+    }
+    fs::create_dir_all(data_dir)?;
+    let root = data_dir.join(project_id);
+    match fs::create_dir(&root) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(CreateProjectError::Exists(project_id.to_owned()));
+        }
+        Err(err) => return Err(CreateProjectError::Io(err)),
+    }
+
+    let mut files = vec![ProjectFileJson {
+        path: EMPTY_PROJECT_MAIN_FILE.to_owned(),
+        content: Some(EMPTY_PROJECT_HCL.to_owned()),
+    }];
+    files.extend(EMPTY_PROJECT_DIRS.iter().map(|dir| ProjectFileJson {
+        path: (*dir).to_owned(),
+        content: None,
+    }));
+
+    write_project(data_dir, locks, project_id, user, None, &files).map_err(|err| {
+        // Do not leave an empty shell behind: it would block a retry as
+        // `Exists`. Only an empty directory is removed, never a partial one.
+        let _ = fs::remove_dir(&root);
+        match err {
+            WriteProjectError::Locked { project, holder } => {
+                CreateProjectError::Locked { project, holder }
+            }
+            WriteProjectError::Io(err) => CreateProjectError::Io(err),
+            WriteProjectError::Unknown(message) | WriteProjectError::Malformed(message) => {
+                CreateProjectError::Io(std::io::Error::other(message))
+            }
+            WriteProjectError::StaleVersion { current } => CreateProjectError::Io(
+                std::io::Error::other(format!("unexpected version mismatch ({current})")),
+            ),
+        }
+    })
+}
+
+/// Validates per-project write entries into the tree the project directory
+/// should hold. Paths resolve against `root` with the same confinement as
+/// the read-only tools, duplicates are refused, and every file's ancestors
+/// must be listed as directories.
+///
+/// # Errors
+///
+/// Returns [`WriteProjectError::Malformed`] for unwritable paths.
+fn plan_project_files(
+    root: &Path,
+    files: &[ProjectFileJson],
+) -> Result<ProjectPlan, WriteProjectError> {
+    let mut plan: ProjectPlan = HashMap::new();
+    for file in files {
+        let relative = Path::new(&file.path);
+        let absolute = resolve_confined_path(root, relative).map_err(|err| match err {
+            ConfinedPathError::Outside => WriteProjectError::Malformed(format!(
+                "path `{}` must be relative and stay inside the project",
+                file.path
+            )),
+            ConfinedPathError::Excluded => WriteProjectError::Malformed(format!(
+                "path `{}` traverses a hidden entry or symlink",
+                file.path
+            )),
+        })?;
+        let relative = absolute
+            .strip_prefix(root)
+            .map(Path::to_path_buf)
+            .map_err(|_| {
+                WriteProjectError::Malformed(format!(
+                    "path `{}` is not inside the project",
+                    file.path
+                ))
+            })?;
+        if relative.as_os_str().is_empty() {
+            return Err(WriteProjectError::Malformed(
+                "path must not be the project root itself".to_owned(),
+            ));
+        }
+        let wanted = file
+            .content
+            .as_ref()
+            .map_or(Wanted::Dir, |content| Wanted::File(content.clone()));
+        if plan.insert(relative.clone(), wanted).is_some() {
+            return Err(WriteProjectError::Malformed(format!(
+                "two entries resolve to the same path `{}`",
+                relative.display()
+            )));
+        }
+    }
+    // Every file's parents must be listed as directories, so a missing
+    // parent is the client's fault (400) rather than a filesystem failure.
+    let mut ordered: Vec<&PathBuf> = plan.keys().collect();
+    ordered.sort();
+    for path in ordered {
+        if !matches!(plan.get(path), Some(Wanted::File(_))) {
+            continue;
+        }
+        let mut parent = path.parent();
+        while let Some(dir) = parent {
+            if dir.as_os_str().is_empty() {
+                break;
+            }
+            match plan.get(dir) {
+                Some(Wanted::Dir) => {}
+                Some(Wanted::File(_)) => {
+                    return Err(WriteProjectError::Malformed(format!(
+                        "parent `{}` of `{}` is a file, not a directory",
+                        dir.display(),
+                        path.display()
+                    )));
+                }
+                None => {
+                    return Err(WriteProjectError::Malformed(format!(
+                        "file `{}` has no parent directory entry for `{}`",
+                        path.display(),
+                        dir.display()
+                    )));
+                }
+            }
+            parent = dir.parent();
+        }
+    }
+    Ok(plan)
+}
+
+/// The version of whatever is on disk for `project_id`, without judging
+/// whether it is a project: the hash over its walked entries, or over an
+/// empty set when the directory does not exist yet.
+fn hash_dir_version(data_dir: &Path, project_id: &str) -> Result<String, WriteProjectError> {
+    let found = collect_dir_entries(data_dir, project_id).map_err(WriteProjectError::Io)?;
+    let empty: Vec<Found> = Vec::new();
+    let found = found.as_ref().unwrap_or(&empty);
+    Ok(hash_found_entries(project_id, found))
+}
+
+/// Serializes model writes within this process, so two writes sent with the
+/// same version cannot both pass the version check. This is the inner
+/// compare-and-swap; the project lock is the outer admission check,
+/// mirroring [`FILE_WRITE_LOCK`] for generic files.
+static MODEL_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// Serializes generic file read-check-write sequences within this
+/// process, so two writes sent with the same version cannot both pass the
+/// version check. This is the inner compare-and-swap; the project lock
+/// (proposal 0004) is the outer admission check.
+static FILE_WRITE_LOCK: Mutex<()> = Mutex::new(());
+
+/// One granular text replacement inside an `edit_file` call.
+#[derive(Debug, Clone)]
+pub struct FileEdit {
+    /// The exact span to replace; must occur exactly once.
+    pub old_text: String,
+    /// The replacement text.
+    pub new_text: String,
+}
+
+/// The outcome of a `create_file` / `edit_file` call.
+#[derive(Debug)]
+pub struct FileWriteResult {
+    /// Content-hash version of the file after the write, for chaining
+    /// another write without re-reading.
+    pub version: String,
+    /// Total line count of the file after the write.
+    pub total_lines: usize,
+    /// Non-blocking validation warnings accompanying the new content
+    /// (model/view files only; empty for every other path).
+    pub warnings: Vec<rhizome_core::Diagnostic>,
+}
+
+/// Why a generic file write was not persisted. Every variant leaves the file
+/// untouched.
+#[derive(Debug, Error)]
+pub enum FileWriteError {
+    /// No project with this id.
+    #[error("unknown project `{0}`")]
+    Unknown(String),
+    /// Someone else holds the project lock; carries their username.
+    #[error("project is locked by `{holder}`")]
+    Locked {
+        /// The username holding the project.
+        holder: String,
+    },
+    /// The filesystem refused to read or write.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+    /// The write was refused: bad path, match failure, or a stale version.
+    /// Carries a human-readable message telling the client to re-read.
+    #[error("{0}")]
+    Refused(String),
+    /// The new content does not resolve; carries the resolver diagnostics.
+    #[error("refused")]
+    Invalid(Vec<rhizome_core::Diagnostic>),
+}
+
+/// Whether `filename` (project-relative, `/`-separated) names a view source.
+fn is_view_filename(filename: &str) -> bool {
+    rhizome_core::is_view_source(filename)
+}
+
+/// Whether `filename` names a model HCL file: any `.hcl` that is not a view.
+fn is_model_hcl_filename(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .is_some_and(|ext| ext == "hcl")
+        && !is_view_filename(filename)
+}
+
+/// Whether `filename` needs compile validation: any `.hcl` file (model or
+/// view). Everything else writes through with no validation.
+fn needs_validation(filename: &str) -> bool {
+    Path::new(filename)
+        .extension()
+        .is_some_and(|ext| ext == "hcl")
+}
+
+/// Validates `new_content` for `relative` (project-relative, `/`-separated)
+/// against the project's current sources with the file replaced/added.
+///
+/// Model HCL goes through a model-only `compile` (no views) with the proposed
+/// content substituted: any error refuses the write, warnings pass through.
+/// View HCL goes through `parse_views` + `validate_view` against the current
+/// model: `E016`/`E006`/parse `E000` errors refuse, warnings pass through.
+/// Every other path skips validation. Isolating the edited file (rather than
+/// demanding a fully clean project) keeps single-file tools usable: a valid
+/// fix applies even when an unrelated view is still broken, while a breaking
+/// edit is still refused byte-identical.
+fn validate_proposed_content(
+    sources: &[rhizome_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizome_core::Diagnostic>, Vec<rhizome_core::Diagnostic>> {
+    if !needs_validation(relative) {
+        return Ok(Vec::new());
+    }
+    if is_view_filename(relative) {
+        return validate_proposed_view(sources, relative, new_content);
+    }
+    validate_proposed_model(sources, relative, new_content)
+}
+
+/// Validates a proposed model HCL file: model-only compile, zero errors.
+fn validate_proposed_model(
+    sources: &[rhizome_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizome_core::Diagnostic>, Vec<rhizome_core::Diagnostic>> {
+    let mut proposed: Vec<rhizome_core::Source> = Vec::new();
+    let mut replaced = false;
+    for source in sources {
+        if rhizome_core::is_view_source(&source.filename) {
+            continue;
+        }
+        if source.filename == relative {
+            proposed.push(rhizome_core::Source {
+                filename: source.filename.clone(),
+                content: new_content.to_owned(),
+            });
+            replaced = true;
+        } else {
+            proposed.push(source.clone());
+        }
+    }
+    if !replaced {
+        proposed.push(rhizome_core::Source {
+            filename: relative.to_owned(),
+            content: new_content.to_owned(),
+        });
+    }
+    let result = rhizome_core::compile(&proposed);
+    if result
+        .diagnostics
+        .iter()
+        .any(rhizome_core::Diagnostic::is_error)
+    {
+        return Err(result.diagnostics);
+    }
+    Ok(result
+        .diagnostics
+        .into_iter()
+        .filter(|d| !d.is_error())
+        .collect())
+}
+
+/// Validates a proposed view HCL file against the current model.
+///
+/// When the model itself is broken the view cannot be validated: the model's
+/// diagnostics are returned (codes preserved) with a prefix naming the view,
+/// so an AI client sees that the refusal is about the model, not its edit.
+fn validate_proposed_view(
+    sources: &[rhizome_core::Source],
+    relative: &str,
+    new_content: &str,
+) -> Result<Vec<rhizome_core::Diagnostic>, Vec<rhizome_core::Diagnostic>> {
+    let model_sources: Vec<rhizome_core::Source> = sources
+        .iter()
+        .filter(|source| !rhizome_core::is_view_source(&source.filename))
+        .cloned()
+        .collect();
+    let model_result = rhizome_core::compile(&model_sources);
+    if model_result
+        .diagnostics
+        .iter()
+        .any(rhizome_core::Diagnostic::is_error)
+    {
+        return Err(model_result
+            .diagnostics
+            .into_iter()
+            .map(|mut diagnostic| {
+                diagnostic.message = format!(
+                    "cannot validate view `{relative}` while the model is broken: {}",
+                    diagnostic.message
+                );
+                diagnostic
+            })
+            .collect());
+    }
+    let Some(model) = model_result.model else {
+        return Err(model_result.diagnostics);
+    };
+    let views = match rhizome_core::parse_views(new_content) {
+        Ok(views) => views,
+        Err(e) => {
+            return Err(vec![rhizome_core::Diagnostic {
+                code: rhizome_core::DiagnosticCode::E000,
+                file: Some(std::path::PathBuf::from(relative)),
+                line: None,
+                message: format!("{relative}: {e}"),
+            }]);
+        }
+    };
+    let diagnostics = rhizome_core::validate::validate_view(&model, &views, relative);
+    if diagnostics.iter().any(rhizome_core::Diagnostic::is_error) {
+        return Err(diagnostics);
+    }
+    Ok(diagnostics.into_iter().filter(|d| !d.is_error()).collect())
+}
+
+/// Project-relative `/`-separated path for `absolute` under `root`.
+fn relative_filename(root: &Path, absolute: &Path) -> String {
+    absolute
+        .strip_prefix(root)
+        .map(|relative| {
+            relative
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .unwrap_or_default()
+}
+
+/// Creates a new file at any project-confined path, or overwrites an
+/// existing one whole.
+///
+/// The project lock is taken first (free projects auto-acquire; held-by-other
+/// is refused with [`FileWriteError::Locked`]).
+///
+/// A missing file is created with `content` (parent directories are created
+/// as needed); an existing file is replaced whole, but only when `version`
+/// equals [`file_version`] of the file on disk — overwriting without a
+/// version, or with a stale one, is refused with a message telling the
+/// client to re-read. A `version` passed for a file that does not exist yet
+/// is ignored: there is nothing to check it against. The check and the write
+/// happen under the same `FILE_WRITE_LOCK` (plus `MODEL_WRITE_LOCK` for
+/// model HCL, so two concurrent model writes cannot silently win over
+/// each other), so a create racing an edit of the same path cannot silently win.
+///
+/// Confinement mirrors `read_file`: the project is resolved with
+/// [`resolve_project`] and the path with [`resolve_confined_path`], so the
+/// path never escapes the project and hidden entries or symlinks are
+/// refused. Any confined path may be written — `system.hcl`, `views/**.hcl`,
+/// `docs/**.md`, `README.md`, and everything else. Writes go through
+/// `write_atomic`.
+///
+/// Validation on write: `.hcl` model files go through a full compile (zero
+/// errors required); `views/**.hcl` goes
+/// through `parse_views` + resolution as part of that compile
+/// (error-severity `E016`/`E006`/parse errors refuse, warnings pass through
+/// and are returned); every other path skips validation.
+///
+/// # Errors
+///
+/// Returns [`FileWriteError::Unknown`] for unknown projects,
+/// [`FileWriteError::Locked`] when someone else holds the lock,
+/// [`FileWriteError::Io`] when the filesystem fails,
+/// [`FileWriteError::Refused`] with a human-readable reason for bad paths
+/// and version mismatches, and [`FileWriteError::Invalid`] with the resolver
+/// diagnostics when the new content does not resolve.
+pub fn create_file(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    file_path: &str,
+    content: &str,
+    version: Option<&str>,
+) -> Result<FileWriteResult, FileWriteError> {
+    use crate::locks::AcquireOutcome;
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => FileWriteError::Unknown(id),
+        ProjectError::Io(err) => FileWriteError::Io(err),
+    })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(FileWriteError::Locked { holder });
+        }
+    }
+
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let relative = Path::new(file_path);
+    let absolute = resolve_confined_path(&root, relative)
+        .map_err(|e| FileWriteError::Refused(e.to_string()))?;
+
+    let normalized = relative_filename(&root, &absolute);
+    // Model HCL additionally serializes with `mutate_project`.
+    let _model_guard = if is_model_hcl_filename(&normalized) {
+        Some(
+            MODEL_WRITE_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    } else {
+        None
+    };
+
+    match fs::symlink_metadata(&absolute) {
+        Ok(metadata) => {
+            if !metadata.is_file() || metadata.file_type().is_symlink() {
+                return Err(FileWriteError::Refused(format!(
+                    "path `{file_path}` is not a regular file"
+                )));
+            }
+            let current = fs::read_to_string(&absolute)?;
+            match version {
+                Some(version) if file_version(&current) == version => {}
+                Some(_) => {
+                    return Err(FileWriteError::Refused(format!(
+                        "version mismatch: `{file_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+                        file_version(&current)
+                    )));
+                }
+                None => {
+                    return Err(FileWriteError::Refused(format!(
+                        "file `{file_path}` already exists; pass the `version` `read_file` returned to overwrite it whole"
+                    )));
+                }
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => return Err(FileWriteError::Io(err)),
+    }
+
+    let sources = match project_sources(data_dir, project_id) {
+        Ok(sources) => sources.unwrap_or_default(),
+        Err(err) => return Err(FileWriteError::Io(err)),
+    };
+    let warnings = validate_proposed_content(&sources, &normalized, content)
+        .map_err(FileWriteError::Invalid)?;
+
+    if let Some(parent) = absolute.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    write_atomic(&absolute, content).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => FileWriteError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => FileWriteError::Io(err),
+    })?;
+    // The file changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
+    Ok(FileWriteResult {
+        version: file_version(content),
+        total_lines: content.lines().count(),
+        warnings,
+    })
+}
+
+/// Applies granular text replacements to an existing file at any
+/// project-confined path.
+///
+/// The project lock is taken first (free projects auto-acquire; held-by-other
+/// is refused with [`FileWriteError::Locked`]). Then the read, the version
+/// check, the sequential edit application, validation, and the write happen
+/// under one held lock, so two edits sent with the same version cannot both
+/// apply: the loser sees the winner's version and is refused.
+///
+/// `edits` apply sequentially in order: the list must not be empty, and each
+/// `old_text` must occur exactly once in the intermediate content (zero
+/// matches, several matches, and an empty `old_text` are all refused with the
+/// file untouched). The version must equal [`file_version`] of the file on
+/// disk, or the edit is refused with a message telling the client to re-read.
+///
+/// Confinement and validation mirror [`create_file`]: any confined path may
+/// be edited, `.hcl` goes through a full compile (zero errors required),
+/// every other path skips validation. Writes go through `write_atomic`.
+///
+/// # Errors
+///
+/// Returns [`FileWriteError::Unknown`] for unknown projects,
+/// [`FileWriteError::Locked`] when someone else holds the lock,
+/// [`FileWriteError::Io`] when the filesystem fails,
+/// [`FileWriteError::Refused`] with a human-readable reason for bad paths,
+/// match failures, and version mismatches, and [`FileWriteError::Invalid`]
+/// with the resolver diagnostics when the edited content does not resolve.
+pub fn edit_file(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+    file_path: &str,
+    edits: &[FileEdit],
+    version: &str,
+) -> Result<FileWriteResult, FileWriteError> {
+    use crate::locks::AcquireOutcome;
+
+    let root = resolve_project(data_dir, project_id).map_err(|e| match e {
+        ProjectError::Unknown(id) => FileWriteError::Unknown(id),
+        ProjectError::Io(err) => FileWriteError::Io(err),
+    })?;
+    match locks.acquire(project_id, user) {
+        AcquireOutcome::Acquired | AcquireOutcome::Renewed => {}
+        AcquireOutcome::Refused { holder } => {
+            return Err(FileWriteError::Locked { holder });
+        }
+    }
+
+    let _file_guard = FILE_WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    let relative = Path::new(file_path);
+    let absolute = resolve_confined_path(&root, relative)
+        .map_err(|e| FileWriteError::Refused(e.to_string()))?;
+
+    let normalized = relative_filename(&root, &absolute);
+    let _model_guard = if is_model_hcl_filename(&normalized) {
+        Some(
+            MODEL_WRITE_LOCK
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    } else {
+        None
+    };
+
+    let metadata = fs::symlink_metadata(&absolute).map_err(|_| {
+        FileWriteError::Refused(format!(
+            "unknown file `{file_path}` (create it with `create_file` first)"
+        ))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(FileWriteError::Refused(format!(
+            "path `{file_path}` is not a regular file"
+        )));
+    }
+
+    let content = fs::read_to_string(&absolute)?;
+    if edits.is_empty() {
+        return Err(FileWriteError::Refused(
+            "`edits` must contain at least one edit".to_owned(),
+        ));
+    }
+    if file_version(&content) != version {
+        return Err(FileWriteError::Refused(format!(
+            "version mismatch: `{file_path}` changed since it was read (current version {}); re-read it with `read_file` and retry",
+            file_version(&content)
+        )));
+    }
+
+    let mut updated = content;
+    for (index, edit) in edits.iter().enumerate() {
+        if edit.old_text.is_empty() {
+            return Err(FileWriteError::Refused(format!(
+                "edit {index}: `old_text` must not be empty"
+            )));
+        }
+        match updated.matches(&edit.old_text).count() {
+            0 => {
+                return Err(FileWriteError::Refused(format!(
+                    "edit {index}: `old_text` does not occur in `{file_path}`"
+                )));
+            }
+            1 => {}
+            count => {
+                return Err(FileWriteError::Refused(format!(
+                    "edit {index}: `old_text` occurs {count} times in `{file_path}`; it must occur exactly once"
+                )));
+            }
+        }
+        updated = updated.replacen(&edit.old_text, &edit.new_text, 1);
+    }
+
+    let sources = match project_sources(data_dir, project_id) {
+        Ok(sources) => sources.unwrap_or_default(),
+        Err(err) => return Err(FileWriteError::Io(err)),
+    };
+    let warnings = validate_proposed_content(&sources, &normalized, &updated)
+        .map_err(FileWriteError::Invalid)?;
+
+    write_atomic(&absolute, &updated).map_err(|e| match e {
+        SaveVfsError::Malformed(message) => FileWriteError::Io(std::io::Error::other(message)),
+        SaveVfsError::Io(err) => FileWriteError::Io(err),
+    })?;
+    // The file changed: the idle timer restarts. (Always held here — the
+    // acquire above succeeded.)
+    let _ = locks.note_edit(project_id, user);
+    Ok(FileWriteResult {
+        version: file_version(&updated),
+        total_lines: updated.lines().count(),
+        warnings,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // ── Fixtures ───────────────────────────────────────────────────────
+
+    /// Writes `content` to `path`, creating parent directories as needed.
+    fn write_file(path: &Path, content: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        fs::write(path, content).unwrap();
+    }
+
+    /// Lays out one example-style project directory and returns the tempdir.
+    fn data_dir_with_drone() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"quadcopter\" {}\n",
+        );
+        write_file(
+            &dir.path().join("drone/views/main.hcl"),
+            "view \"main\" {}\n",
+        );
+        dir
+    }
+
+    /// The node with `id`, panicking with a readable message when absent.
+    ///
+    /// Deliberately reports only the id and the ids it *did* find: a whole
+    /// project blob is tens of kilobytes of HCL, and a failure message made of
+    /// that is unreadable.
+    fn node<'a>(vfs: &'a Value, id: &str) -> &'a Value {
+        let nodes = vfs["nodes"].as_array().unwrap();
+        nodes
+            .iter()
+            .find(|n| n["id"] == json!(id))
+            .unwrap_or_else(|| {
+                let found: Vec<&str> = nodes.iter().filter_map(|n| n["id"].as_str()).collect();
+                panic!("no node with id {id:?}; found {found:?}")
+            })
+    }
+
+    /// The id the loader hands out for `path` inside `project`.
+    fn id_of(project: &str, path: &str) -> String {
+        format!("{project}/{path}")
+    }
+
+    /// Every node id, in the order the blob lists them.
+    fn node_ids(vfs: &Value) -> Vec<String> {
+        vfs["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|n| n["id"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    /// Every project id, in the order the blob lists them.
+    fn project_ids(vfs: &Value) -> Vec<String> {
+        vfs["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["id"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    /// A file's stored content.
+    fn content_of(vfs: &Value, id: &str) -> String {
+        node(vfs, id)["content"].as_str().unwrap().to_owned()
+    }
+
+    /// A path's mtime as milliseconds since the Unix epoch — the value the
+    /// loader is expected to derive `revision`/`updatedAt` from.
+    fn mtime_millis(path: &Path) -> i64 {
+        let modified = fs::metadata(path).unwrap().modified().unwrap();
+        i64::try_from(modified.duration_since(UNIX_EPOCH).unwrap().as_millis()).unwrap()
+    }
+
+    /// Whether `path` holds no entries at all.
+    fn dir_is_empty(path: &Path) -> bool {
+        fs::read_dir(path).map_or(true, |mut e| e.next().is_none())
+    }
+
+    // ── Payload builders ───────────────────────────────────────────────
+
+    fn project(id: &str) -> Value {
+        json!({ "id": id, "name": id, "createdAt": "t0", "updatedAt": "t1" })
+    }
+
+    fn file_node(
+        id: &str,
+        project: &str,
+        parent: Option<&str>,
+        name: &str,
+        content: &str,
+    ) -> Value {
+        json!({
+            "id": id, "projectId": project, "parentId": parent, "name": name,
+            "kind": "file", "content": content, "revision": 1, "updatedAt": "t2"
+        })
+    }
+
+    fn dir_node(id: &str, project: &str, parent: Option<&str>, name: &str) -> Value {
+        json!({
+            "id": id, "projectId": project, "parentId": parent, "name": name,
+            "kind": "directory"
+        })
+    }
+
+    /// A whole-VFS payload from projects and nodes.
+    fn vfs(projects: &[Value], nodes: &[Value]) -> Value {
+        json!({ "version": 1, "projects": projects, "nodes": nodes })
+    }
+
+    // ── Loading: discovery ─────────────────────────────────────────────
+
+    #[test]
+    fn load_yields_empty_vfs_for_a_missing_or_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("does-not-exist");
+        for path in [&missing, dir.path()] {
+            assert_eq!(load_vfs(path).unwrap(), empty_vfs());
+        }
+    }
+
+    #[test]
+    fn load_reads_a_project_directory_into_a_node_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"quadcopter\" {}\n",
+        );
+        write_file(
+            &dir.path().join("drone/views/main.hcl"),
+            "view \"main\" {}\n",
+        );
+        write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
+        write_file(&dir.path().join("drone/README.md"), "readme\n");
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(project_ids(&loaded), vec!["drone"]);
+        // Every entry in the directory becomes a node, addressed by its
+        // project-relative path — including the README, which is just a file.
+        let mut ids = node_ids(&loaded);
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![
+                "drone/README.md",
+                "drone/docs",
+                "drone/docs/battery.md",
+                "drone/system.hcl",
+                "drone/views",
+                "drone/views/main.hcl",
+            ]
+        );
+        let at = |path: &str| id_of("drone", path);
+        assert_eq!(
+            content_of(&loaded, &at("system.hcl")),
+            "system \"quadcopter\" {}\n"
+        );
+        assert_eq!(
+            content_of(&loaded, &at("views/main.hcl")),
+            "view \"main\" {}\n"
+        );
+        assert_eq!(content_of(&loaded, &at("docs/battery.md")), "# battery\n");
+        assert_eq!(content_of(&loaded, &at("README.md")), "readme\n");
+        assert_eq!(node(&loaded, &at("views"))["kind"], json!("directory"));
+        assert_eq!(node(&loaded, &at("system.hcl"))["kind"], json!("file"));
+        // A root entry has no parent node — its parent is the project itself,
+        // which the node schema does not model.
+        assert_eq!(node(&loaded, &at("system.hcl"))["parentId"], json!(null));
+        assert_eq!(
+            node(&loaded, &at("views/main.hcl"))["parentId"],
+            json!(at("views"))
+        );
+    }
+
+    #[test]
+    fn load_names_the_project_after_its_directory() {
+        let dir = data_dir_with_drone();
+        let loaded = load_vfs(dir.path()).unwrap();
+        let project = &loaded["projects"][0];
+        assert_eq!(project["id"], json!("drone"));
+        assert_eq!(project["name"], json!("drone"));
+    }
+
+    #[test]
+    fn load_derives_revision_and_updated_at_from_the_file_mtime() {
+        let dir = data_dir_with_drone();
+        let path = dir.path().join("drone/system.hcl");
+        let expected = mtime_millis(&path);
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        let file = node(&loaded, &id_of("drone", "system.hcl"));
+        assert_eq!(file["revision"], json!(u64::try_from(expected).unwrap()));
+        assert_eq!(file["updatedAt"], json!(format_rfc3339_millis(expected)));
+    }
+
+    #[test]
+    fn load_spans_project_timestamps_over_the_oldest_and_newest_file() {
+        let dir = data_dir_with_drone();
+        let oldest = mtime_millis(&dir.path().join("drone/system.hcl"));
+        let newest = mtime_millis(&dir.path().join("drone/views/main.hcl"));
+        let (created, updated) = if oldest <= newest {
+            (oldest, newest)
+        } else {
+            (newest, oldest)
+        };
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        let project = &loaded["projects"][0];
+        assert_eq!(project["createdAt"], json!(format_rfc3339_millis(created)));
+        assert_eq!(project["updatedAt"], json!(format_rfc3339_millis(updated)));
+    }
+
+    #[test]
+    fn load_sorts_projects_by_address() {
+        let dir = tempfile::tempdir().unwrap();
+        for address in ["zulu", "alpha", "mike"] {
+            write_file(
+                &dir.path().join(address).join("system.hcl"),
+                "system \"s\" {}\n",
+            );
+        }
+
+        assert_eq!(
+            project_ids(&load_vfs(dir.path()).unwrap()),
+            vec!["alpha", "mike", "zulu"]
+        );
+    }
+
+    #[test]
+    fn load_sorts_a_projects_nodes_by_path() {
+        // Node order decides which file the compiler treats as the primary
+        // source and which view a diagram page opens first, so it has to come
+        // from the filesystem in a stable order rather than from readdir's.
+        let dir = tempfile::tempdir().unwrap();
+        for path in [
+            "zzz.hcl",
+            "aaa.hcl",
+            "views/main.hcl",
+            "views/aaa.hcl",
+            "docs/battery.md",
+            "mmm.hcl",
+        ] {
+            write_file(&dir.path().join("drone").join(path), "x\n");
+        }
+
+        assert_eq!(
+            node_ids(&load_vfs(dir.path()).unwrap()),
+            vec![
+                "drone/aaa.hcl",
+                "drone/docs",
+                "drone/docs/battery.md",
+                "drone/mmm.hcl",
+                "drone/views",
+                "drone/views/aaa.hcl",
+                "drone/views/main.hcl",
+                "drone/zzz.hcl",
+            ]
+        );
+    }
+
+    #[test]
+    fn load_ignores_entries_that_are_not_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        // A file at the data-dir root is not a project.
+        write_file(&dir.path().join("README.md"), "readme\n");
+        // Neither is a directory without a model source: no `.hcl` at all…
+        fs::create_dir_all(dir.path().join("notes")).unwrap();
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        // …or `.hcl` files that are all view sources.
+        write_file(
+            &dir.path().join("gallery/views/main.hcl"),
+            "view \"main\" {}\n",
+        );
+        write_file(&dir.path().join("empty/.keep"), "");
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(loaded, empty_vfs());
+    }
+
+    #[test]
+    fn load_ignores_hidden_entries_at_every_level() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join(".git/config"), "[core]\n");
+        write_file(&dir.path().join("drone/.hidden.hcl"), "system \"x\" {}\n");
+        write_file(&dir.path().join("drone/.DS_Store"), "junk");
+        write_file(&dir.path().join("drone/views/.gitkeep"), "");
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(project_ids(&loaded), vec!["drone"]);
+        assert_eq!(
+            node_ids(&loaded),
+            vec!["drone/system.hcl", "drone/views", "drone/views/main.hcl"]
+        );
+    }
+
+    #[test]
+    fn load_ignores_a_hidden_project_directory() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join(".rhizome/system.hcl"), "system \"x\" {}\n");
+
+        assert_eq!(project_ids(&load_vfs(dir.path()).unwrap()), vec!["drone"]);
+    }
+
+    #[test]
+    fn load_ignores_symlinks() {
+        let dir = data_dir_with_drone();
+        let outside = dir.path().join("outside.hcl");
+        write_file(&outside, "system \"leaked\" {}\n");
+        std::os::unix::fs::symlink(&outside, dir.path().join("drone/linked.hcl")).unwrap();
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert!(!node_ids(&loaded).contains(&"linked.hcl".to_owned()));
+    }
+
+    #[test]
+    fn load_ignores_directories_whose_name_is_not_its_own_address() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("Drone System/system.hcl"),
+            "system \"x\" {}\n",
+        );
+
+        assert_eq!(project_ids(&load_vfs(dir.path()).unwrap()), vec!["drone"]);
+    }
+
+    #[test]
+    fn load_accepts_main_hcl_as_the_model_source() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir.path().join("scratch/main.hcl"), "system \"s\" {}\n");
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(project_ids(&loaded), vec!["scratch"]);
+        assert_eq!(
+            content_of(&loaded, &id_of("scratch", "main.hcl")),
+            "system \"s\" {}\n"
+        );
+    }
+
+    #[test]
+    fn load_reads_every_example_project() {
+        // The end goal of the layout: a checkout's `examples/` directory is a
+        // valid data dir, so mounting it lists the examples as projects.
+        let examples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples");
+        if !examples.is_dir() {
+            return; // examples/ is not part of a published crate
+        }
+
+        let loaded = load_vfs(&examples).unwrap();
+
+        let mut ids = project_ids(&loaded);
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![
+                "apollo-11",
+                "drone",
+                "social-media",
+                "software-house",
+                "weather-service",
+                "web-app",
+            ]
+        );
+        // Ids carry the project address, so every example's model source is a
+        // distinct node and no two nodes in the blob share an id.
+        assert!(content_of(&loaded, &id_of("drone", "system.hcl")).contains("system "));
+        let node_list = node_ids(&loaded);
+        assert_eq!(
+            node_list
+                .iter()
+                .filter(|id| *id == "drone/system.hcl")
+                .count(),
+            1,
+            "{node_list:?}"
+        );
+        assert!(node_list.contains(&"apollo-11/views/main.hcl".to_owned()));
+        assert!(node_list.contains(&"software-house/docs/product.md".to_owned()));
+    }
+
+    #[test]
+    fn node_ids_are_unique_across_the_whole_blob() {
+        // The regression guard for the cross-project wipe: the frontend's store
+        // resolves a node by id across the entire flat `nodes` array
+        // (`findNode` takes the first match, `updateFileContent` rewrites every
+        // match), so an id that is unique only *within* a project lets a write
+        // to one project land on another. Ids must therefore be unique over the
+        // blob, which for a real filesystem means carrying the project address.
+        let dir = tempfile::tempdir().unwrap();
+        // Two projects with byte-identical layouts: every path collides if the
+        // id does not include the address.
+        for project in ["drone", "web-app"] {
+            write_file(
+                &dir.path().join(project).join("system.hcl"),
+                "system \"s\" {}\n",
+            );
+            write_file(
+                &dir.path().join(project).join("views/main.hcl"),
+                "view \"main\" {}\n",
+            );
+            write_file(&dir.path().join(project).join("docs/battery.md"), "# b\n");
+        }
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        let ids = node_ids(&loaded);
+        let mut deduped = ids.clone();
+        deduped.sort();
+        deduped.dedup();
+        assert_eq!(
+            ids.len(),
+            deduped.len(),
+            "ids must be unique across projects: {ids:?}"
+        );
+        // …and they name the project they belong to.
+        for id in &ids {
+            assert!(
+                id.starts_with("drone/") || id.starts_with("web-app/"),
+                "id {id:?} carries no project address"
+            );
+        }
+        // system.hcl + views/ + views/main.hcl + docs/ + docs/battery.md
+        assert_eq!(ids.len(), 10, "five entries per project: {ids:?}");
+    }
+
+    #[test]
+    fn a_project_directory_named_views_is_still_a_project() {
+        // The view classifier has to see the path *inside* the project: an id
+        // that starts with `views/` must not make the project's own model
+        // source look like a view source.
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir.path().join("views/system.hcl"), "system \"s\" {}\n");
+        write_file(
+            &dir.path().join("views/views/inner.hcl"),
+            "view \"inner\" {}\n",
+        );
+
+        let loaded = load_vfs(dir.path()).unwrap();
+
+        assert_eq!(project_ids(&loaded), vec!["views"]);
+        assert_eq!(
+            node_ids(&loaded),
+            vec!["views/system.hcl", "views/views", "views/views/inner.hcl"]
+        );
+    }
+
+    // ── Timestamp formatting ───────────────────────────────────────────
+
+    #[test]
+    fn formats_known_instants_as_rfc3339() {
+        assert_eq!(format_rfc3339_millis(0), "1970-01-01T00:00:00.000Z");
+        assert_eq!(format_rfc3339_millis(1_000), "1970-01-01T00:00:01.000Z");
+        // A leap day, and an instant past the 32-bit boundary.
+        assert_eq!(
+            format_rfc3339_millis(951_782_400_000),
+            "2000-02-29T00:00:00.000Z"
+        );
+        assert_eq!(
+            format_rfc3339_millis(1_700_000_000_123),
+            "2023-11-14T22:13:20.123Z"
+        );
+    }
+
+    #[test]
+    fn formats_instants_before_the_epoch() {
+        // Floor division, not truncation: a file stamped one millisecond
+        // before 1970 belongs to the *previous* day, not to 1970.
+        assert_eq!(format_rfc3339_millis(-1), "1969-12-31T23:59:59.999Z");
+        assert_eq!(
+            format_rfc3339_millis(-86_400_000),
+            "1969-12-31T00:00:00.000Z"
+        );
+    }
+
+    // ── Saving ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn save_writes_a_project_into_a_directory_tree() {
+        let dir = tempfile::tempdir().unwrap();
+        let payload = vfs(
+            &[project("drone")],
+            &[
+                dir_node("views", "drone", None, "views"),
+                file_node(
+                    "system.hcl",
+                    "drone",
+                    None,
+                    "system.hcl",
+                    "system \"s\" {}\n",
+                ),
+                file_node(
+                    "views/main.hcl",
+                    "drone",
+                    Some("views"),
+                    "main.hcl",
+                    "view \"main\" {}\n",
+                ),
+            ],
+        );
+
+        save_vfs(dir.path(), &payload).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"s\" {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap(),
+            "view \"main\" {}\n"
+        );
+        assert!(dir.path().join("drone/views").is_dir());
+    }
+
+    #[test]
+    fn save_round_trips_a_directory_tree() {
+        let dir = data_dir_with_drone();
+        let before = load_vfs(dir.path()).unwrap();
+
+        // Hand the loaded blob straight back, as the frontend does.
+        save_vfs(dir.path(), &before).unwrap();
+
+        let after = load_vfs(dir.path()).unwrap();
+        assert_eq!(project_ids(&after), project_ids(&before));
+        assert_eq!(node_ids(&after), node_ids(&before));
+        for id in node_ids(&before) {
+            if node(&before, &id)["kind"] == json!("file") {
+                assert_eq!(content_of(&after, &id), content_of(&before, &id), "{id}");
+            }
+        }
+    }
+
+    #[test]
+    fn save_creates_missing_parent_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        let payload = vfs(
+            &[project("p")],
+            &[
+                dir_node("a", "p", None, "a"),
+                dir_node("b", "p", Some("a"), "b"),
+                file_node("c", "p", Some("b"), "deep.hcl", "# deep\n"),
+            ],
+        );
+
+        save_vfs(dir.path(), &payload).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("p/a/b/deep.hcl")).unwrap(),
+            "# deep\n"
+        );
+    }
+
+    #[test]
+    fn save_deletes_files_the_payload_dropped() {
+        let dir = data_dir_with_drone();
+
+        let trimmed = vfs(
+            &[project("drone")],
+            &[file_node(
+                "system.hcl",
+                "drone",
+                None,
+                "system.hcl",
+                "system \"q\" {}\n",
+            )],
+        );
+        save_vfs(dir.path(), &trimmed).unwrap();
+
+        assert!(!dir.path().join("drone/views/main.hcl").exists());
+        assert!(!dir.path().join("drone/views").exists());
+        assert_eq!(
+            content_of(
+                &load_vfs(dir.path()).unwrap(),
+                &id_of("drone", "system.hcl")
+            ),
+            trimmed["nodes"][0]["content"]
+        );
+    }
+
+    #[test]
+    fn save_removes_project_directories_absent_from_the_payload() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("zulu/system.hcl"), "system \"z\" {}\n");
+
+        save_vfs(dir.path(), &vfs(&[project("drone")], &[])).unwrap();
+
+        assert!(dir.path().join("drone").is_dir());
+        assert!(!dir.path().join("zulu").exists());
+    }
+
+    #[test]
+    fn save_keeps_directories_that_are_not_projects() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        write_file(&dir.path().join("README.md"), "readme\n");
+
+        save_vfs(dir.path(), &load_vfs(dir.path()).unwrap()).unwrap();
+
+        // Deleting "projects absent from the payload" must not reach past the
+        // projects: anything that isn't one is none of the server's business.
+        assert!(dir.path().join("notes/scratch.md").exists());
+        assert!(dir.path().join("README.md").exists());
+    }
+
+    #[test]
+    fn save_leaves_hidden_entries_alone() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join(".git/config"), "[core]\n");
+        write_file(&dir.path().join("drone/.DS_Store"), "junk");
+
+        save_vfs(dir.path(), &load_vfs(dir.path()).unwrap()).unwrap();
+
+        assert!(dir.path().join(".git/config").exists());
+        assert!(dir.path().join("drone/.DS_Store").exists());
+    }
+
+    #[test]
+    fn save_skips_files_whose_content_is_unchanged() {
+        let dir = data_dir_with_drone();
+        let payload = load_vfs(dir.path()).unwrap();
+        let before = mtime_millis(&dir.path().join("drone/system.hcl"));
+
+        save_vfs(dir.path(), &payload).unwrap();
+        save_vfs(dir.path(), &payload).unwrap();
+
+        assert_eq!(mtime_millis(&dir.path().join("drone/system.hcl")), before);
+    }
+
+    #[test]
+    fn save_writes_a_file_whose_content_changed() {
+        let dir = data_dir_with_drone();
+        let payload = vfs(
+            &[project("drone")],
+            &[file_node(
+                "system.hcl",
+                "drone",
+                None,
+                "system.hcl",
+                "system \"new\" {}\n",
+            )],
+        );
+
+        save_vfs(dir.path(), &payload).unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"new\" {}\n"
+        );
+    }
+
+    #[test]
+    fn save_replaces_a_file_with_a_directory_of_the_same_name() {
+        let dir = data_dir_with_drone();
+
+        save_vfs(
+            dir.path(),
+            &vfs(
+                &[project("drone")],
+                &[
+                    file_node(
+                        "system.hcl",
+                        "drone",
+                        None,
+                        "system.hcl",
+                        "system \"s\" {}\n",
+                    ),
+                    dir_node("views", "drone", None, "views"),
+                    file_node(
+                        "views/main.hcl",
+                        "drone",
+                        Some("views"),
+                        "main.hcl",
+                        "view \"m\" {}\n",
+                    ),
+                ],
+            ),
+        )
+        .unwrap();
+
+        assert!(dir.path().join("drone/views").is_dir());
+        assert_eq!(
+            node_ids(&load_vfs(dir.path()).unwrap()),
+            vec!["drone/system.hcl", "drone/views", "drone/views/main.hcl"]
+        );
+    }
+
+    #[test]
+    fn save_replaces_a_directory_with_a_file_of_the_same_name() {
+        let dir = data_dir_with_drone();
+
+        save_vfs(
+            dir.path(),
+            &vfs(
+                &[project("drone")],
+                &[
+                    file_node(
+                        "system.hcl",
+                        "drone",
+                        None,
+                        "system.hcl",
+                        "system \"s\" {}\n",
+                    ),
+                    file_node("views", "drone", None, "views", "not a directory\n"),
+                ],
+            ),
+        )
+        .unwrap();
+
+        assert!(dir.path().join("drone/views").is_file());
+        assert_eq!(
+            node_ids(&load_vfs(dir.path()).unwrap()),
+            vec!["drone/system.hcl", "drone/views"]
+        );
+    }
+
+    // ── Saving: what the server refuses ─────────────────────────────────
+
+    #[test]
+    fn save_rejects_payload_without_projects() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(save_vfs(dir.path(), &json!({ "version": 1, "nodes": [] })).is_err());
+    }
+
+    #[test]
+    fn save_rejects_a_non_object_payload() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(save_vfs(dir.path(), &json!(42)).is_err());
+    }
+
+    #[test]
+    fn save_rejects_duplicate_project_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(&[project("dup"), project("dup")], &[]);
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_missing_project_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(&[json!({ "name": "no id" })], &[]);
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_a_node_without_a_project_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(&[project("p")], &[file_node("n", "", None, "a.hcl", "")]);
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    /// Asserts that a payload carrying `name` in `build`'s position is refused
+    /// and writes nothing. A name that cannot be one path segment arrives in
+    /// two places — as the project's directory name and as a node's own — and
+    /// both are the same refusal.
+    fn assert_refused(name: &str, build: impl FnOnce(&str) -> Value) {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(
+            save_vfs(dir.path(), &build(name)).is_err(),
+            "{name:?} should be refused"
+        );
+        assert!(dir_is_empty(dir.path()), "{name:?} wrote something");
+    }
+
+    #[test]
+    fn save_rejects_a_project_id_that_is_not_an_address() {
+        // The address is the directory name, so a traversal attempt here is
+        // the same hole as one in a node name — and is refused before a single
+        // byte is written.
+        for id in ["../escape", "..", ".", "/etc", "Drone System", "drone/", ""] {
+            assert_refused(id, |id| {
+                vfs(
+                    &[project(id)],
+                    &[file_node("a.hcl", id, None, "a.hcl", "x")],
+                )
+            });
+        }
+    }
+
+    #[test]
+    fn save_rejects_a_node_name_that_is_not_a_single_path_segment() {
+        for name in ["views/main.hcl", "..", ".", "/etc/passwd", "a/../b", ""] {
+            assert_refused(name, |name| {
+                vfs(&[project("p")], &[file_node("n", "p", None, name, "x")])
+            });
+        }
+    }
+
+    #[test]
+    fn save_rejects_a_parent_belonging_to_another_project() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(
+            &[project("p"), project("q")],
+            &[
+                dir_node("a", "p", None, "a"),
+                dir_node("b", "q", Some("a"), "b"),
+            ],
+        );
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_a_dangling_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(
+            &[project("p")],
+            &[file_node("a", "p", Some("ghost"), "a.hcl", "x")],
+        );
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_a_parent_cycle() {
+        // A payload whose parents form a loop must be refused, not followed.
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(
+            &[project("p")],
+            &[
+                dir_node("a", "p", Some("b"), "a"),
+                dir_node("b", "p", Some("a"), "b"),
+            ],
+        );
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_a_file_used_as_a_parent() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(
+            &[project("p")],
+            &[
+                file_node("a", "p", None, "a.hcl", "x"),
+                file_node("b", "p", Some("a"), "b.hcl", "y"),
+            ],
+        );
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    #[test]
+    fn save_rejects_two_nodes_resolving_to_the_same_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let bad = vfs(
+            &[project("p")],
+            &[
+                file_node("a", "p", None, "same.hcl", "x"),
+                file_node("b", "p", None, "same.hcl", "y"),
+            ],
+        );
+        assert!(save_vfs(dir.path(), &bad).is_err());
+    }
+
+    // ── MCP read-only helpers ─────────────────────────────────────────────
+
+    #[test]
+    fn file_version_is_stable_and_content_sensitive() {
+        let version = file_version("system \"s\" {}\n");
+        assert_eq!(
+            version.len(),
+            VERSION_LEN,
+            "short SHA-256 prefix is 16 chars"
+        );
+        assert_eq!(file_version("system \"s\" {}\n"), version);
+        assert_ne!(file_version("system \"s\" {}"), version);
+        assert_ne!(file_version(""), version);
+    }
+
+    #[test]
+    fn file_version_is_the_sha256_prefix() {
+        // Empty string has a well-known SHA-256; the wire version must be its
+        // first 16 hex chars. Guards against accidentally returning a hash of
+        // something else (e.g. path + content) from `file_version`.
+        assert_eq!(file_version(""), "e3b0c44298fc1c14");
+    }
+
+    #[test]
+    fn short_versions_refuse_an_8char_prefix_collision() {
+        use sha2::{Digest, Sha256};
+        use std::collections::HashMap;
+
+        fn full_sha256_hex(content: &str) -> String {
+            use std::fmt::Write as _;
+            let digest = Sha256::digest(content.as_bytes());
+            let mut out = String::with_capacity(64);
+            for byte in digest {
+                let _ = write!(out, "{byte:02x}");
+            }
+            out
+        }
+
+        fn short8(full: &str) -> String {
+            full.chars().take(8).collect()
+        }
+
+        // Find two distinct contents whose first 8 hex chars collide but whose
+        // full SHA-256 differs: an 8-char wire format would let a stale write
+        // through here, a 16-char one must still refuse.
+        let mut seen: HashMap<String, (usize, String)> = HashMap::new();
+        let mut pair: Option<(String, String)> = None;
+        for i in 0..200_000usize {
+            let content = format!("collision-probe-{i}\n");
+            let full = full_sha256_hex(&content);
+            let prefix = short8(&full);
+            if let Some((prev_i, prev_full)) = seen.get(&prefix) {
+                if *prev_full != full {
+                    let prev_content = format!("collision-probe-{prev_i}\n");
+                    pair = Some((prev_content, content));
+                    break;
+                }
+            } else {
+                seen.insert(prefix, (i, full));
+            }
+        }
+        let (first_content, second_content) =
+            pair.expect("must find an 8-char SHA-256 collision within 200k probes");
+        let first_full = full_sha256_hex(&first_content);
+        let second_full = full_sha256_hex(&second_content);
+        assert_eq!(
+            short8(&first_full),
+            short8(&second_full),
+            "test setup: 8-char prefixes must collide"
+        );
+        assert_ne!(
+            first_full, second_full,
+            "test setup: full hashes must differ"
+        );
+        let first_version = file_version(&first_content);
+        let second_version = file_version(&second_content);
+        assert_eq!(
+            first_version.len(),
+            VERSION_LEN,
+            "wire versions are {VERSION_LEN} chars"
+        );
+        assert_ne!(
+            first_version, second_version,
+            "test setup: 16-char wire versions must differ on an 8-char collision"
+        );
+
+        // Stale write with the first version after the file moved to the
+        // second content must be refused byte-identical.
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/collide.md"), &first_content);
+        assert_eq!(
+            file_version(&first_content),
+            first_version,
+            "fixture content must hash to the probed version"
+        );
+        // Outside edit (git, editor) flips the file without going through CAS.
+        write_file(&dir.path().join("drone/docs/collide.md"), &second_content);
+        let locks = crate::locks::LockManager::new();
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/collide.md",
+            "v3\n",
+            Some(&first_version),
+        );
+        assert!(
+            matches!(refused, Err(FileWriteError::Refused(_))),
+            "8-char-colliding stale version must still be refused: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/collide.md")).unwrap(),
+            second_content,
+            "refused writes must not touch the file"
+        );
+    }
+
+    #[test]
+    fn project_version_is_stable_for_the_same_tree() {
+        let dir = data_dir_with_drone();
+        let first = project_version(dir.path(), "drone").unwrap();
+        let second = project_version(dir.path(), "drone").unwrap();
+        assert_eq!(first.len(), VERSION_LEN, "short SHA-256 prefix is 16 chars");
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn project_version_flips_when_a_file_changes() {
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"changed\" {}\n",
+        );
+
+        assert_ne!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_flips_when_files_are_added_or_removed() {
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(
+            &dir.path().join("drone/views/second.hcl"),
+            "view \"second\" {}\n",
+        );
+        let added = project_version(dir.path(), "drone").unwrap();
+        assert_ne!(added, before);
+
+        fs::remove_file(dir.path().join("drone/views/second.hcl")).unwrap();
+        assert_eq!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_ignores_hidden_entries() {
+        // `.git` internals churn on every commit; they must not look like
+        // model edits to a watching client.
+        let dir = data_dir_with_drone();
+        let before = project_version(dir.path(), "drone").unwrap();
+
+        write_file(&dir.path().join(".git/config"), "[core]\n");
+        write_file(&dir.path().join("drone/.DS_Store"), "junk");
+
+        assert_eq!(project_version(dir.path(), "drone").unwrap(), before);
+    }
+
+    #[test]
+    fn project_version_is_unknown_for_missing_or_bad_addresses() {
+        let dir = data_dir_with_drone();
+        assert!(matches!(
+            project_version(dir.path(), "ghost"),
+            Err(ProjectError::Unknown(_))
+        ));
+        assert!(matches!(
+            project_version(dir.path(), "../escape"),
+            Err(ProjectError::Unknown(_))
+        ));
+    }
+
+    #[test]
+    fn project_version_covers_directories_without_a_model_source() {
+        // Versions must work on project shells that do not resolve yet: a
+        // just-created project has no files at all, and locks, heartbeats,
+        // and writes all key off the version.
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        fs::create_dir_all(dir.path().join("empty")).unwrap();
+
+        let notes = project_version(dir.path(), "notes").unwrap();
+        let empty = project_version(dir.path(), "empty").unwrap();
+        assert_eq!(notes.len(), VERSION_LEN);
+        assert_eq!(empty.len(), VERSION_LEN);
+        assert_ne!(notes, empty);
+        assert_ne!(empty, project_version(dir.path(), "drone").unwrap());
+    }
+
+    // ── Per-project writes ─────────────────────────────────────────────
+
+    /// One `write_project` entry: `None` content means a directory.
+    fn project_file(path: &str, content: Option<&str>) -> ProjectFileJson {
+        ProjectFileJson {
+            path: path.to_owned(),
+            content: content.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn write_project_persists_and_returns_the_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            None,
+            &[
+                project_file("system.hcl", Some("system \"drone\" {}\n")),
+                project_file("views", None),
+                project_file("views/main.hcl", Some("view \"main\" {}\n")),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(version.len(), VERSION_LEN);
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"drone\" {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap(),
+            "view \"main\" {}\n"
+        );
+        // The write acquired the lock for the writer.
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+    }
+
+    #[test]
+    fn write_project_creates_an_empty_project_shell() {
+        // `createProject` lands as a blob entry with no nodes: the write
+        // creates an empty directory, which stays invisible to the project
+        // listing until a model source lands in it.
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = write_project(dir.path(), &locks, "drone", "alice", None, &[]).unwrap();
+
+        assert!(dir.path().join("drone").is_dir());
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+        let projects = load_vfs(dir.path()).unwrap()["projects"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert!(projects.is_empty(), "{projects:?}");
+    }
+
+    #[test]
+    fn write_project_refuses_a_strangers_write_byte_identical() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let before = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+
+        assert!(matches!(
+            locks.acquire("drone", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        ));
+        let refused = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            None,
+            &[project_file("system.hcl", Some("system \"hijacked\" {}\n"))],
+        );
+        assert!(matches!(
+            refused,
+            Err(WriteProjectError::Locked { ref holder, .. }) if holder == "alice"
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "a refused write must leave the file untouched"
+        );
+    }
+
+    #[test]
+    fn write_project_refuses_a_stale_base_version() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let stale = project_version(dir.path(), "drone").unwrap();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"edited-elsewhere\" {}\n",
+        );
+        let current = project_version(dir.path(), "drone").unwrap();
+
+        let refused = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            Some(&stale),
+            &[project_file("system.hcl", Some("system \"mine\" {}\n"))],
+        );
+        assert!(matches!(
+            refused,
+            Err(WriteProjectError::StaleVersion { current: ref on_disk }) if on_disk == &current
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"edited-elsewhere\" {}\n"
+        );
+
+        // The current version applies — and the holder keeps the lock, since
+        // the refused write never gave it away.
+        let version = write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            Some(&current),
+            &[project_file("system.hcl", Some("system \"mine\" {}\n"))],
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            "system \"mine\" {}\n"
+        );
+        assert_eq!(version, project_version(dir.path(), "drone").unwrap());
+    }
+
+    #[test]
+    fn write_project_only_manages_its_own_project() {
+        // The whole-VFS PUT is gone: writing one project must neither touch
+        // its siblings nor anything that is not a project.
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("web-app/system.hcl"),
+            "system \"web\" {}\n",
+        );
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        write_file(&dir.path().join("README.md"), "readme\n");
+        let web_before = fs::read_to_string(dir.path().join("web-app/system.hcl")).unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        // A payload that drops every file still only manages `drone`.
+        write_project(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            None,
+            &[project_file(
+                "system.hcl",
+                Some("system \"quadcopter\" {}\n"),
+            )],
+        )
+        .unwrap();
+
+        assert!(!dir.path().join("drone/views").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("web-app/system.hcl")).unwrap(),
+            web_before
+        );
+        assert!(dir.path().join("notes/scratch.md").exists());
+        assert!(dir.path().join("README.md").exists());
+        assert_eq!(
+            project_ids(&load_vfs(dir.path()).unwrap()),
+            vec!["drone", "web-app"]
+        );
+    }
+
+    #[test]
+    fn write_project_rejects_unwritable_paths() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let before = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+
+        for files in [
+            vec![project_file("../escape.hcl", Some("x"))],
+            vec![project_file("/etc/passwd", Some("x"))],
+            vec![project_file("views/.hidden", Some("x"))],
+            // A file whose parent directory is not listed.
+            vec![project_file("views/main.hcl", Some("x"))],
+            // A parent that is a file, not a directory.
+            vec![
+                project_file("views", Some("x")),
+                project_file("views/main.hcl", Some("y")),
+            ],
+            // Two entries for one path.
+            vec![
+                project_file("dup.hcl", Some("x")),
+                project_file("dup.hcl", Some("y")),
+            ],
+            // The project root itself.
+            vec![project_file("", Some("x"))],
+        ] {
+            assert!(
+                matches!(
+                    write_project(dir.path(), &locks, "drone", "alice", None, &files),
+                    Err(WriteProjectError::Malformed(_))
+                ),
+                "must be refused: {files:?}"
+            );
+        }
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "refused writes must leave the tree untouched"
+        );
+    }
+
+    #[test]
+    fn write_project_is_unknown_for_bad_addresses() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        assert!(matches!(
+            write_project(
+                dir.path(),
+                &locks,
+                "../escape",
+                "alice",
+                None,
+                &[project_file("system.hcl", Some("x"))]
+            ),
+            Err(WriteProjectError::Unknown(_))
+        ));
+        assert!(!dir.path().parent().unwrap().join("escape").exists());
+    }
+
+    #[test]
+    fn mutate_project_refuses_when_locked_by_someone_else() {
+        use rhizome_core::mutation::ModelOp;
+
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let new_system = |label: &str| ModelOp::AddSystem {
+            label: label.to_owned(),
+            full_name: String::new(),
+        };
+
+        // Alice's edit acquires the project lock and applies …
+        let applied = mutate_project(dir.path(), &locks, "drone", "alice", &new_system("extra"))
+            .expect("a free project takes the edit");
+        assert!(applied.applied);
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+
+        // … so Bob is refused with Alice named, and the file is untouched
+        // since Alice's write.
+        let since_alice = fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let refused = mutate_project(dir.path(), &locks, "drone", "bob", &new_system("another"));
+        assert!(matches!(
+            refused,
+            Err(MutateProjectError::Locked { ref holder }) if holder == "alice"
+        ));
+        assert_eq!(
+            fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            since_alice,
+            "a refused mutation must leave the file untouched"
+        );
+    }
+
+    #[test]
+    fn resolve_confined_path_resolves_nested_relative_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("views")).unwrap();
+        write_file(&dir.path().join("views/main.hcl"), "view \"main\" {}\n");
+
+        assert_eq!(
+            resolve_confined_path(dir.path(), Path::new("views/main.hcl")).unwrap(),
+            dir.path().join("views/main.hcl")
+        );
+        assert_eq!(
+            resolve_confined_path(dir.path(), Path::new("./views/main.hcl")).unwrap(),
+            dir.path().join("views/main.hcl")
+        );
+    }
+
+    #[test]
+    fn resolve_confined_path_refuses_escapes_and_absolute_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        for bad in [
+            "..",
+            "../outside",
+            "views/../../outside",
+            "/etc/passwd",
+            "a/../..",
+        ] {
+            assert_eq!(
+                resolve_confined_path(dir.path(), Path::new(bad)),
+                Err(ConfinedPathError::Outside),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_confined_path_refuses_hidden_entries_and_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir.path().join("outside.hcl"), "system \"out\" {}\n");
+        fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("outside.hcl"),
+            dir.path().join("linked.hcl"),
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(
+            dir.path().join("outside.hcl"),
+            dir.path().join("sub/linked.hcl"),
+        )
+        .unwrap();
+
+        for bad in [
+            "views/.hidden",
+            ".git/config",
+            ".hidden.hcl",
+            "linked.hcl",
+            "sub/linked.hcl",
+        ] {
+            assert_eq!(
+                resolve_confined_path(dir.path(), Path::new(bad)),
+                Err(ConfinedPathError::Excluded),
+                "{bad}"
+            );
+        }
+    }
+
+    #[test]
+    fn project_entries_lists_the_tree_with_kinds_revisions_and_versions() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
+        write_file(&dir.path().join("drone/.hidden"), "x\n");
+        std::os::unix::fs::symlink(
+            dir.path().join("drone/system.hcl"),
+            dir.path().join("drone/linked.hcl"),
+        )
+        .unwrap();
+
+        let entries = project_entries(dir.path(), "drone")
+            .unwrap()
+            .expect("project");
+        let mut by_path: HashMap<&str, &ProjectEntry> = HashMap::new();
+        for entry in &entries {
+            let path = match entry {
+                ProjectEntry::Dir { path } | ProjectEntry::File { path, .. } => path.as_str(),
+            };
+            by_path.insert(path, entry);
+        }
+
+        assert!(matches!(by_path["system.hcl"], &ProjectEntry::File { .. }));
+        assert!(matches!(by_path["views"], &ProjectEntry::Dir { .. }));
+        assert!(matches!(by_path["docs"], &ProjectEntry::Dir { .. }));
+
+        let ProjectEntry::File {
+            revision, version, ..
+        } = by_path["views/main.hcl"]
+        else {
+            panic!("views/main.hcl should be a file");
+        };
+        assert!(*revision > 0);
+        assert_eq!(version, &file_version("view \"main\" {}\n"));
+
+        assert!(!by_path.contains_key(".hidden"));
+        assert!(!by_path.contains_key("linked.hcl"));
+    }
+
+    #[test]
+    fn create_project_seeds_the_rhizome_core_empty_project_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = create_project(dir.path(), &locks, "rocket-engine", "AI").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("rocket-engine/main.hcl")).unwrap(),
+            rhizome_core::empty_project::EMPTY_PROJECT_HCL
+        );
+        assert!(dir.path().join("rocket-engine/docs").is_dir());
+        assert_eq!(
+            fs::read_dir(dir.path().join("rocket-engine/docs"))
+                .unwrap()
+                .count(),
+            0,
+            "docs/ is seeded empty"
+        );
+        assert_eq!(
+            version,
+            project_version(dir.path(), "rocket-engine").unwrap()
+        );
+        // It is a real project right away: resolvable and compilable.
+        resolve_project(dir.path(), "rocket-engine").unwrap();
+        let sources = project_sources(dir.path(), "rocket-engine")
+            .unwrap()
+            .expect("project has sources");
+        assert!(rhizome_core::compile(&sources).model.is_some());
+    }
+
+    #[test]
+    fn create_project_creates_a_missing_data_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().join("not-yet");
+        let locks = crate::locks::LockManager::new();
+
+        create_project(&data_dir, &locks, "first", "AI").unwrap();
+
+        assert!(data_dir.join("first/main.hcl").is_file());
+    }
+
+    #[test]
+    fn create_project_refuses_an_existing_id_without_touching_it() {
+        let dir = data_dir_with_drone();
+        let before = fs::read(dir.path().join("drone/system.hcl")).unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let err = create_project(dir.path(), &locks, "drone", "AI").unwrap_err();
+
+        assert!(matches!(err, CreateProjectError::Exists(id) if id == "drone"));
+        assert_eq!(
+            fs::read(dir.path().join("drone/system.hcl")).unwrap(),
+            before
+        );
+        assert!(!dir.path().join("drone/main.hcl").exists());
+    }
+
+    #[test]
+    fn create_project_refuses_ids_that_are_not_addresses() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        for id in [
+            "",
+            "Rocket Engine",
+            "../escape",
+            "a/b",
+            "-lead",
+            "trail-",
+            "a--b",
+            "UPPER",
+        ] {
+            assert!(
+                matches!(
+                    create_project(dir.path(), &locks, id, "AI"),
+                    Err(CreateProjectError::InvalidId(_))
+                ),
+                "`{id}` must be refused"
+            );
+        }
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn create_project_refuses_when_someone_else_holds_the_lock_and_leaves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+        assert_eq!(
+            locks.acquire("reserved", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        );
+
+        let err = create_project(dir.path(), &locks, "reserved", "AI").unwrap_err();
+
+        assert!(
+            matches!(&err, CreateProjectError::Locked { holder, .. } if holder == "alice"),
+            "{err:?}"
+        );
+        assert!(
+            !dir.path().join("reserved").exists(),
+            "a refused creation must not leave an empty shell that blocks a retry"
+        );
+    }
+
+    #[test]
+    fn resolve_project_refuses_directories_without_a_model_source() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        write_file(&dir.path().join("notes/views/only.hcl"), "view \"v\" {}\n");
+        write_file(&dir.path().join("notes/.secret.hcl"), "system \"s\" {}\n");
+        write_file(&dir.path().join("bad/system.hcl"), "");
+        fs::write(dir.path().join("bad/system.hcl"), [0xff, 0xfe, 0xfd]).unwrap();
+
+        for id in ["notes", "bad"] {
+            assert!(
+                matches!(
+                    resolve_project(dir.path(), id),
+                    Err(ProjectError::Unknown(_))
+                ),
+                "{id} is not a project"
+            );
+        }
+        assert_eq!(
+            resolve_project(dir.path(), "drone").unwrap(),
+            dir.path().join("drone")
+        );
+    }
+
+    #[test]
+    fn project_entries_returns_none_for_unknown_or_non_projects() {
+        let dir = data_dir_with_drone();
+        assert!(project_entries(dir.path(), "ghost").unwrap().is_none());
+        assert!(project_entries(dir.path(), "../escape").unwrap().is_none());
+        write_file(&dir.path().join("notes/scratch.md"), "# scratch\n");
+        assert!(project_entries(dir.path(), "notes").unwrap().is_none());
+        assert!(
+            project_entries(&dir.path().join("missing"), "drone")
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn resolve_project_finds_real_projects_and_refuses_everything_else() {
+        let dir = data_dir_with_drone();
+        assert_eq!(
+            resolve_project(dir.path(), "drone").unwrap(),
+            dir.path().join("drone")
+        );
+        assert!(matches!(
+            resolve_project(dir.path(), "ghost"),
+            Err(ProjectError::Unknown(_))
+        ));
+        assert!(matches!(
+            resolve_project(dir.path(), "../escape"),
+            Err(ProjectError::Unknown(_))
+        ));
+    }
+
+    #[test]
+    fn project_sources_collects_hcl_and_docs_as_relative_filenames() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/battery.md"), "# battery\n");
+        write_file(&dir.path().join("drone/README.md"), "readme\n");
+
+        let sources = project_sources(dir.path(), "drone")
+            .unwrap()
+            .expect("project");
+        let names: Vec<&str> = sources.iter().map(|s| s.filename.as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["docs/battery.md", "system.hcl", "views/main.hcl"]
+        );
+        assert_eq!(sources[1].content, "system \"quadcopter\" {}\n");
+        assert!(project_sources(dir.path(), "ghost").unwrap().is_none());
+    }
+
+    #[test]
+    fn create_file_replaces_a_broken_model_whole() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/system.hcl"),
+            "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n",
+        );
+        let current = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&current);
+        let locks = crate::locks::LockManager::new();
+
+        let fixed = "system \"quadcopter\" {\n  full_name = \"Quad\"\n}\n";
+        let result = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "system.hcl",
+            fixed,
+            Some(&version),
+        )
+        .expect("valid content must apply");
+        let stored = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        assert_eq!(result.version.len(), VERSION_LEN);
+        assert_eq!(result.total_lines, stored.lines().count());
+        assert!(
+            stored.contains("full_name"),
+            "fixed content must persist, got: {stored}"
+        );
+        assert_eq!(result.version, file_version(&stored));
+    }
+
+    #[test]
+    fn file_writes_refuse_when_locked_by_someone_else() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/docs/guide.md"),
+            "# Guide\nOld text.\n",
+        );
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/guide.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+        assert!(matches!(
+            locks.acquire("drone", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        ));
+
+        let refused = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            "docs/guide.md",
+            &[FileEdit {
+                old_text: "Old text.".to_owned(),
+                new_text: "New text.".to_owned(),
+            }],
+            &version,
+        );
+        assert!(
+            matches!(
+                refused,
+                Err(FileWriteError::Locked { ref holder }) if holder == "alice"
+            ),
+            "must name the holder: {refused:?}"
+        );
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "bob",
+            "docs/guide.md",
+            "# Replaced\n",
+            Some(&version),
+        );
+        assert!(
+            matches!(
+                refused,
+                Err(FileWriteError::Locked { ref holder }) if holder == "alice"
+            ),
+            "must name the holder: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/guide.md")).unwrap(),
+            before,
+            "lock-refused file writes must not touch the file"
+        );
+
+        // The holder's own edit applies and keeps the lock.
+        let applied = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guide.md",
+            &[FileEdit {
+                old_text: "Old text.".to_owned(),
+                new_text: "New text.".to_owned(),
+            }],
+            &version,
+        )
+        .expect("the holder's edit must apply");
+        assert_eq!(applied.version.len(), VERSION_LEN);
+        assert_eq!(
+            locks.get("drone").expect("lock must be held").holder,
+            "alice"
+        );
+    }
+
+    #[test]
+    fn create_file_creates_parents_and_chains_into_edit_file() {
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+
+        let created = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guides/getting-started.md",
+            "# Getting started\n\nintro\n",
+            None,
+        )
+        .expect("new file must be created");
+        assert_eq!(created.total_lines, 3);
+        assert_eq!(created.version.len(), VERSION_LEN);
+
+        let extended = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/guides/getting-started.md",
+            &[FileEdit {
+                old_text: "intro".to_owned(),
+                new_text: "intro\n\nmore\n".to_owned(),
+            }],
+            &created.version,
+        )
+        .expect("chained edit must apply");
+        assert_eq!(extended.total_lines, 6);
+        let stored =
+            std::fs::read_to_string(dir.path().join("drone/docs/guides/getting-started.md"))
+                .unwrap();
+        assert_eq!(stored, "# Getting started\n\nintro\n\nmore\n\n");
+        assert_eq!(extended.version, file_version(&stored));
+    }
+
+    #[test]
+    fn file_writes_refuse_stale_and_missing_versions_byte_identical() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/plan.md"), "v1\n");
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/plan.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+
+        assert!(matches!(
+            create_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                "v2\n",
+                None
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert!(matches!(
+            create_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                "v2\n",
+                Some("0".repeat(VERSION_LEN).as_str())
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert!(matches!(
+            edit_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/plan.md",
+                &[FileEdit {
+                    old_text: "v1".to_owned(),
+                    new_text: "v2".to_owned(),
+                }],
+                "0".repeat(VERSION_LEN).as_str()
+            ),
+            Err(FileWriteError::Refused(_))
+        ));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/plan.md")).unwrap(),
+            before,
+            "refused writes must not touch the file"
+        );
+
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/plan.md",
+            "v2\n",
+            Some(&version),
+        )
+        .expect("matching version must apply");
+        assert_eq!(applied.version, file_version("v2\n"));
+    }
+
+    #[test]
+    fn edit_file_refuses_zero_two_and_empty_matches_byte_identical() {
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/note.md"), "# Note\n\nalpha\n");
+        let before = std::fs::read_to_string(dir.path().join("drone/docs/note.md")).unwrap();
+        let version = file_version(&before);
+        let locks = crate::locks::LockManager::new();
+
+        for old in ["missing", "a", ""] {
+            let refused = edit_file(
+                dir.path(),
+                &locks,
+                "drone",
+                "alice",
+                "docs/note.md",
+                &[FileEdit {
+                    old_text: old.to_owned(),
+                    new_text: "X".to_owned(),
+                }],
+                &version,
+            );
+            assert!(
+                matches!(refused, Err(FileWriteError::Refused(_))),
+                "{old:?} must be refused: {refused:?}"
+            );
+        }
+        // An empty edit list is refused without touching the file.
+        let refused = edit_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "docs/note.md",
+            &[],
+            &version,
+        );
+        assert!(
+            matches!(refused, Err(FileWriteError::Refused(_))),
+            "empty edits must be refused: {refused:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/docs/note.md")).unwrap(),
+            before,
+            "refused edits must not touch the file"
+        );
+    }
+
+    #[test]
+    fn file_writes_validate_model_and_views() {
+        let dir = data_dir_with_drone();
+        write_file(
+            &dir.path().join("drone/views/overview.hcl"),
+            "view \"overview\" {\n  system = \"quadcopter\"\n}\n",
+        );
+        let locks = crate::locks::LockManager::new();
+
+        // Breaking the model is refused with diagnostics, file untouched.
+        let before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let version = file_version(&before);
+        let broken = "system \"quadcopter\" {\n  instance \"a\" { source = \"missing\" }\n}\n";
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "system.hcl",
+            broken,
+            Some(&version),
+        );
+        match refused {
+            Err(FileWriteError::Invalid(diagnostics)) => {
+                assert!(
+                    diagnostics.iter().any(|d| d.code.to_string() == "E014"),
+                    "expected E014, got {diagnostics:?}"
+                );
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap(),
+            before
+        );
+
+        // Invalid views are refused: unknown system is E006.
+        let view_before =
+            std::fs::read_to_string(dir.path().join("drone/views/overview.hcl")).unwrap();
+        let view_version = file_version(&view_before);
+        let bad_view = "view \"overview\" {\n  system = \"ghost\"\n}\n";
+        let refused = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "views/overview.hcl",
+            bad_view,
+            Some(&view_version),
+        );
+        match refused {
+            Err(FileWriteError::Invalid(diagnostics)) => {
+                assert!(
+                    diagnostics.iter().any(|d| d.code.to_string() == "E006"),
+                    "expected E006, got {diagnostics:?}"
+                );
+            }
+            other => panic!("expected Invalid, got {other:?}"),
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("drone/views/overview.hcl")).unwrap(),
+            view_before
+        );
+
+        // Valid writes apply and carry warnings (possibly empty).
+        let valid_view = "view \"overview\" {\n  system = \"quadcopter\"\n}\n";
+        // Rewriting the same valid view with its version applies (idempotent).
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "views/overview.hcl",
+            valid_view,
+            Some(&view_version),
+        )
+        .expect("valid view must apply");
+        assert_eq!(applied.version.len(), VERSION_LEN);
+
+        // Non-HCL writes skip validation entirely.
+        let applied = create_file(
+            dir.path(),
+            &locks,
+            "drone",
+            "alice",
+            "README.md",
+            "# Drone\n",
+            None,
+        )
+        .expect("README must apply");
+        assert!(applied.warnings.is_empty());
+    }
+
+    #[test]
+    fn write_project_races_with_create_file_on_same_path_cannot_both_apply() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = data_dir_with_drone();
+        write_file(&dir.path().join("drone/docs/race.md"), "v1\n");
+        let locks = crate::locks::LockManager::new();
+        let base_project = project_version(dir.path(), "drone").unwrap();
+        let base_file = file_version("v1\n");
+
+        // `write_project` carries the whole tree (as the browser does),
+        // with `docs/race.md` changed to winner-a.
+        let system_before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let view_before = std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+        let vfs_files = vec![
+            project_file("system.hcl", Some(&system_before)),
+            project_file("views", None),
+            project_file("views/main.hcl", Some(&view_before)),
+            project_file("docs", None),
+            project_file("docs/race.md", Some("winner-a\n")),
+        ];
+
+        let barrier = Arc::new(Barrier::new(2));
+        let data_dir = dir.path().to_path_buf();
+        std::thread::scope(|s| {
+            let barrier_a = Arc::clone(&barrier);
+            let locks_a = locks.clone();
+            let data_a = data_dir.clone();
+            let files_a = vfs_files.clone();
+            let base_a = base_project.clone();
+            let save = s.spawn(move || {
+                barrier_a.wait();
+                write_project(&data_a, &locks_a, "drone", "alice", Some(&base_a), &files_a)
+            });
+
+            let barrier_b = Arc::clone(&barrier);
+            let locks_b = locks.clone();
+            let data_b = data_dir.clone();
+            let base_b = base_file.clone();
+            let generic = s.spawn(move || {
+                barrier_b.wait();
+                create_file(
+                    &data_b,
+                    &locks_b,
+                    "drone",
+                    "alice",
+                    "docs/race.md",
+                    "winner-b\n",
+                    Some(&base_b),
+                )
+            });
+
+            let save_result = save.join().expect("save thread panicked");
+            let generic_result = generic.join().expect("generic thread panicked");
+
+            let save_ok = save_result.is_ok();
+            let generic_ok = generic_result.is_ok();
+            assert!(
+                save_ok ^ generic_ok,
+                "exactly one same-path write must apply: save={save_result:?} generic={generic_result:?}"
+            );
+
+            // The loser must be a version/stale refusal, not a lock or crash.
+            if save_ok {
+                assert!(
+                    matches!(generic_result, Err(FileWriteError::Refused(_))),
+                    "generic loser must be a version refusal: {generic_result:?}"
+                );
+            } else {
+                assert!(
+                    matches!(save_result, Err(WriteProjectError::StaleVersion { .. })),
+                    "VFS loser must be a stale refusal: {save_result:?}"
+                );
+            }
+
+            let stored = std::fs::read_to_string(data_dir.join("drone/docs/race.md")).unwrap();
+            assert!(
+                stored == "winner-a\n" || stored == "winner-b\n",
+                "loser must leave the winner byte-identical, got: {stored:?}"
+            );
+        });
+    }
+
+    #[test]
+    fn write_project_touching_model_races_with_create_file_cannot_both_apply() {
+        use std::sync::{Arc, Barrier};
+
+        let dir = data_dir_with_drone();
+        let locks = crate::locks::LockManager::new();
+        let base_project = project_version(dir.path(), "drone").unwrap();
+        let system_before = std::fs::read_to_string(dir.path().join("drone/system.hcl")).unwrap();
+        let base_file = file_version(&system_before);
+        let view_before = std::fs::read_to_string(dir.path().join("drone/views/main.hcl")).unwrap();
+
+        let winner_a = "system \"quadcopter\" {\n  full_name = \"Winner A\"\n}\n";
+        let winner_b = "system \"quadcopter\" {\n  full_name = \"Winner B\"\n}\n";
+
+        let vfs_files = vec![
+            project_file("system.hcl", Some(winner_a)),
+            project_file("views", None),
+            project_file("views/main.hcl", Some(&view_before)),
+        ];
+
+        let barrier = Arc::new(Barrier::new(2));
+        let data_dir = dir.path().to_path_buf();
+        std::thread::scope(|s| {
+            let barrier_a = Arc::clone(&barrier);
+            let locks_a = locks.clone();
+            let data_a = data_dir.clone();
+            let files_a = vfs_files.clone();
+            let base_a = base_project.clone();
+            let save = s.spawn(move || {
+                barrier_a.wait();
+                write_project(&data_a, &locks_a, "drone", "alice", Some(&base_a), &files_a)
+            });
+
+            let barrier_b = Arc::clone(&barrier);
+            let locks_b = locks.clone();
+            let data_b = data_dir.clone();
+            let base_b = base_file.clone();
+            let generic = s.spawn(move || {
+                barrier_b.wait();
+                create_file(
+                    &data_b,
+                    &locks_b,
+                    "drone",
+                    "alice",
+                    "system.hcl",
+                    winner_b,
+                    Some(&base_b),
+                )
+            });
+
+            let save_result = save.join().expect("save thread panicked");
+            let generic_result = generic.join().expect("generic thread panicked");
+
+            let save_ok = save_result.is_ok();
+            let generic_ok = generic_result.is_ok();
+            assert!(
+                save_ok ^ generic_ok,
+                "exactly one model write must apply: save={save_result:?} generic={generic_result:?}"
+            );
+
+            let stored = std::fs::read_to_string(data_dir.join("drone/system.hcl")).unwrap();
+            assert!(
+                stored == winner_a || stored == winner_b,
+                "loser must leave the winner byte-identical, got: {stored:?}"
+            );
+        });
+    }
+}

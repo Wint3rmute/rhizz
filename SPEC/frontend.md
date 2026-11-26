@@ -11,39 +11,39 @@ Browser-based system modeler & explorer. Pure SPA — no API, no external backen
 | UI framework   | Svelte 5                                  |
 | Build tool     | Vite                                      |
 | Visualisation  | Custom SVG renderer                       |
-| Model compiler | `rhizz-wasm` (WASM build of `rhizz-core`) |
+| Model compiler | `rhizome-wasm` (WASM build of `rhizome-core`) |
 
 ## Architecture
 
 The frontend follows the same
 [frontend contract](architecture.md#frontend-contract) as the CLI: all
-model logic lives in `rhizz-core`, the frontend owns only I/O and presentation.
+model logic lives in `rhizome-core`, the frontend owns only I/O and presentation.
 
 ```
 web/
 ├── package.json              # npm dependencies and scripts: dev, build, preview
 ├── package-lock.json         # locked dependency tree (`npm ci`)
-├── vite.config.ts            # Svelte plugin + rhizz-wasm alias
+├── vite.config.ts            # Svelte plugin + rhizome-wasm alias
 ├── index.html
 └── src/                      # Source code
 ```
 
 ## WASM Integration
 
-The `rhizz-wasm` package (built with `wasm-pack --target web`) is resolved via a
-Vite alias pointing at `../crates/rhizz-wasm/pkg`.
+The `rhizome-wasm` package (built with `wasm-pack --target web`) is resolved via a
+Vite alias pointing at `../crates/rhizome-wasm/pkg`.
 
 ### Typed bindings via wrapper structs
 
-`rhizz-wasm` exposes **`#[wasm_bindgen]` wrapper structs** that convert from
-`rhizz-core` types. Each wrapper has `#[wasm_bindgen(getter)]` methods for its
+`rhizome-wasm` exposes **`#[wasm_bindgen]` wrapper structs** that convert from
+`rhizome-core` types. Each wrapper has `#[wasm_bindgen(getter)]` methods for its
 fields, so `wasm-pack` generates matching TypeScript class definitions with full
 autocompletion — no manual `.d.ts` files needed.
 
-Example — wrapping `rhizz_core::Diagnostic`:
+Example — wrapping `rhizome_core::Diagnostic`:
 
 ```rust
-// rhizz-wasm/src/lib.rs
+// rhizome-wasm/src/lib.rs
 #[derive(Clone)]
 #[wasm_bindgen]
 pub struct DiagnosticJS {
@@ -62,8 +62,8 @@ impl DiagnosticJS {
     pub fn message(&self) -> String { self.message.clone() }
 }
 
-impl From<&rhizz_core::Diagnostic> for DiagnosticJS {
-    fn from(d: &rhizz_core::Diagnostic) -> Self {
+impl From<&rhizome_core::Diagnostic> for DiagnosticJS {
+    fn from(d: &rhizome_core::Diagnostic) -> Self {
         Self { code: d.code.code.to_string(), message: d.message.clone() }
     }
 }
@@ -72,7 +72,7 @@ impl From<&rhizz_core::Diagnostic> for DiagnosticJS {
 `wasm-pack` then generates:
 
 ```typescript
-// rhizz_wasm.d.ts (auto-generated)
+// rhizome_wasm.d.ts (auto-generated)
 export class DiagnosticJS {
   free(): void;
   readonly code: string;
@@ -81,7 +81,7 @@ export class DiagnosticJS {
 ```
 
 ```
-rhizz-core types              rhizz-wasm wrappers          TS (auto-generated)
+rhizome-core types              rhizome-wasm wrappers          TS (auto-generated)
 ─────────────────              ───────────────────          ───────────────────
 Diagnostic          ──From──▸  DiagnosticJS                 class DiagnosticJS { code, message, … }
 Component           ──From──▸  ComponentJS                  class ComponentJS  { label, full_name, … }
@@ -107,8 +107,8 @@ impl CompileResultJS {
 
 ### Design principles
 
-- **`rhizz-core` has no wasm dependency** — all wasm-bindgen concerns stay in
-  `rhizz-wasm`.
+- **`rhizome-core` has no wasm dependency** — all wasm-bindgen concerns stay in
+  `rhizome-wasm`.
 - **Wrappers use `From` conversions** — mechanical mapping, easy to extend.
 - **Expose only what the frontend needs** — complex enums and internal IDs are
   flattened or omitted; more accessors are added as the frontend grows.
@@ -118,7 +118,7 @@ impl CompileResultJS {
 ## Rendering Pipeline
 
 1. User selects an example system (hardcoded HCL sources).
-2. Sources are compiled via `rhizz-wasm` → `CompileResult`.
+2. Sources are compiled via `rhizome-wasm` → `CompileResult`.
 3. The resolved `Model` is fed to the layout engine, which positions components
    in a grid (non-leaf components expand to contain children).
 4. For the active view, the renderer derives projected connections and projected
@@ -191,8 +191,8 @@ after `node:fs/promises`) is the only thing pages use; the id-based
 `ProjectStore` beneath it is an implementation detail.
 
 - **Browser** (default): one JSON document in `localStorage` under
-  `rhizz:vfs:v1`.
-- **`rhizz web`** (when the build sets `VITE_RHIZZ_SERVER_URL`): `GET
+  `rhizome:vfs:v1`.
+- **`rhizome web`** (when the build sets `VITE_RHIZOME_SERVER_URL`): `GET
   /api/vfs` fetches the whole VFS for bootstrapping, then each project is
   written on its own through `PUT /api/projects/{id}/files`
   (`{ user, base_version?, files: [{ path, content? }] }`, paths
@@ -227,7 +227,7 @@ project into a **directory of ordinary files** — `system.hcl`, `views/*.hcl`,
 `docs/*.md`, plus anything else the project contains — one directory per
 project, named by the project's address (`vfs/slug`). So a data dir is a plain
 directory tree, the repository's `examples/` is a valid one, and the files a
-project is made of are the files on disk. See `rhizz-server`'s `storage`
+project is made of are the files on disk. See `rhizome-server`'s `storage`
 module for the exact layout and what it deliberately ignores (hidden entries,
 symlinks, directories that are not projects).
 
@@ -254,4 +254,4 @@ npm run preview
 ```
 
 The WASM binary must exist before building
-(`wasm-pack build crates/rhizz-wasm --target web --release`).
+(`wasm-pack build crates/rhizome-wasm --target web --release`).

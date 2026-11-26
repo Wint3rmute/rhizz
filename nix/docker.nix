@@ -1,6 +1,6 @@
 # The OCI image deployed to ghcr.io and Fly.io.
 #
-# Stage 4 of the Nix pipeline: consumes the `rhizz-server` binary (stage 3) and wraps
+# Stage 4 of the Nix pipeline: consumes the `rhizome-server` binary (stage 3) and wraps
 # it in a container image. This replaces the three-stage Dockerfile, whose
 # frontend/backend stages re-implemented stages 2–3 by hand.
 #
@@ -12,7 +12,7 @@
 #
 # Differences from the Dockerfile image, both deliberate:
 #   - Sentry mode is set by the frontend derivation (nix/frontend.nix), which
-#     builds with VITE_RHIZZ_DEPLOYMENT=prod: errors go to Sentry through the
+#     builds with VITE_RHIZOME_DEPLOYMENT=prod: errors go to Sentry through the
 #     server's tunnel. The Dockerfile no longer sets this, so it builds a dev
 #     frontend that sends nothing.
 #   - Runs as root, as the Dockerfile image did. The server's data dir is a
@@ -20,23 +20,23 @@
 {
   lib,
   dockerTools,
-  rhizz-server,
+  rhizome-server,
   examples,
 }:
 
 dockerTools.buildLayeredImage {
-  name = "rhizz";
+  name = "rhizome";
   tag = "latest";
 
   # The binary and its whole /nix/store closure, plus CA certificates for
   # outbound TLS (mirrors the Dockerfile's `ca-certificates` package).
   contents = [
-    rhizz-server
+    rhizome-server
     dockerTools.caCertificates
   ];
 
   # Seed the VFS data dir. The server keeps a project as a plain directory of
-  # HCL (see rhizz-server's storage module), so `examples/` is already a valid
+  # HCL (see rhizome-server's storage module), so `examples/` is already a valid
   # data dir: a fresh container comes up with six editable systems and no
   # migration step. A volume mounted at /data shadows these, as it does today.
   #
@@ -49,18 +49,18 @@ dockerTools.buildLayeredImage {
   '';
 
   config = {
-    # `rhizz web` binds RHIZZ_ADDR (default 127.0.0.1:3000); the platform
+    # `rhizome web` binds RHIZOME_ADDR (default 127.0.0.1:3000); the platform
     # forwards to the container port, so bind all interfaces. The data dir
-    # defaults to ./rhizz-data relative to cwd, so point it at the seed above.
+    # defaults to ./rhizome-data relative to cwd, so point it at the seed above.
     Env = [
-      "RHIZZ_ADDR=0.0.0.0:8080"
-      "RHIZZ_DATA_DIR=/data"
+      "RHIZOME_ADDR=0.0.0.0:8080"
+      "RHIZOME_DATA_DIR=/data"
       "RUST_LOG=info"
     ];
 
     # Absolute path: this image is built from scratch and has no PATH to
-    # search. The binary lands at /bin/rhizz (`rhizz` installs into $out/bin).
-    Cmd = [ "/bin/rhizz" "web" ];
+    # search. The binary lands at /bin/rhizome (`rhizome` installs into $out/bin).
+    Cmd = [ "/bin/rhizome" "web" ];
 
     WorkingDir = "/";
 
@@ -70,8 +70,8 @@ dockerTools.buildLayeredImage {
   };
 
   meta = {
-    description = "Rhizz model-based systems engineering tool (OCI image)";
+    description = "Rhizome model-based systems engineering tool (OCI image)";
     license = lib.licenses.eupl12;
-    mainProgram = "rhizz";
+    mainProgram = "rhizome";
   };
 }

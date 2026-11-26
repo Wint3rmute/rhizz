@@ -15,7 +15,7 @@ export interface DiagnosticsLayout {
 }
 
 /** localStorage key holding the JSON-encoded layout. */
-export const DIAGNOSTICS_LAYOUT_KEY = "rhizz-diagnostics-layout:v1";
+export const DIAGNOSTICS_LAYOUT_KEY = "rhizome-diagnostics-layout:v1";
 
 /** Default panel height: the old fixed cap (`max-h-64`). */
 export const DIAGNOSTICS_DEFAULT_HEIGHT = 256;

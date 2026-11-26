@@ -15,7 +15,7 @@
 //
 // **A node id must be unique across the whole VFS, not merely within its
 // project** — see ./operations (which enforces it when parsing) and
-// rhizz-server's `storage` module (which produces ids that way).
+// rhizome-server's `storage` module (which produces ids that way).
 import { z } from "zod";
 
 const BaseNodeSchema = z.object({

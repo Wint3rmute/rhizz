@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { DiagnosticJS } from "rhizz";
+  import type { DiagnosticJS } from "rhizome";
   import DiagnosticRow from "./DiagnosticRow.svelte";
   import NetActivityIndicator from "./NetActivityIndicator.svelte";
   import ScoreBadge from "./ScoreBadge.svelte";

@@ -2,7 +2,7 @@
   import { fetchBuildInfo, type BuildInfo } from "../buildInfo";
   import { trackedFetch } from "../netActivity";
 
-  // The commit the running `rhizz web` server was built from, shown as a
+  // The commit the running `rhizome web` server was built from, shown as a
   // footer. Only a server build exposes `/api/version`; the browser-only build
   // has no server to ask, so nothing renders there. The Vite dev server has no
   // server either, so it shows a `dev server` label instead of staying empty.
@@ -21,7 +21,8 @@
 
   let { buildInfo }: Props = $props();
 
-  const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+  const serverUrl = import.meta.env.VITE_RHIZOME_SERVER_URL as
+    string | undefined;
   let fetched = $state<BuildInfo | null>(null);
   if (serverUrl) {
     // Background noise for the activity widget (`/api/version` never shows).
@@ -61,7 +62,7 @@
         rel="noopener noreferrer"
         title="Open this build's release on GitHub"
       >
-        rhizz build {tag} ({info.git_sha})
+        rhizome build {tag} ({info.git_sha})
       </a>
     {:else if isCommit}
       <a
@@ -71,10 +72,10 @@
         rel="noopener noreferrer"
         title="Open this build's commit on GitHub"
       >
-        rhizz build {info.git_sha}
+        rhizome build {info.git_sha}
       </a>
     {:else}
-      rhizz build {info.git_sha}
+      rhizome build {info.git_sha}
     {/if}
   </footer>
 {/if}

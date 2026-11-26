@@ -1,8 +1,8 @@
-# Builds the `rhizz-wasm` WebAssembly package (`crates/rhizz-wasm/pkg/`).
+# Builds the `rhizome-wasm` WebAssembly package (`crates/rhizome-wasm/pkg/`).
 #
 # This is stage 1 of the Nix build pipeline (see flake.nix `packages`): it turns
-# the Rust `rhizz-wasm` crate into the npm package that the web frontend imports
-# as `file:../crates/rhizz-wasm/pkg/`.
+# the Rust `rhizome-wasm` crate into the npm package that the web frontend imports
+# as `file:../crates/rhizome-wasm/pkg/`.
 #
 # It mirrors `just wasm` exactly — same `wasm-pack build --target web --release`
 # invocation — but hermetically: `cargoLock` vendors the workspace's Cargo.lock
@@ -23,7 +23,7 @@
 }:
 
 rustPlatform.buildRustPackage {
-  pname = "rhizz-wasm-pkg";
+  pname = "rhizome-wasm-pkg";
   version = "0.1.0";
 
   inherit src;
@@ -45,7 +45,7 @@ rustPlatform.buildRustPackage {
   buildPhase = ''
     runHook preBuild
     export HOME=$(mktemp -d)
-    wasm-pack build crates/rhizz-wasm --target web --release
+    wasm-pack build crates/rhizome-wasm --target web --release
     runHook postBuild
   '';
 
@@ -54,14 +54,14 @@ rustPlatform.buildRustPackage {
   installPhase = ''
     runHook preInstall
     mkdir -p $out
-    cp -r crates/rhizz-wasm/pkg/. $out/
+    cp -r crates/rhizome-wasm/pkg/. $out/
     runHook postInstall
   '';
 
   doCheck = false;
 
   meta = {
-    description = "WebAssembly bindings for rhizz-core (npm package)";
+    description = "WebAssembly bindings for rhizome-core (npm package)";
     license = lib.licenses.eupl12;
   };
 }

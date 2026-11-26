@@ -3,7 +3,7 @@
 This chapter focuses on how to model connections between the components of your
 system. You've already seen the basic port-to-port connection schema:
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "server" {
   full_name = "Server in the cloud"
   leaf = true
@@ -62,7 +62,7 @@ is completed.
 
 ## Defining & connecting ports
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 component "computer" {
   full_name = "Personal Computer (PC)"
   leaf = true
@@ -111,7 +111,7 @@ one end names the declaring scope itself (`./api`). The outer port omits
 The system-level edge stays clean: it names only the boundary, never
 `weather-service/proxy/...`:
 
-```rhizz,level=architectural
+```rhizome,level=architectural
 protocol "rest" {
   full_name = "REST over HTTP"
   leaf = true

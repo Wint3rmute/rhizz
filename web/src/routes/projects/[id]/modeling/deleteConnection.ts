@@ -8,7 +8,7 @@
 //
 // Deliberately has zero dependency on Svelte, so it is unit-testable in plain
 // Node (see deleteConnection.test.ts).
-import type { ModelJS } from "rhizz";
+import type { ModelJS } from "rhizome";
 import type { RawModelPayload } from "../../../../modelView";
 
 /** One endpoint of the connection, as the dialog shows it. */

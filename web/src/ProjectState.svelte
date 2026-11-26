@@ -18,16 +18,17 @@
   import { ServerProjectStore } from "./vfs/vfsStore";
   import { getOrCreateUsername } from "./collab/identity";
   import { getSafeStorage } from "./safeStorage";
-  import { get_empty_project } from "./rhizz_wasm_wrapper";
+  import { get_empty_project } from "./rhizome_wasm_wrapper";
   import { netActivity, trackedFetch } from "./netActivity";
   import type { ProjectStore } from "./vfs/store";
   import type { Project } from "./vfs/types";
 
-  // Storage backend switch: with VITE_RHIZZ_SERVER_URL set, the whole VFS
-  // persists through the rhizz-server HTTP API; without it (the default),
+  // Storage backend switch: with VITE_RHIZOME_SERVER_URL set, the whole VFS
+  // persists through the rhizome-server HTTP API; without it (the default),
   // everything stays in the browser via localStorage. Build-time env var —
-  // e.g. `VITE_RHIZZ_SERVER_URL=http://localhost:3000 npm run build`.
-  const serverUrl = import.meta.env.VITE_RHIZZ_SERVER_URL as string | undefined;
+  // e.g. `VITE_RHIZOME_SERVER_URL=http://localhost:3000 npm run build`.
+  const serverUrl = import.meta.env.VITE_RHIZOME_SERVER_URL as
+    string | undefined;
   // Probing one key (rather than evaluating `globalThis.localStorage`)
   // detects blocked third-party storage: cross-site iframes with storage
   // denied throw on any localStorage touch, which used to crash module init
@@ -60,7 +61,7 @@
   export const projectStore: ProjectStore = createDefaultStore();
 
   // Test seam for the network-activity E2E: lets the spec drive a slow or
-  // failing tracked request without needing a real rhizz-server (local
+  // failing tracked request without needing a real rhizome-server (local
   // first-run has zero requests, so the widget would otherwise stay hidden).
   if (import.meta.env.DEV && typeof window !== "undefined") {
     (
@@ -68,7 +69,7 @@
     ).__netActivity = netActivity;
   }
 
-  /** The rhizz-server origin, or null for local/memory backends. */
+  /** The rhizome-server origin, or null for local/memory backends. */
   export function getServerBaseUrl(): string | null {
     return serverUrl ?? null;
   }
@@ -121,7 +122,7 @@
   // actions). Also seeds the empty folders (`docs/`) alongside the model
   // file (a `Wanted::Dir` entry persists in the VFS, no `.gitkeep` needed —
   // the server rejects hidden entries with 400). The file name and folders
-  // come from the rhizz-core empty-project seed, the same layout the MCP
+  // come from the rhizome-core empty-project seed, the same layout the MCP
   // `create_project` tool writes.
   //
   // Rejects when the name's slug is taken or unusable (see vfs/slug) — callers

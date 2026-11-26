@@ -5,7 +5,7 @@
 import { createPaneLayout } from "../../../../components/modular_ui/paneLayout";
 
 export const modelingPanes = createPaneLayout({
-  key: "rhizz-modeling-layout:v1",
+  key: "rhizome-modeling-layout:v1",
   defaultLeftWidth: 256,
   defaultRightWidth: 256,
 });

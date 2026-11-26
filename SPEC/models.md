@@ -1,6 +1,6 @@
 # Core Data Models
 
-Two layers (see `crates/rhizz-core/src/{parse,model}.rs` as source of truth for
+Two layers (see `crates/rhizome-core/src/{parse,model}.rs` as source of truth for
 field lists — they are not duplicated here):
 
 1. **Raw** — deserialization structs mirroring the HCL schema 1:1. All fields

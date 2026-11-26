@@ -20,7 +20,7 @@ export default defineConfig({
   plugins: [tailwindcss(), sveltekit(sveltekitConfig)],
   server: {
     fs: {
-      allow: [".", "../crates/rhizz-wasm/pkg"],
+      allow: [".", "../crates/rhizome-wasm/pkg"],
     },
   },
   test: {

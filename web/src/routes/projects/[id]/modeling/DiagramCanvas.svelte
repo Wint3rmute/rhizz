@@ -1,7 +1,7 @@
 <svelte:options namespace="svg" />
 
 <script lang="ts">
-  // The one SVG fragment every Rhizz diagram is drawn with. It is not an
+  // The one SVG fragment every Rhizome diagram is drawn with. It is not an
   // <svg>: the host owns the camera (viewBox, pan, zoom) and the pointer
   // handlers on that element. This component turns a scene into nodes, edges,
   // notes, and overlays, and reports which thing was hit. Paths are recomputed

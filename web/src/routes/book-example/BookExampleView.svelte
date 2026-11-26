@@ -9,7 +9,7 @@
     parse_views,
     type ViewDefinition,
     type WarningLevel,
-  } from "../../rhizz_wasm_wrapper";
+  } from "../../rhizome_wasm_wrapper";
   import { isDocsSource } from "../../vfs/compile";
   import {
     mapLayoutToBoxes,
@@ -59,8 +59,8 @@
   const moonIcon = resolveIcon("moon");
 
   // Every source file — model `.hcl`, `views/*.hcl` view layouts, and
-  // `docs/*.md` presence markers — so the browser verdict matches `rhizz`
-  // and the book preprocessor (`rhizz-core::compile` validates each diagram
+  // `docs/*.md` presence markers — so the browser verdict matches `rhizome`
+  // and the book preprocessor (`rhizome-core::compile` validates each diagram
   // file independently and checks docs presence for W018). Doc contents are
   // never parsed, only their filenames matter.
   let sources = $derived(
@@ -125,7 +125,7 @@
     return "No errors, no warnings";
   });
 
-  // Book-panel-style completion stats (rhizz-stats): per-category
+  // Book-panel-style completion stats (rhizome-stats): per-category
   // complete/total plus the overall percentage. Absent when compilation
   // produced no model — mirroring the book, which omits the score then.
   let stats = $derived.by((): VerdictStats | null => {
@@ -174,7 +174,7 @@
   }
 
   // A lone file needs no navigation: hide the top bar and show its source,
-  // like a plain ```rhizz block with a verdict underneath.
+  // like a plain ```rhizome block with a verdict underneath.
   let singleFile = $derived(files.length === 1);
 
   let selectedFile = $state<string | null>(null);

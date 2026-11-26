@@ -10,7 +10,7 @@
 import { safeGetItem, safeSetItem } from "../safeStorage";
 
 /** The `localStorage` key holding the username. */
-export const USERNAME_KEY = "rhizz-username";
+export const USERNAME_KEY = "rhizome-username";
 
 /** The stored username, or null when none was chosen yet. Never throws. */
 export function getUsername(): string | null {

@@ -1,7 +1,7 @@
 # Diagnostic Codes
 
 Each file in this directory documents a single diagnostic code emitted by
-`rhizz-core` during parsing, resolution, or validation.
+`rhizome-core` during parsing, resolution, or validation.
 
 - **Error codes** (`EXXX`) halt compilation.
 - **Warning codes** (`WXXX`) are non-blocking, and declare the least-detailed

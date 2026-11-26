@@ -1,4 +1,4 @@
-import init from "rhizz";
+import init from "rhizome";
 
 export const ssr = false;
 export const prerender = false;

@@ -5,16 +5,16 @@
 The repository root is a Cargo workspace. All crates live under `crates/`.
 
 ```
-rhizz/
+rhizome/
   Cargo.toml          # workspace root
   crates/
-    rhizz-core/       # model compiler — pure library, no I/O
-    rhizz-cli/        # CLI frontend (the `rhizz` binary: check/score/build/fmt/watch/web)
-    rhizz-wasm/       # WebAssembly bindings (browser / Node.js frontend)
-    rhizz-server/     # HTTP server library (used by `rhizz web`)
-    rhizz-book/       # mdBook preprocessor
+    rhizome-core/       # model compiler — pure library, no I/O
+    rhizome-cli/        # CLI frontend (the `rhizome` binary: check/score/build/fmt/watch/web)
+    rhizome-wasm/       # WebAssembly bindings (browser / Node.js frontend)
+    rhizome-server/     # HTTP server library (used by `rhizome web`)
+    rhizome-book/       # mdBook preprocessor
     …                 # additional frontends (LSP, …) may be added here
-  web/                # Rhizz Web application
+  web/                # Rhizome Web application
   examples/           # example system used for demoing and internal tests
   SPEC.md
   TASKS/
@@ -24,7 +24,7 @@ rhizz/
 
 ---
 
-## `rhizz-core`
+## `rhizome-core`
 
 Pure library crate. No `std::fs`, no `std::env`, no terminal or rendering
 dependencies.
@@ -68,40 +68,40 @@ pub fn score(model: &Model) -> ScoreReport;
 
 ## Frontend Contract
 
-A frontend is any crate that consumes `rhizz-core` to expose the model to a user
+A frontend is any crate that consumes `rhizome-core` to expose the model to a user
 or automated process.
 
 **Required behaviour:**
 
 1. **Own all I/O** — discover, read, and (optionally) watch source files; write
    any generated output; manage stdin/stdout/stderr or the browser DOM.
-2. **Supply sources** — assemble `Vec<Source>` and call `rhizz_core::compile`.
+2. **Supply sources** — assemble `Vec<Source>` and call `rhizome_core::compile`.
    Do not parse or validate HCL independently.
 3. **Render diagnostics** — present `Vec<Diagnostic>` in a medium-appropriate
    form (coloured terminal lines, inline editor annotations, notifications,
    etc.).
 4. **Do not duplicate logic** — if behaviour needed by a frontend is missing
-   from `rhizz-core`, add it there instead of implementing it in
+   from `rhizome-core`, add it there instead of implementing it in
    the frontend. In particular, model writes must go through
-   `rhizz-core::mutate_to_hcl` (via the `apply_model_op` WASM binding):
+   `rhizome-core::mutate_to_hcl` (via the `apply_model_op` WASM binding):
    frontends send a declarative op and persist the returned canonical HCL,
    never hand-emit model HCL themselves.
 
-**CLI-specific notes** (`rhizz-cli`):
+**CLI-specific notes** (`rhizome-cli`):
 
 - Discovers `.hcl` files via `walkdir`, reads them, calls `compile`, then
   formats and prints diagnostics.
 - Exit code 0 when no errors; non-zero otherwise. With `--strict`, warnings also
   produce a non-zero exit.
-- All model logic is delegated; `rhizz-cli` contains no parsing, validation,
+- All model logic is delegated; `rhizome-cli` contains no parsing, validation,
   or scoring logic of its own.
 
 See [frontend.md](frontend.md) for the web-frontend-specific notes
-(`rhizz-wasm` + the SvelteKit app in `web/`).
+(`rhizome-wasm` + the SvelteKit app in `web/`).
 
-**Wasm-specific notes** (`rhizz-wasm`):
+**Wasm-specific notes** (`rhizome-wasm`):
 
-- A thin `cdylib` crate that wraps `rhizz-core` with
+- A thin `cdylib` crate that wraps `rhizome-core` with
   [`wasm-bindgen`](https://rustwasm.github.io/wasm-bindgen/) bindings.
 - Exposes a single function —
   `compile_sources(sources: JsValue) -> Result<JsValue, JsError>` — that accepts
@@ -118,16 +118,16 @@ See [frontend.md](frontend.md) for the web-frontend-specific notes
 
 ---
 
-## `rhizz-wasm`
+## `rhizome-wasm`
 
-WebAssembly frontend crate. Depends on `rhizz-core`. No I/O, no filesystem
+WebAssembly frontend crate. Depends on `rhizome-core`. No I/O, no filesystem
 access.
 
 ### Public API (JavaScript)
 
 ```ts
 // ES module import after wasm-pack build --target web
-import init, { compile_sources } from "./rhizz_wasm.js";
+import init, { compile_sources } from "./rhizome_wasm.js";
 
 await init(); // loads and initialises the .wasm binary (--target web only)
 
@@ -142,13 +142,13 @@ const result = compile_sources([
 
 ```bash
 # Browser / Node (ES modules)
-wasm-pack build crates/rhizz-wasm --target web
+wasm-pack build crates/rhizome-wasm --target web
 ```
 
-Output lands in `crates/rhizz-wasm/pkg/` as a ready-to-publish npm package.
+Output lands in `crates/rhizome-wasm/pkg/` as a ready-to-publish npm package.
 
 ### Wasm-pack tests
 
 ```bash
-wasm-pack test --node crates/rhizz-wasm
+wasm-pack test --node crates/rhizome-wasm
 ```

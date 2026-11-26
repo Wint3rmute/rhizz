@@ -1,10 +1,10 @@
-// Helpers around rhizz-core's structurally-stable component keys
+// Helpers around rhizome-core's structurally-stable component keys
 // (`Model::component_keys`): a label path per component, index-aligned with
 // `model.components()`, which — unlike an arena index — only changes when the
 // component (or an ancestor) is renamed or reparented. Every view that maps
 // persisted layout entries back onto the compiled model needs the same two
 // lookups, so they live here once.
-import type { ModelJS } from "rhizz";
+import type { ModelJS } from "rhizome";
 
 /** Fallback key for an index the model didn't supply one for. */
 export function fallbackComponentKey(index: number): string {

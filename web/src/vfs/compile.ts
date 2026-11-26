@@ -1,14 +1,14 @@
-// The one place that knows a rhizz project's source files are the ones
+// The one place that knows a rhizome project's source files are the ones
 // named "*.hcl" — everything else in ./vfs is a generic filesystem with
 // no opinion about what a project even is. Built entirely on top of
 // ProjectFs's public readdir/readFile, exactly like a real Node program
 // gathering source files off a real directory would (mirroring how
-// rhizz-core's own CLI-side file discovery globs `**/*.hcl`).
+// rhizome-core's own CLI-side file discovery globs `**/*.hcl`).
 import type { Dirent, ProjectFs } from "./fs";
 
 // A single compiled source file, matching the `{ filename, content }`
-// shape rhizz-core's `compile()` — and thus `CompileResultJS.compile` /
-// `compile_system` in rhizz_wasm_wrapper.ts — already accepts.
+// shape rhizome-core's `compile()` — and thus `CompileResultJS.compile` /
+// `compile_system` in rhizome_wasm_wrapper.ts — already accepts.
 export interface Source {
   filename: string;
   content: string;
@@ -19,7 +19,7 @@ export interface Source {
 // file's path as its `filename` — so compiler diagnostics point at a real,
 // human-meaningful path instead of a synthetic placeholder.
 //
-// Diagram layouts under `views/` are included: `rhizz-core::compile`
+// Diagram layouts under `views/` are included: `rhizome-core::compile`
 // classifies them by path and validates each one independently (E016/E006/
 // W016), exactly like the CLI and book preprocessor. View errors never clear
 // the resolved model, so the model and canvas keep working.
@@ -46,7 +46,7 @@ export async function readProjectSources(fs: ProjectFs): Promise<Source[]> {
   );
 }
 
-/// Mirrors `rhizz_core::is_docs_source`: a `.md` file under a `docs/`
+/// Mirrors `rhizome_core::is_docs_source`: a `.md` file under a `docs/`
 /// directory (e.g. `docs/motor.md`). Kept in sync by hand — the compiler is
 /// the authority, this only decides which files to hand it.
 export function isDocsSource(path: string): boolean {

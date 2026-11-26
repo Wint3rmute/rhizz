@@ -6,7 +6,7 @@
 
 ## Motivation
 
-With `rhizz web`, several people can open the same project, but the editor
+With `rhizome web`, several people can open the same project, but the editor
 saves the whole VFS to the server (`PUT /api/vfs`), and the last save wins.
 A stale tab silently overwrites a colleague's model, or deletes projects it
 does not know about. Model and layout edits are not mergeable, so conflicts

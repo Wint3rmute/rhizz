@@ -7,7 +7,7 @@
     getCurrentProjectId,
     projectStore,
   } from "../ProjectState.svelte";
-  import { get_example_projects } from "../rhizz_wasm_wrapper";
+  import { get_example_projects } from "../rhizome_wasm_wrapper";
   import { toastState } from "../ToastState.svelte";
   import { resolveIcon } from "../iconHelper";
   import { TOUR_TARGETS } from "../tour/tourTargets";
@@ -121,10 +121,10 @@
           style:-webkit-mask-repeat="no-repeat"
           aria-hidden="true"
         ></span>
-        Rhizz
+        Rhizome
       </a>
 
-      <!-- Desktop navigation links (positioned next to ← rhizz button).
+      <!-- Desktop navigation links (positioned next to ← rhizome button).
            Each link carries its tour anchor here only (not in the mobile
            copy below): querySelector resolves the first match, so a
            duplicated anchor would spotlight the hidden desktop link on

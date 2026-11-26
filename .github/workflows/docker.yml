@@ -4,7 +4,7 @@ name: docker
 # to GitHub's container registry (ghcr.io).
 #
 # The derivation replaces the Dockerfile's three stages end to end, so this job
-# no longer needs a Docker build context: `nix build .#rhizz-docker` compiles
+# no longer needs a Docker build context: `nix build .#rhizome-docker` compiles
 # the whole pipeline (wasm → frontend → binary → image) and emits a
 # docker-archive tarball.
 #
@@ -44,21 +44,21 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
-      # The point of the job: `.#rhizz-docker` consumes the whole pipeline
-      # (rhizz-wasm-pkg → rhizz-frontend → rhizz-server → image), so a failure in any
+      # The point of the job: `.#rhizome-docker` consumes the whole pipeline
+      # (rhizome-wasm-pkg → rhizome-frontend → rhizome-server → image), so a failure in any
       # stage surfaces here. This replaced `docker/build-push-action`, which
       # could only build from a Dockerfile.
       #
       # Tag pushes (e.g. `0.10.0`) bake the release tag into the binary (shown
-      # in the UI via `/api/version`): the flake reads `RHIZZ_GIT_TAG`, which
+      # in the UI via `/api/version`): the flake reads `RHIZOME_GIT_TAG`, which
       # needs `--impure` (pure evaluation hides the environment). Branch builds
       # stay pure and report no tag.
       - name: Build the image
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            RHIZZ_GIT_TAG="${GITHUB_REF_NAME}" nix build --impure .#rhizz-docker
+            RHIZOME_GIT_TAG="${GITHUB_REF_NAME}" nix build --impure .#rhizome-docker
           else
-            nix build .#rhizz-docker
+            nix build .#rhizome-docker
           fi
 
       - name: Log in to GitHub Container Registry
@@ -86,14 +86,14 @@ jobs:
             type=raw,value={{ date 'YYYYMMDD-HHmmss' }}
 
       # The Nix image arrives as a docker-archive tarball whose only tag is the
-      # derivation's own name (`rhizz:latest`), so it is loaded first and the
+      # derivation's own name (`rhizome:latest`), so it is loaded first and the
       # metadata tags above are applied by hand — `docker/build-push-action`
       # used to do that from the Dockerfile.
       - name: Load, tag and push the image
         run: |
           docker load -i result
           printf '%s\n' "${{ steps.meta.outputs.tags }}" | while IFS= read -r tag; do
-            docker tag rhizz:latest "$tag"
+            docker tag rhizome:latest "$tag"
             docker push "$tag"
           done
 

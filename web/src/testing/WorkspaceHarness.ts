@@ -1,11 +1,11 @@
-import type { ComponentJS } from "rhizz";
+import type { ComponentJS } from "rhizome";
 import type { ComponentData } from "../modelView";
 import {
   compile_system,
   type ExampleProject,
   get_example_projects,
   serialize_model,
-} from "../rhizz_wasm_wrapper";
+} from "../rhizome_wasm_wrapper";
 import { readProjectSources, type Source } from "../vfs/compile";
 import {
   applyModelMutation,

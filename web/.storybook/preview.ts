@@ -1,5 +1,5 @@
 import "../src/app.css";
-import init from "rhizz";
+import init from "rhizome";
 import { withThemeByDataAttribute } from "@storybook/addon-themes";
 import ProjectModelProvider from "../src/components/ProjectModelProvider.svelte";
 

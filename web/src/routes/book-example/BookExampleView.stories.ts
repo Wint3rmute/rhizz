@@ -240,7 +240,7 @@ export const WarningsShownDirectly: Story = {
 };
 
 // A lone file hides the top bar entirely: just code plus diagnostics,
-// like a plain ```rhizz block.
+// like a plain ```rhizome block.
 const singleFile: BookPayloadFile[] = SAMPLE_FILES.filter(
   (file) => file.path === "system.hcl",
 );

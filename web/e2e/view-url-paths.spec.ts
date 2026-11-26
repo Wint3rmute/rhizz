@@ -111,7 +111,7 @@ test("a legacy ?diagram= link still opens its view, then redirects to the path",
   page,
 }) => {
   const id = await createNewProject(page, "E2E legacy view url");
-  // Links shared before views moved into the URL path (the "Open in Rhizz"
+  // Links shared before views moved into the URL path (the "Open in Rhizome"
   // button used to hand out `?diagram=views/<name>.hcl`) must keep working.
   await page.goto(`/projects/${id}/modeling?diagram=views%2Fmain.hcl`);
   await expect(page).toHaveURL(`/projects/${id}/modeling/main.hcl`);

@@ -1,4 +1,4 @@
-import init from "rhizz";
+import init from "rhizome";
 import * as nodeFs from "node:fs/promises";
 import * as path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -30,7 +30,7 @@ async function projectFs() {
 beforeAll(async () => {
   const wasmPath = path.resolve(
     __dirname,
-    "../../../../../../crates/rhizz-wasm/pkg/rhizz_wasm_bg.wasm",
+    "../../../../../../crates/rhizome-wasm/pkg/rhizome_wasm_bg.wasm",
   );
   const buffer = await nodeFs.readFile(wasmPath);
   await init({ module_or_path: buffer });
