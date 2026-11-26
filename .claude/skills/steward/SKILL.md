@@ -42,8 +42,3 @@ Applies on top of `AGENTS.md`; that file's workflow still holds.
 - Merge only when the user explicitly asks: "merge now", or "merge once CICD
   succeeds" (then wait for CI to be green on the PR's current head and merge
   with the rebase method). Without such an ask, stop at "green and approved".
-
-## Pace
-
-- Wait for events rather than polling. After pushing, end the turn; CI results
-  wake the session.
