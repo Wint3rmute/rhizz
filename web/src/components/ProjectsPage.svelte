@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
+  import logoMarkUrl from "../../assets/logo-mark.svg";
   import ScrollingBackground from "./ScrollingBackground.svelte";
   import TipsPanel from "./TipsPanel.svelte";
   import BuildInfo from "./BuildInfo.svelte";
@@ -154,6 +155,9 @@
     await projectStore.deleteProject(project.id);
     await refresh();
   }
+
+  // Quoted so the inlined data URI cannot break the url() token.
+  const maskImage = `url("${logoMarkUrl}")`;
 </script>
 
 <div class="flex-1 w-full bg-base-100 overflow-y-auto">
@@ -178,7 +182,19 @@
         class="relative card bg-base-100 shadow-2xl border border-base-content/10 max-w-2xl w-full mx-4"
       >
         <div class="card-body items-center text-center p-8 sm:p-12">
-          <div class="text-5xl mb-4">🗂️</div>
+          <span
+            data-testid="landing-logo"
+            class="inline-block size-16 mb-4 bg-current"
+            style:mask-image={maskImage}
+            style:-webkit-mask-image={maskImage}
+            style:mask-position="center"
+            style:mask-size="contain"
+            style:mask-repeat="no-repeat"
+            style:-webkit-mask-position="center"
+            style:-webkit-mask-size="contain"
+            style:-webkit-mask-repeat="no-repeat"
+            aria-hidden="true"
+          ></span>
           <h1 class="text-3xl font-bold text-base-content">Rhizome</h1>
           <p class="text-base-content py-4 max-w-xl">
             Model your system architecture and verify it. Build your system in
