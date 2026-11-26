@@ -21,6 +21,9 @@
   import SettingsModal from "./SettingsModal.svelte";
   import { projectLock } from "../collab/projectLock.svelte";
 
+  // Quoted so the inlined data URI cannot break the url() token.
+  const maskImage = `url("${logoMarkUrl}")`;
+
   let settingsOpen = $state(false);
 
   // A palette action (project layout) asks for settings through a shared
@@ -108,7 +111,14 @@
         <span
           data-testid="navbar-logo"
           class="inline-block size-7 sm:size-8 bg-current"
-          style="mask: url({logoMarkUrl}) center / contain no-repeat; -webkit-mask: url({logoMarkUrl}) center / contain no-repeat;"
+          style:mask-image={maskImage}
+          style:-webkit-mask-image={maskImage}
+          style:mask-position="center"
+          style:mask-size="contain"
+          style:mask-repeat="no-repeat"
+          style:-webkit-mask-position="center"
+          style:-webkit-mask-size="contain"
+          style:-webkit-mask-repeat="no-repeat"
           aria-hidden="true"
         ></span>
         Rhizz
