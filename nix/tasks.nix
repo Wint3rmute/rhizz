@@ -28,6 +28,27 @@ let
     export RHIZOME_VRT_FONTCONFIG_FILE="${fontsConf}"
   '';
 
+  # Legacy `favicon.ico` (16/32/48 px) for browsers without SVG favicon
+  # support: the white mark on the dark theme's page colour, since an .ico
+  # cannot follow the colour scheme. Defines `render_favicon_ico <out.ico>`;
+  # shared by `assets` and `assets-check`. Root-relative paths.
+  faviconIcoLib = ''
+    render_favicon_ico() {
+      local out="$1" tmp s inner
+      local -a frames=()
+      tmp=$(mktemp -d)
+      for s in 16 32 48; do
+        inner=$((s * 84 / 100))
+        magick -background none -density 1200 logo/renders/molecule/molecule-ref-white.svg \
+          -trim +repage -resize "''${inner}x''${inner}" \
+          -background '#1D232A' -gravity center -extent "''${s}x''${s}" "$tmp/$s.png"
+        frames+=("$tmp/$s.png")
+      done
+      magick "''${frames[@]}" "$out"
+      rm -rf "$tmp"
+    }
+  '';
+
   # Shared body of the landing-hero pipeline (`assets` + the tail of
   # `vrt-accept`): perspective + drop shadow + gradient background via
   # ImageMagick. Callers set INPUT (source screenshot), BG (gradient
@@ -389,7 +410,7 @@ let
     #   - the logo SVGs (logo/renders/molecule/: mark, lockup and construction
     #     drawing, each with a dark-background variant, plus the navbar's copy of the
     #     mark at web/assets/logo-mark.svg, and the favicon at
-    #     web/static/favicon.svg), with Roboto Bold from nixpkgs
+    #     web/static/favicon.svg and its legacy favicon.ico), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
       name = "assets";
@@ -412,6 +433,8 @@ let
         cp logo/renders/molecule/molecule-ref.svg web/assets/logo-mark.svg
         # Browser-tab favicon (served from web/static), same reason.
         (cd logo && npm run -s gen:favicon)
+      '' + faviconIcoLib + ''
+        render_favicon_ico web/static/favicon.ico
       '';
     };
 
@@ -433,7 +456,7 @@ let
         INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="$OUTDIR/rhizome_landing.png"
-      '' + landingLib + ''
+      '' + landingLib + faviconIcoLib + ''
         # landingLib installed its own EXIT trap; replace it with one for both dirs.
         trap 'rm -rf "$TMPDIR" "$OUTDIR"' EXIT
         # ImageMagick 7 prints "<count> (<fraction>)", e.g. "0 (0)"; keep the count.
@@ -470,6 +493,16 @@ let
           echo "web/static/favicon.svg is out of date" >&2
           stale=1
         fi
+        render_favicon_ico "$OUTDIR/favicon.ico"
+        # Compared per frame, by pixels, so ICO container metadata cannot cause false alarms.
+        for i in 0 1 2; do
+          diff_px=$(magick compare -metric AE "$OUTDIR/favicon.ico[$i]" "web/static/favicon.ico[$i]" null: 2>&1 || true)
+          diff_px=''${diff_px%% *}
+          if [ "$diff_px" != "0" ]; then
+            echo "web/static/favicon.ico is out of date (frame $i, $diff_px differing pixels)" >&2
+            stale=1
+          fi
+        done
 
         if [ "$stale" -ne 0 ]; then
           echo "Run \`just assets\` and commit the regenerated files." >&2
