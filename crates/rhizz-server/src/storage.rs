@@ -1472,6 +1472,99 @@ pub fn write_project(
     hash_dir_version(data_dir, project_id)
 }
 
+/// Why a project was not created. Every variant leaves the data dir without
+/// a new project.
+#[derive(Debug, Error)]
+pub enum CreateProjectError {
+    /// The id is not a project address (lowercase ASCII alphanumerics in runs
+    /// joined by single hyphens).
+    #[error(
+        "`{0}` is not a valid project id: use lowercase letters and digits joined by single hyphens"
+    )]
+    InvalidId(String),
+    /// A project directory with this id already exists.
+    #[error("project `{0}` already exists")]
+    Exists(String),
+    /// Someone else holds the lock on this id; carries their username.
+    #[error("project `{project}` is locked by `{holder}`")]
+    Locked {
+        /// The project that was to be created.
+        project: String,
+        /// The username holding the lock.
+        holder: String,
+    },
+    /// The filesystem refused to create or write the project.
+    #[error("{0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Creates a brand-new project `project_id` seeded with the rhizz-core
+/// empty-project layout ([`rhizz_core::empty_project`]) — the same files the
+/// web editor writes for "new project".
+///
+/// Refuses an id that is already taken instead of overwriting it. The
+/// directory is claimed with a non-recursive `create_dir`, so two concurrent
+/// creations of one id cannot both succeed.
+///
+/// Returns the new project's content-hash version.
+///
+/// # Errors
+///
+/// Returns [`CreateProjectError::InvalidId`] for non-address ids,
+/// [`CreateProjectError::Exists`] when the id is taken,
+/// [`CreateProjectError::Locked`] when someone else holds the lock, and
+/// [`CreateProjectError::Io`] when the filesystem fails.
+pub fn create_project(
+    data_dir: &Path,
+    locks: &crate::locks::LockManager,
+    project_id: &str,
+    user: &str,
+) -> Result<String, CreateProjectError> {
+    use rhizz_core::empty_project::{
+        EMPTY_PROJECT_DIRS, EMPTY_PROJECT_HCL, EMPTY_PROJECT_MAIN_FILE,
+    };
+
+    if !is_address(project_id) {
+        return Err(CreateProjectError::InvalidId(project_id.to_owned()));
+    }
+    fs::create_dir_all(data_dir)?;
+    let root = data_dir.join(project_id);
+    match fs::create_dir(&root) {
+        Ok(()) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+            return Err(CreateProjectError::Exists(project_id.to_owned()));
+        }
+        Err(err) => return Err(CreateProjectError::Io(err)),
+    }
+
+    let mut files = vec![ProjectFileJson {
+        path: EMPTY_PROJECT_MAIN_FILE.to_owned(),
+        content: Some(EMPTY_PROJECT_HCL.to_owned()),
+    }];
+    files.extend(EMPTY_PROJECT_DIRS.iter().map(|dir| ProjectFileJson {
+        path: (*dir).to_owned(),
+        content: None,
+    }));
+
+    write_project(data_dir, locks, project_id, user, None, &files).map_err(|err| {
+        // Do not leave an empty shell behind: it would block a retry as
+        // `Exists`. Only an empty directory is removed, never a partial one.
+        let _ = fs::remove_dir(&root);
+        match err {
+            WriteProjectError::Locked { project, holder } => {
+                CreateProjectError::Locked { project, holder }
+            }
+            WriteProjectError::Io(err) => CreateProjectError::Io(err),
+            WriteProjectError::Unknown(message) | WriteProjectError::Malformed(message) => {
+                CreateProjectError::Io(std::io::Error::other(message))
+            }
+            WriteProjectError::StaleVersion { current } => CreateProjectError::Io(
+                std::io::Error::other(format!("unexpected version mismatch ({current})")),
+            ),
+        }
+    })
+}
+
 /// Validates per-project write entries into the tree the project directory
 /// should hold. Paths resolve against `root` with the same confinement as
 /// the read-only tools, duplicates are refused, and every file's ancestors
@@ -3487,6 +3580,111 @@ mod tests {
 
         assert!(!by_path.contains_key(".hidden"));
         assert!(!by_path.contains_key("linked.hcl"));
+    }
+
+    #[test]
+    fn create_project_seeds_the_rhizz_core_empty_project_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let version = create_project(dir.path(), &locks, "rocket-engine", "AI").unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("rocket-engine/main.hcl")).unwrap(),
+            rhizz_core::empty_project::EMPTY_PROJECT_HCL
+        );
+        assert!(dir.path().join("rocket-engine/docs").is_dir());
+        assert_eq!(
+            fs::read_dir(dir.path().join("rocket-engine/docs"))
+                .unwrap()
+                .count(),
+            0,
+            "docs/ is seeded empty"
+        );
+        assert_eq!(
+            version,
+            project_version(dir.path(), "rocket-engine").unwrap()
+        );
+        // It is a real project right away: resolvable and compilable.
+        resolve_project(dir.path(), "rocket-engine").unwrap();
+        let sources = project_sources(dir.path(), "rocket-engine")
+            .unwrap()
+            .expect("project has sources");
+        assert!(rhizz_core::compile(&sources).model.is_some());
+    }
+
+    #[test]
+    fn create_project_creates_a_missing_data_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let data_dir = dir.path().join("not-yet");
+        let locks = crate::locks::LockManager::new();
+
+        create_project(&data_dir, &locks, "first", "AI").unwrap();
+
+        assert!(data_dir.join("first/main.hcl").is_file());
+    }
+
+    #[test]
+    fn create_project_refuses_an_existing_id_without_touching_it() {
+        let dir = data_dir_with_drone();
+        let before = fs::read(dir.path().join("drone/system.hcl")).unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        let err = create_project(dir.path(), &locks, "drone", "AI").unwrap_err();
+
+        assert!(matches!(err, CreateProjectError::Exists(id) if id == "drone"));
+        assert_eq!(
+            fs::read(dir.path().join("drone/system.hcl")).unwrap(),
+            before
+        );
+        assert!(!dir.path().join("drone/main.hcl").exists());
+    }
+
+    #[test]
+    fn create_project_refuses_ids_that_are_not_addresses() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+
+        for id in [
+            "",
+            "Rocket Engine",
+            "../escape",
+            "a/b",
+            "-lead",
+            "trail-",
+            "a--b",
+            "UPPER",
+        ] {
+            assert!(
+                matches!(
+                    create_project(dir.path(), &locks, id, "AI"),
+                    Err(CreateProjectError::InvalidId(_))
+                ),
+                "`{id}` must be refused"
+            );
+        }
+        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn create_project_refuses_when_someone_else_holds_the_lock_and_leaves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let locks = crate::locks::LockManager::new();
+        assert_eq!(
+            locks.acquire("reserved", "alice"),
+            crate::locks::AcquireOutcome::Acquired
+        );
+
+        let err = create_project(dir.path(), &locks, "reserved", "AI").unwrap_err();
+
+        assert!(
+            matches!(&err, CreateProjectError::Locked { holder, .. } if holder == "alice"),
+            "{err:?}"
+        );
+        assert!(
+            !dir.path().join("reserved").exists(),
+            "a refused creation must not leave an empty shell that blocks a retry"
+        );
     }
 
     #[test]

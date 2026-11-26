@@ -599,6 +599,15 @@ struct DeleteProtocolParams {
     path: String,
 }
 
+/// Arguments accepted by the `create_project` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct CreateProjectParams {
+    /// The new project's id (also its directory name): lowercase letters and
+    /// digits, in runs joined by single hyphens (e.g. `rocket-engine`).
+    #[schemars(length(min = 1), regex(pattern = r"^[a-z0-9]+(-[a-z0-9]+)*$"))]
+    project: String,
+}
+
 /// Arguments accepted by the `create_file` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct CreateFileParams {
@@ -1352,6 +1361,63 @@ impl RhizzMcp {
             path: params.0.path.clone(),
         };
         Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
+    /// Creates a brand-new project seeded with the same empty-project layout
+    /// the web editor uses (`main.hcl` with a `main` system, plus an empty
+    /// `docs/`). Refuses an id that is already taken. Takes the project lock as
+    /// the hardcoded `AI` identity (proposal 0004).
+    #[tool(
+        name = "create_project",
+        title = "Create project",
+        annotations(
+            title = "Create project",
+            destructive_hint = false,
+            idempotent_hint = true
+        ),
+        description = "Create a new empty Rhizz project with the same seed as the web editor's \"new project\" (`main.hcl` holding a `main` system, plus an empty `docs/`). `project` is the explicit id/slug: lowercase letters and digits joined by single hyphens. An id that is already taken is refused. Returns `project`, `version` and `lockedBy`; then use `create_file` / the ModelOp tools. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder."
+    )]
+    async fn create_project(
+        &self,
+        params: Parameters<CreateProjectParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let data_dir = self.data_dir.clone();
+        let locks = self.locks.clone();
+        let project = params.0.project;
+        let id = project.clone();
+        // MCP clients have no username of their own: every write contends
+        // as the hardcoded `AI` identity (proposal 0004).
+        let created = tokio::task::spawn_blocking({
+            let locks = locks.clone();
+            move || storage::create_project(&data_dir, &locks, &id, "AI")
+        })
+        .await;
+        let version = match created {
+            Ok(Ok(version)) => version,
+            Ok(Err(
+                err @ (storage::CreateProjectError::InvalidId(_)
+                | storage::CreateProjectError::Exists(_)
+                | storage::CreateProjectError::Locked { .. }),
+            )) => return Ok(tool_error(err.to_string())),
+            Ok(Err(storage::CreateProjectError::Io(err))) => {
+                tracing::error!(?err, "create_project: failed to write project");
+                return Ok(tool_error("failed to create project"));
+            }
+            Err(err) => {
+                tracing::error!(?err, "create_project: worker task failed");
+                return Ok(tool_error("failed to create project"));
+            }
+        };
+        let mut payload = serde_json::Map::new();
+        payload.insert("project".to_owned(), Value::String(project.clone()));
+        payload.extend(lock_state(&locks, &project, version));
+        match serde_json::to_string(&payload) {
+            Ok(text) => Ok(CallToolResult::success(vec![ContentBlock::text(text)])),
+            Err(err) => {
+                tracing::error!(?err, "create_project: failed to encode result");
+                Ok(tool_error("failed to encode result"))
+            }
+        }
     }
 
     /// Creates a new file at any path, or overwrites an existing one whole.
@@ -2184,6 +2250,7 @@ mod tests {
                 "check_project",
                 "connect_components",
                 "create_file",
+                "create_project",
                 "delete_component",
                 "delete_connection_by_label",
                 "delete_protocol",
@@ -2234,7 +2301,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 21, "all tools must be listed: {tools:?}");
+        assert_eq!(tools.len(), 22, "all tools must be listed: {tools:?}");
 
         // (name, expect_read_only, expect_destructive).
         let expectations = [
@@ -2253,6 +2320,7 @@ mod tests {
             ("update_system", false, Some(true)),
             ("update_connection", false, Some(true)),
             ("update_protocol", false, Some(true)),
+            ("create_project", false, Some(false)),
             ("create_file", false, Some(true)),
             ("edit_file", false, Some(true)),
             ("delete_component", false, Some(true)),
@@ -2304,7 +2372,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 21);
+        assert_eq!(tools.len(), 22);
 
         let mut total = 0usize;
         let mut by_name = std::collections::HashMap::new();
@@ -2363,6 +2431,7 @@ mod tests {
             "add_protocol",
             "update_protocol",
             "delete_protocol",
+            "create_project",
             "create_file",
             "edit_file",
         ];
@@ -2878,6 +2947,125 @@ mod tests {
             .as_str()
             .unwrap()
             .to_owned()
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_project_seeds_the_empty_project_and_unblocks_follow_ups() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let created = call_tool(
+            &app,
+            &session,
+            400,
+            "create_project",
+            json!({ "project": "rocket-engine" }),
+        )
+        .await;
+        assert_ne!(created["result"]["isError"], json!(true), "{created}");
+        let value = result_value(&created);
+        assert_eq!(value["project"], json!("rocket-engine"));
+        assert!(value["version"].as_str().is_some_and(|v| !v.is_empty()));
+
+        // The seed is exactly the rhizz-core empty project.
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("rocket-engine/main.hcl")).unwrap(),
+            rhizz_core::empty_project::EMPTY_PROJECT_HCL
+        );
+        assert!(tmp.path().join("rocket-engine/docs").is_dir());
+
+        // It lists, checks clean of errors, and accepts a follow-up write —
+        // the whole point: `create_file` alone could not start a project.
+        let listed = call_tool(&app, &session, 401, "fetch_projects", json!({})).await;
+        assert!(
+            result_value(&listed)["projects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|p| p["id"] == json!("rocket-engine")),
+            "{listed}"
+        );
+        let added = call_tool(
+            &app,
+            &session,
+            402,
+            "add_component_definition",
+            json!({ "project": "rocket-engine", "label": "injector" }),
+        )
+        .await;
+        assert_ne!(added["result"]["isError"], json!(true), "{added}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_create_project_refuses_taken_and_malformed_ids() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_drone_project(tmp.path());
+        let before = std::fs::read(tmp.path().join("drone/system.hcl")).unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let taken = call_tool(
+            &app,
+            &session,
+            410,
+            "create_project",
+            json!({ "project": "drone" }),
+        )
+        .await;
+        assert!(
+            tool_error_text(&taken).contains("already exists"),
+            "{taken}"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("drone/system.hcl")).unwrap(),
+            before,
+            "a refused creation must not touch the existing project"
+        );
+
+        for (id, bad) in [(411, "Rocket Engine"), (412, "../escape"), (413, "a--b")] {
+            let refused = call_tool(
+                &app,
+                &session,
+                id,
+                "create_project",
+                json!({ "project": bad }),
+            )
+            .await;
+            // The schema pattern may reject first (JSON-RPC error) or the
+            // handler may (tool error); either way nothing is created.
+            assert!(
+                refused["error"].is_object() || refused["result"]["isError"] == json!(true),
+                "`{bad}` must be refused: {refused}"
+            );
+        }
+        let dirs = std::fs::read_dir(tmp.path()).unwrap().count();
+        assert_eq!(dirs, 1, "only the pre-existing drone project");
+    }
+
+    #[tokio::test]
+    async fn tools_list_documents_the_create_project_id_pattern() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let list = json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" });
+        let (_, _, payload) = post_rpc(&app, &list, Some(&session)).await;
+        let payload = payload.expect("tools/list must reply");
+        let tool = payload["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == json!("create_project"))
+            .expect("create_project must be listed");
+        let project = &tool["inputSchema"]["properties"]["project"];
+        assert_eq!(project["minLength"], json!(1), "{project}");
+        assert!(
+            project["pattern"]
+                .as_str()
+                .is_some_and(|p| p.contains("a-z0-9")),
+            "{project}"
+        );
+        assert_eq!(tool["inputSchema"]["required"], json!(["project"]));
     }
 
     #[tokio::test]
