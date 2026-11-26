@@ -29,8 +29,7 @@ let
   '';
 
   # Legacy `favicon.ico` (16/32/48 px) for browsers without SVG favicon
-  # support: the white mark on the dark theme's page colour, since an .ico
-  # cannot follow the colour scheme. Defines `render_favicon_ico <out.ico>`;
+  # support: the black mark on a white square, matching favicon.svg. Defines `render_favicon_ico <out.ico>`;
   # shared by `assets` and `assets-check`. Root-relative paths.
   faviconIcoLib = ''
     render_favicon_ico() {
@@ -39,9 +38,9 @@ let
       tmp=$(mktemp -d)
       for s in 16 32 48; do
         inner=$((s * 84 / 100))
-        magick -background none -density 1200 logo/renders/molecule/molecule-ref-white.svg \
+        magick -background none -density 1200 logo/renders/molecule/molecule-ref.svg \
           -trim +repage -resize "''${inner}x''${inner}" \
-          -background '#1D232A' -gravity center -extent "''${s}x''${s}" "$tmp/$s.png"
+          -background white -gravity center -extent "''${s}x''${s}" "$tmp/$s.png"
         frames+=("$tmp/$s.png")
       done
       magick "''${frames[@]}" "$out"
