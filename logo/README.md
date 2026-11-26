@@ -1,7 +1,10 @@
 # Rhizome brandbook
 
 <p align="center">
-  <img src="renders/molecule/lockup-ref.svg" alt="Rhizome lockup: the molecule mark beside the Rhizome wordmark" width="520">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="renders/molecule/lockup-ref-white.svg">
+    <img src="renders/molecule/lockup-ref.svg" alt="Rhizome lockup: the molecule mark beside the Rhizome wordmark" width="520">
+  </picture>
 </p>
 
 The Rhizome identity is generated from code, not drawn by hand. Every graphic
@@ -11,7 +14,10 @@ change the parameters and regenerate (see [Files](#files)).
 ## The mark
 
 <p align="center">
-  <img src="renders/molecule/molecule-ref.svg" alt="The molecule mark" width="220">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="renders/molecule/molecule-ref-white.svg">
+    <img src="renders/molecule/molecule-ref.svg" alt="The molecule mark" width="220">
+  </picture>
 </p>
 
 A rhizome is a root network with no trunk and no top. The mark draws one as a
@@ -25,7 +31,10 @@ overlaps or gaps, so it holds up as a mask, a stamp, a favicon or a cut-out.
 ## Construction
 
 <p align="center">
-  <img src="renders/molecule/construction-ref.svg" alt="Construction drawing of the mark with its guide circles and axes" width="520">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="renders/molecule/construction-ref-dark.svg">
+    <img src="renders/molecule/construction-ref.svg" alt="Construction drawing of the mark with its guide circles and axes" width="520">
+  </picture>
 </p>
 
 Every guide in this drawing comes out of the same code that traces the mark, so
@@ -80,6 +89,11 @@ and mint. Use it as a background, never inside the wordmark.
 | `renders/molecule/molecule-ref.svg` | the mark (also copied to `web/assets/logo-mark.svg`) | `src/molecule.mjs` |
 | `renders/molecule/lockup-ref.svg` | mark + wordmark | `src/lockup.mjs` |
 | `renders/molecule/construction-ref.svg` | construction drawing | `src/construction.mjs` |
+| `renders/molecule/*-white.svg`, `construction-ref-dark.svg` | the same, for dark backgrounds | the same scripts, with `--fill '#fff'` or `--theme dark` |
+| `renders/video/rhizome-gradient-{light,dark}.mp4` | Full HD looping video of the mark with a flowing gradient (not committed) | `src/gradient.mjs` via `just logo-video` |
+
+The images on this page switch to their dark-background variants when GitHub
+is in a dark theme (`<picture>` with `prefers-color-scheme`).
 
 The SVGs are build outputs: change the generators, never the SVGs. To
 regenerate:

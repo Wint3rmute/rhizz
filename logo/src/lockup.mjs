@@ -23,6 +23,7 @@ const get = (k, d) => {
 const markPath = get('mark', 'renders/paper-rhizome-001.svg');
 const outPath = get('out', 'renders/lockup-001.svg');
 const text = get('text', 'Rhizome');
+const fill = get('fill', '#000'); // '#fff' for the dark-background variant
 // Roboto Bold comes from nixpkgs: the `assets` task in nix/tasks.nix exports ROBOTO_BOLD.
 const fontPath = get('font', process.env.ROBOTO_BOLD);
 if (!fontPath) {
@@ -93,14 +94,14 @@ const fmt = (n) => +n.toFixed(2);
 const lockup =
   `<?xml version="1.0" encoding="UTF-8"?>\n` +
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fmt(vx)} ${fmt(vy)} ${fmt(vw)} ${fmt(vh)}">\n` +
-  `<g transform="translate(${fmt(iconLeft)} ${fmt(iconTop)}) scale(${s.toFixed(4)})" fill="#000" stroke="#000">${inner}</g>\n` +
-  `<g transform="translate(${fmt(textX)} 0)"><path d="${textD}" fill="#000"/></g>\n` +
+  `<g transform="translate(${fmt(iconLeft)} ${fmt(iconTop)}) scale(${s.toFixed(4)})" fill="${fill}" stroke="${fill}">${inner}</g>\n` +
+  `<g transform="translate(${fmt(textX)} 0)"><path d="${textD}" fill="${fill}"/></g>\n` +
   `</svg>\n`;
 
 const textOnly =
   `<?xml version="1.0" encoding="UTF-8"?>\n` +
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fmt(tb.x1 - padOut)} ${fmt(tb.y1 - padOut)} ${fmt(tb.x2 - tb.x1 + 2 * padOut)} ${fmt(tb.y2 - tb.y1 + 2 * padOut)}">\n` +
-  `<path d="${textD}" fill="#000"/>\n</svg>\n`;
+  `<path d="${textD}" fill="${fill}"/>\n</svg>\n`;
 
 const textPath = outPath.replace(/\.svg$/, '-text.svg');
 fs.writeFileSync(outPath, lockup);

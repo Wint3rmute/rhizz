@@ -17,6 +17,7 @@
 //   node src/molecule.mjs --preset reference --out renders/molecule-ref.svg
 //   node src/molecule.mjs --seed 1 --seed-end 6 --outdir renders/molecule
 //   node src/molecule.mjs --set dotR=44,barW=24,fillet=8,jointFillet=18 --out x.svg
+//   node src/molecule.mjs --preset reference --fill '#fff' --out x.svg   (for dark backgrounds)
 
 export const MOLECULE_DEFAULTS = {
   size: 512,
@@ -324,7 +325,7 @@ export function traceOutline(graph, cfg, guides = null) {
 }
 
 // --------------------------------------------------------------- render ---
-export function renderMolecule({ seed = 1, preset = null, ...overrides } = {}) {
+export function renderMolecule({ seed = 1, preset = null, fill = '#000', ...overrides } = {}) {
   const cfg = { ...MOLECULE_DEFAULTS, ...overrides };
   const graph = preset === 'reference'
     ? referenceGraph(cfg)
@@ -364,7 +365,7 @@ export function renderMolecule({ seed = 1, preset = null, ...overrides } = {}) {
   const svg =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${cfg.size} ${cfg.size}">\n` +
-    `<path d="${d}" fill="#000"/>\n</svg>\n`;
+    `<path d="${d}" fill="${fill}"/>\n</svg>\n`;
   return { svg, bounds, graph, cfg, d, guides };
 }
 
@@ -384,6 +385,7 @@ if (isCLI) {
     if (k && v !== undefined && k in MOLECULE_DEFAULTS) overrides[k] = parseFloat(v);
   }
   const preset = get('preset', null);
+  const fill = get('fill', '#000');
   const seedEnd = parseInt(get('seed-end', get('seed', '1')), 10);
   const seedStart = args.includes('--seed-end') ? parseInt(get('seed', '1'), 10) : seedEnd;
   const outdir = get('outdir', null);
@@ -392,11 +394,11 @@ if (isCLI) {
   const jobs = [];
   if (outdir) for (let s = seedStart; s <= seedEnd; s++) jobs.push([s, `${outdir}/molecule-${String(s).padStart(3, '0')}.svg`]);
   else if (single) jobs.push([seedEnd, single]);
-  else { process.stdout.write(renderMolecule({ seed: seedEnd, preset, ...overrides }).svg); process.exit(0); }
+  else { process.stdout.write(renderMolecule({ seed: seedEnd, preset, fill, ...overrides }).svg); process.exit(0); }
 
   for (const [s, file] of jobs) {
     fs.mkdirSync(path.dirname(file) || '.', { recursive: true });
-    const { svg, bounds } = renderMolecule({ seed: s, preset, ...overrides });
+    const { svg, bounds } = renderMolecule({ seed: s, preset, fill, ...overrides });
     fs.writeFileSync(file, svg);
     fs.writeFileSync(file.replace(/\.svg$/, '.bounds.json'), JSON.stringify({ seed: s, preset, ...overrides, bounds }) + '\n');
     console.log(`wrote ${file} (seed ${s}${preset ? ', preset ' + preset : ''})`);

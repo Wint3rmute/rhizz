@@ -385,7 +385,8 @@ let
     #   - the README/book landing hero (book/src/rhizz_landing.png), from a
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
-    #   - the logo SVGs (logo/renders/molecule/, incl. the construction sheet, plus the navbar's copy of the
+    #   - the logo SVGs (logo/renders/molecule/: mark, lockup and construction
+    #     drawing, each with a dark-background variant, plus the navbar's copy of the
     #     mark at web/assets/logo-mark.svg), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
@@ -445,7 +446,12 @@ let
         node logo/src/molecule.mjs --preset reference --out "$OUTDIR/molecule-ref.svg"
         node logo/src/lockup.mjs --mark "$OUTDIR/molecule-ref.svg" --out "$OUTDIR/lockup-ref.svg"
         node logo/src/construction.mjs --out "$OUTDIR/construction-ref.svg"
-        for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg construction-ref.svg; do
+        # dark-background variants (the brandbook swaps them in for dark themes)
+        node logo/src/molecule.mjs --preset reference --fill '#fff' --out "$OUTDIR/molecule-ref-white.svg"
+        node logo/src/lockup.mjs --mark "$OUTDIR/molecule-ref-white.svg" --fill '#fff' --out "$OUTDIR/lockup-ref-white.svg"
+        node logo/src/construction.mjs --theme dark --out "$OUTDIR/construction-ref-dark.svg"
+        for f in molecule-ref.svg molecule-ref.bounds.json lockup-ref.svg construction-ref.svg \
+                 molecule-ref-white.svg molecule-ref-white.bounds.json lockup-ref-white.svg construction-ref-dark.svg; do
           if ! cmp -s "$OUTDIR/$f" "logo/renders/molecule/$f"; then
             echo "logo/renders/molecule/$f is out of date" >&2
             stale=1
