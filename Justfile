@@ -164,6 +164,12 @@ assets input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
 assets-check:
     nix run .#assets-check
 
+# Renders the animated-gradient logo videos (Full HD MP4, light + dark) into
+# logo/renders/video/. Extra args go to logo/src/gradient.mjs, e.g.:
+#   just logo-video --variant dark --seconds 4
+logo-video *args:
+    nix run .#logo-video -- {{args}}
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     nix run .#dev
