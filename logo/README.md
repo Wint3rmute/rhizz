@@ -40,16 +40,6 @@ overlaps or gaps, so it holds up as a mask, a stamp, a favicon or a cut-out.
 Every guide in this drawing comes out of the same code that traces the mark, so
 the drawing can't drift from the logo.
 
-| Element | Rule (512-unit canvas) |
-| --- | --- |
-| **Dots** | 6 circles of radius **39.6** |
-| **Bars** | constant width **28.2**: 0.356 of a dot's diameter, no taper |
-| **Hub** | 4 bars meet at one point, with no dot there |
-| **Chains** | 2 arms continue past their first dot to a second one |
-| **Dot joints** | where a bar meets a dot, the corner is rounded with a radius of **12** |
-| **Hub notches** | where two bars meet at the hub, each corner is rounded starting a fixed **18** units from the corner, so all hub corners match |
-| **Fit** | the mark sits centred on the 512 canvas with a 24-unit margin |
-
 The rounded inside corners give the mark its organic feel. Without them, the
 same circles and bars read as a technical diagram.
 
@@ -84,14 +74,6 @@ and mint. Use it as a background, never inside the wordmark.
 
 ## Files
 
-| File | What it is | Built by |
-| --- | --- | --- |
-| `renders/molecule/molecule-ref.svg` | the mark (also copied to `web/assets/logo-mark.svg`) | `src/molecule.mjs` |
-| `renders/molecule/lockup-ref.svg` | mark + wordmark | `src/lockup.mjs` |
-| `renders/molecule/construction-ref.svg` | construction drawing | `src/construction.mjs` |
-| `renders/molecule/*-white.svg`, `construction-ref-dark.svg` | the same, for dark backgrounds | the same scripts, with `--fill '#fff'` or `--theme dark` |
-| `renders/video/rhizome-gradient-{light,dark}.mp4` | Full HD looping video of the mark with a flowing gradient (not committed) | `src/gradient.mjs` via `just logo-video` |
-
 The images on this page switch to their dark-background variants when GitHub
 is in a dark theme (`<picture>` with `prefers-color-scheme`).
 
@@ -106,3 +88,6 @@ This also regenerates the landing hero image. The font comes from nixpkgs, so
 run it through `just`/nix rather than calling the scripts directly. CI runs
 `just assets-check` and fails if a committed SVG differs from what the
 generators produce.
+
+`just logo-video` renders the Full HD gradient videos into `renders/video/`
+(not committed).
