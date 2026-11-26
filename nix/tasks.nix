@@ -384,7 +384,8 @@ let
     #   - the README/book landing hero (book/src/rhizz_landing.png), from a
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
-    #   - the logo SVGs (logo/renders/molecule/), with Roboto Bold from nixpkgs
+    #   - the logo SVGs (logo/renders/molecule/, plus the navbar's copy of the
+    #     mark at web/assets/logo-mark.svg), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
     assets = write {
       name = "assets";
@@ -402,6 +403,9 @@ let
         export ROBOTO_BOLD="${pkgs.roboto}/share/fonts/truetype/Roboto-Bold.ttf"
         npm ci --prefix logo --ignore-scripts --no-audit --no-fund
         (cd logo && npm run -s gen:mark && npm run -s gen:lockup)
+        # The web build (nix `src = ./web`) cannot see logo/, so the navbar's
+        # copy of the mark lives under web/assets.
+        cp logo/renders/molecule/molecule-ref.svg web/assets/logo-mark.svg
       '';
     };
 
@@ -445,6 +449,10 @@ let
             stale=1
           fi
         done
+        if ! cmp -s "$OUTDIR/molecule-ref.svg" web/assets/logo-mark.svg; then
+          echo "web/assets/logo-mark.svg is out of date" >&2
+          stale=1
+        fi
 
         if [ "$stale" -ne 0 ]; then
           echo "Run \`just assets\` and commit the regenerated files." >&2

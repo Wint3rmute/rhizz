@@ -16,9 +16,13 @@
   import { requestPalette } from "../commands/paletteRequest.svelte";
   import { getSettingsRequest } from "../commands/settingsRequest.svelte";
   import { paletteShortcutHint } from "./palette/commandPalette";
+  import logoMarkUrl from "../../assets/logo-mark.svg";
   import LockBadge from "./LockBadge.svelte";
   import SettingsModal from "./SettingsModal.svelte";
   import { projectLock } from "../collab/projectLock.svelte";
+
+  // Quoted so the inlined data URI cannot break the url() token.
+  const maskImage = `url("${logoMarkUrl}")`;
 
   let settingsOpen = $state(false);
 
@@ -99,8 +103,24 @@
     <div class="flex items-center gap-2 min-w-0">
       <a
         href={resolve("/projects")}
-        class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold"
+        class="btn btn-ghost btn-sm sm:btn-md text-lg sm:text-xl shrink-0 font-bold gap-2 ps-1"
       >
+        <!-- The mark is a single-colour shape used as a mask over
+             currentColor, so it follows the theme's text colour (light and
+             dark) without a second asset. -->
+        <span
+          data-testid="navbar-logo"
+          class="inline-block size-5 sm:size-6 bg-current"
+          style:mask-image={maskImage}
+          style:-webkit-mask-image={maskImage}
+          style:mask-position="center"
+          style:mask-size="contain"
+          style:mask-repeat="no-repeat"
+          style:-webkit-mask-position="center"
+          style:-webkit-mask-size="contain"
+          style:-webkit-mask-repeat="no-repeat"
+          aria-hidden="true"
+        ></span>
         Rhizz
       </a>
 

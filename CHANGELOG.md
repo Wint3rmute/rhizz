@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: show the logo mark in the navbar next to the Rhizz text
 - **logo**: esoteric concept set (tree of life, Metatron graph, seed of life, mandala, kamea sigil, natal chart)
 - **logo**: hairline concept set after the Thousand Plateaus covers
 - **logo**: second-round concepts (refined plateau/mesh, R monogram, zz network, nested systems, rhizome stem)
@@ -13,6 +14,7 @@
 
 ### Fix
 
+- **web**: apply navbar logo mask via quoted style directives
 - **ci**: parse ImageMagick 7 AE output in assets-check
 - **web**: clip modeling toolbar so it cannot overlap sidebars
 - **web**: satisfy typescript-eslint 8.74 rules
