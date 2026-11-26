@@ -29,7 +29,7 @@ let
   '';
 
   # Legacy `favicon.ico` (16/32/48 px) for browsers without SVG favicon
-  # support: the black mark on a white square, matching favicon.svg. Defines `render_favicon_ico <out.ico>`;
+  # support: the black mark on a white rounded square, matching favicon.svg. Defines `render_favicon_ico <out.ico>`;
   # shared by `assets` and `assets-check`. Root-relative paths.
   faviconIcoLib = ''
     render_favicon_ico() {
@@ -38,9 +38,13 @@ let
       tmp=$(mktemp -d)
       for s in 16 32 48; do
         inner=$((s * 84 / 100))
+        # white rounded square (radius 9.4% of the side, as the original
+        # favicon), the black mark centred on it
+        magick -size "''${s}x''${s}" xc:none -fill white \
+          -draw "roundrectangle 0,0 $((s - 1)),$((s - 1)) $((s * 94 / 1000)),$((s * 94 / 1000))" "$tmp/bg$s.png"
         magick -background none -density 1200 logo/renders/molecule/molecule-ref.svg \
-          -trim +repage -resize "''${inner}x''${inner}" \
-          -background white -gravity center -extent "''${s}x''${s}" "$tmp/$s.png"
+          -trim +repage -resize "''${inner}x''${inner}" "$tmp/mark$s.png"
+        magick "$tmp/bg$s.png" "$tmp/mark$s.png" -gravity center -composite "$tmp/$s.png"
         frames+=("$tmp/$s.png")
       done
       magick "''${frames[@]}" "$out"
