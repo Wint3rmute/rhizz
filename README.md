@@ -1,4 +1,4 @@
-# Rhizome — Rhizomatic Systems Engineering
+# Rhizome: Systems Engineering & Software Architecture Modeler
 
 Rhizome strives to be an actually useful architecture tool for software
 architects. Express high-level system concepts as code and validate them with a
