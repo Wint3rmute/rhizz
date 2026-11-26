@@ -19,8 +19,6 @@ concurrency:
 # remain.
 
 jobs:
-  # Was `rust` in the old monolithic workflow; renamed to avoid the
-  # `rust / rust` stutter now that the workflow carries the prefix.
   check:
     runs-on: ubuntu-latest
     steps:
@@ -73,10 +71,6 @@ jobs:
           determinate: false
       - uses: DeterminateSystems/magic-nix-cache-action@main
       - run: nix build .#rhizz-server
-
-# The `audit` job moved to its own workflow (audit.yml) so it can be gated on
-# Cargo.lock changes — a path filter applies to a whole workflow, not to a
-# single job, and narrowing this one would have suppressed the checks above.
 
 permissions:
   contents: read
