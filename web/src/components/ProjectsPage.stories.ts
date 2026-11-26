@@ -144,6 +144,8 @@ export const EmptyLanding: Story = {
       canvas.getByText(/Model your system architecture and verify it\./),
     ).toBeInTheDocument();
 
+    await expect(canvas.getByTestId("landing-logo")).toBeInTheDocument();
+
     await expect(
       canvas.getByRole("button", { name: /New project/ }),
     ).toBeInTheDocument();
