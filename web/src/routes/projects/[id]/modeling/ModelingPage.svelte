@@ -4066,13 +4066,8 @@
 
   $effect(() => () => stage.destroy());
 
-  // Fraction of the viewport the diagram's bounding box should fill (in
-  // whichever axis is more constraining, so it fits fully in both) when
-  // "Zoom to Fill" is used.
-  const ZOOM_TO_FILL_FRACTION = 0.95;
-
   // Zooms and pans so every currently-placed node's AND annotation's combined
-  // bounding box fills ZOOM_TO_FILL_FRACTION of the viewport, centered —
+  // bounding box fills FIT_FRACTION of the viewport (see blend.ts), centered —
   // annotations far from the node cluster are never panned out of view.
   // No-op if nothing is placed on canvas.
   function zoomToFill() {
@@ -4086,15 +4081,13 @@
     if (boxes.length === 0) return;
     const bounds = unionBox(boxes);
 
-    const zoomX = (canvas_width * ZOOM_TO_FILL_FRACTION) / bounds.width;
-    const zoomY = (canvas_height * ZOOM_TO_FILL_FRACTION) / bounds.height;
-    const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
-
-    editor_state.view.zoom = newZoom;
-    editor_state.view.x =
-      bounds.x + bounds.width / 2 - canvas_width / newZoom / 2;
-    editor_state.view.y =
-      bounds.y + bounds.height / 2 - canvas_height / newZoom / 2;
+    const fit = fitCamera(bounds, {
+      width: canvas_width,
+      height: canvas_height,
+    });
+    editor_state.view.zoom = fit.zoom;
+    editor_state.view.x = fit.x;
+    editor_state.view.y = fit.y;
   }
 
   // Auto-layout animation budget: stop once the simulation has settled

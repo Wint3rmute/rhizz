@@ -5,6 +5,7 @@ import {
   blendScenes,
   type Camera,
   easeOutCubic,
+  FIT_FRACTION,
   fitCamera,
   frameAt,
   sceneBounds,
@@ -260,9 +261,9 @@ describe("camera", () => {
       { x: 0, y: 0, width: 200, height: 100 },
       { width: 400, height: 400 },
     );
-    expect(fitted.zoom).toBeCloseTo(1.6);
-    expect(fitted.x).toBeCloseTo(100 - 400 / 1.6 / 2);
-    expect(fitted.y).toBeCloseTo(50 - 400 / 1.6 / 2);
+    expect(fitted.zoom).toBeCloseTo(FIT_FRACTION * 2);
+    expect(fitted.x).toBeCloseTo(100 - 400 / fitted.zoom / 2);
+    expect(fitted.y).toBeCloseTo(50 - 400 / fitted.zoom / 2);
   });
 
   it("lerps the camera", () => {

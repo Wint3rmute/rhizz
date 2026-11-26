@@ -5,12 +5,12 @@
     create_editor_state,
     reset_view,
   } from "../../../../ViewEditorState.svelte";
+  import { fitCamera } from "./blend";
   import type { Box } from "./geometry";
 
   let {
     stateKey = "DIAGRAM_VIEWPORT",
     bounds = null,
-    zoomToFillFraction = 0.85,
     content,
     toolbarExtra,
     // Embed views are transient shares, not an editing session: no pan/zoom
@@ -23,7 +23,6 @@
   }: {
     stateKey?: string | undefined;
     bounds?: Box | null;
-    zoomToFillFraction?: number;
     content?: Snippet;
     toolbarExtra?: Snippet;
     viewportIdentity?: string | null;
@@ -43,15 +42,13 @@
   export function zoomToFill() {
     if (!bounds || bounds.width === 0 || bounds.height === 0) return;
 
-    const zoomX = (canvas_width * zoomToFillFraction) / bounds.width;
-    const zoomY = (canvas_height * zoomToFillFraction) / bounds.height;
-    const newZoom = clamp_zoom(Math.min(zoomX, zoomY));
-
-    editor_state.view.zoom = newZoom;
-    editor_state.view.x =
-      bounds.x + bounds.width / 2 - canvas_width / newZoom / 2;
-    editor_state.view.y =
-      bounds.y + bounds.height / 2 - canvas_height / newZoom / 2;
+    const fit = fitCamera(bounds, {
+      width: canvas_width,
+      height: canvas_height,
+    });
+    editor_state.view.zoom = fit.zoom;
+    editor_state.view.x = fit.x;
+    editor_state.view.y = fit.y;
   }
 
   // Which diagram the last auto-fit framed. Compared against
