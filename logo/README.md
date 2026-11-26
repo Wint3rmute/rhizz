@@ -89,5 +89,6 @@ run it through `just`/nix rather than calling the scripts directly. CI runs
 `just assets-check` and fails if a committed SVG differs from what the
 generators produce.
 
-`just logo-video` renders the Full HD gradient videos into `renders/video/`
-(not committed).
+`just logo-video` renders the Full HD gradient videos and `just logo-intro` the
+5-second logo intro (the network sprouts and settles into the mark, then the
+wordmark appears), both into `renders/video/` (not committed).

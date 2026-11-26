@@ -170,6 +170,12 @@ assets-check:
 logo-video *args:
     nix run .#logo-video -- {{args}}
 
+# Renders the logo intro animation (Full HD MP4, 5 s, light + dark) into
+# logo/renders/video/. Extra args go to logo/src/intro.mjs, e.g.:
+#   just logo-intro --variant dark --fps 30
+logo-intro *args:
+    nix run .#logo-intro -- {{args}}
+
 # Starts a dev server. If you're an AI, never use this. It will just hang forever.
 dev: wasm
     nix run .#dev
