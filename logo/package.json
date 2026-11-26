@@ -10,6 +10,7 @@
     "gen:mark": "node src/molecule.mjs --preset reference --out renders/molecule/molecule-ref.svg && node src/molecule.mjs --preset reference --fill '#fff' --out renders/molecule/molecule-ref-white.svg",
     "gen:lockup": "node src/lockup.mjs --mark renders/molecule/molecule-ref.svg --out renders/molecule/lockup-ref.svg && node src/lockup.mjs --mark renders/molecule/molecule-ref-white.svg --fill '#fff' --out renders/molecule/lockup-ref-white.svg",
     "gen:construction": "node src/construction.mjs --out renders/molecule/construction-ref.svg && node src/construction.mjs --theme dark --out renders/molecule/construction-ref-dark.svg",
+    "gen:favicon": "node src/favicon.mjs --out ../web/static/favicon.svg",
     "gen:video": "node src/gradient.mjs --outdir renders/video",
     "gen:intro": "node src/intro.mjs --outdir renders/video"
   }
