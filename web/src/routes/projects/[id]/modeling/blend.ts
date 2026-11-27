@@ -130,6 +130,8 @@ function restingNode(
     reparentTarget: false,
     ports,
     handles: "none",
+    // A retargeted tween starts from a blended frame; its slide is over.
+    labelTween: undefined,
   };
 }
 
@@ -205,14 +207,16 @@ export function blendScenes(
         ...lerpBox(node.box, match.box, t),
         textAlign: match.box.textAlign,
       };
-      nodes.push(
-        restingNode(
-          match,
-          box,
-          1,
-          blendPorts(node.box, node.ports, match.box, match.ports, t),
-        ),
+      const blended = restingNode(
+        match,
+        box,
+        1,
+        blendPorts(node.box, node.ports, match.box, match.ports, t),
       );
+      if (node.box.textAlign !== match.box.textAlign) {
+        blended.labelTween = { from: node.box.textAlign, t };
+      }
+      nodes.push(blended);
     } else {
       nodes.push(restingNode(node, node.box, 1 - t, node.ports));
     }

@@ -41,6 +41,9 @@ export interface DiagramNode {
   handles: DiagramNodeHandles;
   /** 1 while resting. Below 1 only while a transition is fading this node. */
   opacity?: number | undefined;
+  /** Only while a transition changes `box.textAlign`: the alignment the label
+   * is leaving and the tween's progress, so the renderer can slide it. */
+  labelTween?: { from: TextAlign; t: number } | undefined;
 }
 
 export interface DiagramEdge {

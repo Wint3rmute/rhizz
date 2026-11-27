@@ -8,7 +8,11 @@
   // Icon and label placement comes from geometry.nodeLabelLayout, a pure
   // function, so the three text alignments can't drift between renderers.
   import type { ResolvedIcon } from "../../../../iconHelper";
-  import { nodeLabelLayout, type TextAlign } from "./geometry";
+  import {
+    blendLabelLayout,
+    nodeLabelLayout,
+    type TextAlign,
+  } from "./geometry";
   import {
     borderStyleToSvg,
     fontStyleToSvg,
@@ -22,6 +26,7 @@
     width,
     height,
     textAlign = "center",
+    labelTween,
     icon = null,
     color,
     border,
@@ -32,6 +37,9 @@
     width: number;
     height: number;
     textAlign?: TextAlign;
+    /** Set only mid-transition when the alignment changes: the label slides
+     * from the `from` layout to `textAlign`'s, `t` of the way there. */
+    labelTween?: { from: TextAlign; t: number } | undefined;
     /** Resolved FontAwesome glyph, or null to render the label alone. */
     icon?: ResolvedIcon | null;
     /** Model-level visuals; mapped to SVG presentation values by ./visuals. */
@@ -52,6 +60,9 @@
   // falls back to a glyph-count estimate.
   let labelEl: SVGTextElement | undefined = $state();
   let measuredLabelWidth: number | undefined = $state();
+  // Rendered label height, only used to slide the label between alignments
+  // during a transition (see blendLabelLayout).
+  let measuredLabelHeight: number | undefined = $state();
 
   $effect(() => {
     // Re-measure when the text or its font changes; these are the only
@@ -63,18 +74,52 @@
     if (!labelEl) return;
     const measured = labelEl.getComputedTextLength();
     measuredLabelWidth = measured > 0 ? measured : undefined;
+    const height = labelHeight(labelEl);
+    measuredLabelHeight = height > 0 ? height : undefined;
   });
 
-  let layout = $derived(
-    nodeLabelLayout(
+  // getBBox throws while the node is display:none; report 0 (unmeasured).
+  function labelHeight(el: SVGTextElement): number {
+    try {
+      return el.getBBox().height;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Fallbacks before the label has been measured: the glyph-count width
+  // estimate nodeLabelLayout uses, and a typical line height.
+  const LABEL_GLYPH_WIDTH = 7.5;
+  const LABEL_LINE_HEIGHT = 16;
+
+  let layout = $derived.by(() => {
+    const resting = nodeLabelLayout(
       textAlign,
       label,
       width,
       height,
       icon !== null,
       measuredLabelWidth,
-    ),
-  );
+    );
+    if (!labelTween || labelTween.from === textAlign) return resting;
+    const leaving = nodeLabelLayout(
+      labelTween.from,
+      label,
+      width,
+      height,
+      icon !== null,
+      measuredLabelWidth,
+    );
+    return blendLabelLayout(
+      leaving,
+      resting,
+      {
+        width: measuredLabelWidth ?? label.length * LABEL_GLYPH_WIDTH,
+        height: measuredLabelHeight ?? LABEL_LINE_HEIGHT,
+      },
+      labelTween.t,
+    );
+  });
   let iconBox = $derived(layout.icon);
   let outline = $derived(selectionOutlineRect(width, height));
 </script>

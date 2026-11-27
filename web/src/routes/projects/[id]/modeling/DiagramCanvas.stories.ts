@@ -485,3 +485,53 @@ export const PortFadeRidesEdgeTween: Story = {
     await expect(byLabel.get("arriving")).toBe("0.75");
   },
 };
+
+// A node whose text alignment changes between views slides its label from
+// the old placement to the new one instead of jumping at the start of the
+// tween. Frozen halfway from "center" to "top-left" on a 200×100 box.
+const labelSlideScene: DiagramScene = {
+  nodes: [
+    {
+      id: "sys/fc",
+      index: 0,
+      label: "Flight controller",
+      box: { x: 0, y: 0, width: 200, height: 100, textAlign: "top-left" },
+      selected: false,
+      dimmed: false,
+      reparentTarget: false,
+      ports: [],
+      handles: "none",
+      labelTween: { from: "center", t: 0.5 },
+    },
+  ],
+  edges: [],
+  notes: [],
+  overlays: [],
+};
+
+export const LabelSlidesBetweenAlignments: Story = {
+  args: { scene: labelSlideScene },
+  play: async ({ canvasElement }) => {
+    const text = canvasElement.querySelector<SVGTextElement>(
+      "[data-testid=diagram-node] text",
+    );
+    if (!text) throw new Error("node label not rendered");
+    // Drawn in the target's anchor/baseline the whole way, so it stays put
+    // when the resting scene takes over at t = 1.
+    await expect(text.getAttribute("text-anchor")).toBe("start");
+    await expect(text.getAttribute("dominant-baseline")).toBe("hanging");
+    // Halfway between the centered label's top-left corner and (8, 8).
+    const width = text.getComputedTextLength();
+    const height = text.getBBox().height;
+    const centeredX = 100 - width / 2;
+    const centeredY = 50 - height / 2;
+    await expect(Number(text.getAttribute("x"))).toBeCloseTo(
+      (centeredX + 8) / 2,
+      1,
+    );
+    await expect(Number(text.getAttribute("y"))).toBeCloseTo(
+      (centeredY + 8) / 2,
+      1,
+    );
+  },
+};

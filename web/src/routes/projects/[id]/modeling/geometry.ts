@@ -495,6 +495,59 @@ export function nodeLabelLayout(
   }
 }
 
+// Share of the label's width left of its x (text-anchor) and of its height
+// above its y (dominant-baseline), for the values textPosition and
+// nodeLabelLayout produce.
+const ANCHOR_SHARE: Record<string, number> = { start: 0, middle: 0.5, end: 1 };
+const BASELINE_SHARE: Record<string, number> = { hanging: 0, middle: 0.5 };
+
+function lerpNumber(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+/**
+ * Mixes two label layouts of one node for a diagram transition, so a label
+ * whose text alignment changes slides instead of jumping. text-anchor and
+ * dominant-baseline cannot be interpolated, so the source placement is
+ * re-expressed in the target's anchor and baseline (using the label's
+ * rendered size) and only x/y move. At t = 1 the result is exactly `to`, so
+ * the label does not shift when the tween hands over to the resting scene.
+ * The icon slides and resizes when both layouts have one; otherwise the
+ * target's icon is used as is.
+ */
+export function blendLabelLayout(
+  from: NodeLabelLayout,
+  to: NodeLabelLayout,
+  labelSize: { width: number; height: number },
+  t: number,
+): NodeLabelLayout {
+  if (t >= 1) return to;
+  const shiftX = (anchor: string) =>
+    (ANCHOR_SHARE[anchor] ?? 0) * labelSize.width;
+  const shiftY = (baseline: string) =>
+    (BASELINE_SHARE[baseline] ?? 0) * labelSize.height;
+  const fromX = from.text.x - shiftX(from.text.anchor) + shiftX(to.text.anchor);
+  const fromY =
+    from.text.y - shiftY(from.text.baseline) + shiftY(to.text.baseline);
+  const icon =
+    from.icon && to.icon
+      ? {
+          x: lerpNumber(from.icon.x, to.icon.x, t),
+          y: lerpNumber(from.icon.y, to.icon.y, t),
+          size: lerpNumber(from.icon.size, to.icon.size, t),
+        }
+      : to.icon;
+  return {
+    icon,
+    text: {
+      x: lerpNumber(fromX, to.text.x, t),
+      y: lerpNumber(fromY, to.text.y, t),
+      anchor: to.text.anchor,
+      baseline: to.text.baseline,
+    },
+  };
+}
+
 // Returns the midpoint of the side of `box` facing `towards`, for the
 // given orientation: the box's left/right-centre if horizontal, or its
 // top/bottom-centre if vertical. Both endpoints of a connection are always

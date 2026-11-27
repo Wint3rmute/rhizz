@@ -290,6 +290,7 @@
       width={node.box.width}
       height={node.box.height}
       textAlign={node.box.textAlign}
+      labelTween={node.labelTween}
       icon={resolveIcon(node.icon)}
       color={node.color}
       border={node.border}
