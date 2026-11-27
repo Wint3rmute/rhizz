@@ -82,7 +82,9 @@ const PORTS = {
   2: [{ label: "i2c", role: "provider" as const, protocol: "i2c" }],
 };
 
+// Behaviour only: the Modeling page and tour baselines already show port rows.
 export const PortRows: Story = {
+  tags: ["no-vrt"],
   args: {
     // fc and mcu placed; imu not.
     isChecked: (index: number) => index !== 2,
