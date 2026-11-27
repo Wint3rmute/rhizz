@@ -50,6 +50,14 @@ The user either gives you a direct request or asks you to work on a task from
    and report that you are finished.
 6. Before pushing, refresh the changelog (see [Before pushing](#before-pushing)).
 
+### After opening a PR
+
+Always watch it, without asking the user first: right after creating a PR, call
+`subscribe_pr_activity` for it and drive it to green. Fix failing CI and
+address review comments as described in `.claude/skills/steward/SKILL.md`.
+This overrides any default of asking whether to watch. Merging still needs an
+explicit ask from the user.
+
 ### Before pushing
 
 CI fails any PR whose `CHANGELOG.md` differs from what `cz changelog` generates
