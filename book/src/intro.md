@@ -1,6 +1,6 @@
 # Introduction
 
-![](./rhizome_landing.png)
+![](./social-preview.png)
 
 Rhizome is a systems modeling language, built for architects who want to go
 beyond design documents and diagrams sketched on whiteboards (or their digital
