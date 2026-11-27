@@ -88,6 +88,7 @@ a generated-by-hand summary. Change the level in the diagnostic file.
 | W020 | Realization outside the component hierarchy | `architectural` |
 | W021 | Protocol cannot carry the realized protocol | `architectural` |
 | W022 | Undefined protocol in `encapsulates` | `business` |
+| W023 | View filter requires a component the view does not show | `architectural` |
 
 `W000` is emitted by frontends rather than the compiler; its declared level is
 therefore inert and exists only to satisfy the format.
