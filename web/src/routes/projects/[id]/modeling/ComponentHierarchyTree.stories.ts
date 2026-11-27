@@ -69,9 +69,10 @@ export const Default: Story = {
   },
 };
 
-// Ports per component, grouped under a collapsed "Ports (n)" row. Each port
-// row's checkbox shows/hides the port in the open view: a port a drawn
-// connection uses is locked on, ports of an unplaced component are disabled.
+// Ports listed under their component, after its subcomponents: a role dot,
+// a smaller muted label and an eye toggle that shows/hides the port in the
+// open view. A port a drawn connection uses is locked on; ports of an
+// unplaced component are disabled.
 const PORTS = {
   0: [
     { label: "uart", role: "provider" as const, protocol: "serial" },
@@ -97,22 +98,19 @@ export const PortRows: Story = {
   play: async ({ canvasElement, args }) => {
     const canvas = within(canvasElement);
 
-    // Groups start collapsed: only the 3 component checkboxes render.
+    // Port toggles are buttons, not checkboxes: only the 3 component rows
+    // carry a placement checkbox.
     await expect(canvas.getAllByRole("checkbox")).toHaveLength(3);
-    await expect(canvas.getByText("Ports (2)")).toBeInTheDocument();
 
-    await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
-    const uart = canvas.getByRole("checkbox", { name: "Show port uart" });
-    const debug = canvas.getByRole("checkbox", { name: "Show port debug" });
-    const spi = canvas.getByRole("checkbox", { name: "Show port spi" });
-    const i2c = canvas.getByRole("checkbox", { name: "Show port i2c" });
-    await expect(uart).toBeChecked();
-    await expect(uart).toBeDisabled();
-    await expect(spi).toBeChecked();
-    await expect(debug).not.toBeChecked();
-    await expect(i2c).toBeDisabled();
+    const toggle = (label: string) =>
+      canvas.getByRole("button", { name: `Show port ${label}` });
+    await expect(toggle("uart")).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle("uart")).toBeDisabled();
+    await expect(toggle("spi")).toHaveAttribute("aria-pressed", "true");
+    await expect(toggle("debug")).toHaveAttribute("aria-pressed", "false");
+    await expect(toggle("i2c")).toBeDisabled();
 
-    await userEvent.click(debug);
+    await userEvent.click(toggle("debug"));
     await expect(args.onTogglePort).toHaveBeenLastCalledWith(0, "debug");
 
     // A port's label selects the component that owns it.

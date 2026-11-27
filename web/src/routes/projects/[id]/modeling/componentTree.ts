@@ -69,11 +69,6 @@ export type PortsOf = (index: number) => readonly string[];
 
 const PORT_ROW_PREFIX = "port:";
 
-/** Tree id of the "Ports (n)" group row of the component at `index`. */
-export function portGroupId(index: number): string {
-  return `ports:${String(index)}`;
-}
-
 /** Tree id of the row for port `label` on the component at `index`. */
 export function portRowId(index: number, label: string): string {
   return `${PORT_ROW_PREFIX}${String(index)}:${label}`;
@@ -180,25 +175,20 @@ export function buildComponentTree(
     }
   });
 
-  // Pass 3 — a component's declared ports become leaf rows, grouped under a
-  // collapsed "Ports (n)" row after its subcomponents, so the tree can toggle
-  // their visibility per view without crowding the hierarchy.
+  // Pass 3 — a component's declared ports become leaf rows after its
+  // subcomponents (styled apart by the renderer), so the tree can toggle
+  // their visibility per view.
   if (portsOf !== undefined) {
     componentNodeByIndex.forEach((node, index) => {
-      const labels = portsOf(index);
-      if (labels.length === 0) return;
-      node.children.push({
-        id: portGroupId(index),
-        name: `Ports (${String(labels.length)})`,
-        isExpandable: true,
-        initiallyCollapsed: true,
-        children: labels.map((label) => ({
+      for (const label of portsOf(index)) {
+        node.children.push({
           id: portRowId(index, label),
           name: label,
           isExpandable: false,
+          labelClass: "text-xs text-base-content/70",
           children: [],
-        })),
-      });
+        });
+      }
     });
   }
 

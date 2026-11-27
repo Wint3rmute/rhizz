@@ -46,49 +46,40 @@
   } = $props();
 
   // Expand/collapse is purely visual state, mutated in place (a SvelteSet,
-  // not a rebuilt one) so per-node open/close reacts naturally. It records
-  // the rows the user flipped away from their default (expanded, or folded
-  // for `initiallyCollapsed` nodes), so a rebuilt tree keeps their choices.
-  const flippedIds = new SvelteSet<string>();
+  // not a rebuilt one) so per-node open/close reacts naturally.
+  const collapsedIds = new SvelteSet<string>();
 
-  function isCollapsed(entry: TreeNode): boolean {
-    return (entry.initiallyCollapsed === true) !== flippedIds.has(entry.id);
+  function toggleCollapsed(id: string) {
+    if (collapsedIds.has(id)) collapsedIds.delete(id);
+    else collapsedIds.add(id);
   }
 
-  function setCollapsed(entry: TreeNode, collapsed: boolean) {
-    if (collapsed === (entry.initiallyCollapsed === true)) {
-      flippedIds.delete(entry.id);
-    } else {
-      flippedIds.add(entry.id);
-    }
-  }
-
-  // Every expandable node in the tree, for the collapse-all/expand-all
+  // Every expandable node id in the tree, for the collapse-all/expand-all
   // buttons. Purely derived from the input tree, so the buttons only appear
   // when there's actually something to collapse/expand.
-  let expandableNodes = $derived.by(() => {
-    const collect = (entries: TreeNode[], acc: TreeNode[]) => {
+  let expandableIds = $derived.by(() => {
+    const collect = (entries: TreeNode[], acc: string[]) => {
       for (const entry of entries) {
-        if (entry.isExpandable) acc.push(entry);
+        if (entry.isExpandable) acc.push(entry.id);
         collect(entry.children, acc);
       }
     };
-    const acc: TreeNode[] = [];
+    const acc: string[] = [];
     collect(nodes, acc);
     return acc;
   });
 
   function collapseAll() {
-    for (const entry of expandableNodes) setCollapsed(entry, true);
+    for (const id of expandableIds) collapsedIds.add(id);
   }
 
   function expandAll() {
-    for (const entry of expandableNodes) setCollapsed(entry, false);
+    collapsedIds.clear();
   }
 </script>
 
 {#snippet node(entry: TreeNode, depth: number)}
-  {@const collapsed = isCollapsed(entry)}
+  {@const collapsed = collapsedIds.has(entry.id)}
   <li>
     <div
       class="flex items-center gap-1 group/row rounded hover:bg-base-200 {rowClass}"
@@ -96,7 +87,7 @@
       {#if entry.isExpandable}
         <button
           class="w-4 shrink-0 text-xs text-base-content/60"
-          onclick={() => setCollapsed(entry, !collapsed)}
+          onclick={() => toggleCollapsed(entry.id)}
           title={collapsed ? "Expand" : "Collapse"}
           >{collapsed ? "▸" : "▾"}</button
         >
@@ -111,7 +102,7 @@
       <button
         class="flex-1 truncate text-left text-sm {selectedId === entry.id
           ? 'font-semibold text-primary'
-          : ''}"
+          : ''} {entry.labelClass ?? ''}"
         aria-current={selectedId === entry.id ? "true" : undefined}
         onclick={() => {
           selectedId = entry.id;
@@ -146,13 +137,13 @@
       <button
         class="btn btn-ghost btn-xs"
         onclick={collapseAll}
-        disabled={expandableNodes.length === 0}
+        disabled={expandableIds.length === 0}
         title="Collapse every expandable node">Collapse all</button
       >
       <button
         class="btn btn-ghost btn-xs"
         onclick={expandAll}
-        disabled={expandableNodes.length === 0}
+        disabled={expandableIds.length === 0}
         title="Expand every expandable node">Expand all</button
       >
     </div>

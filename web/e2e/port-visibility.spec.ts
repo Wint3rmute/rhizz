@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { createNewProject, replaceModel } from "./helpers";
 
 // Unconnected ports can be shown per view from the Components tree, e.g. to
@@ -35,14 +35,6 @@ system "demo" {
 }
 `;
 
-async function expandPorts(tree: Locator, count: number): Promise<void> {
-  const group = tree
-    .getByRole("button", { name: `Ports (${String(count)})`, exact: true })
-    .first()
-    .locator("xpath=parent::*");
-  await group.getByTitle("Expand").click();
-}
-
 test("shows an unconnected port in the view from the Components tree", async ({
   page,
 }) => {
@@ -64,15 +56,15 @@ test("shows an unconnected port in the view from the Components tree", async ({
   await expect(canvas.getByText("bus", { exact: true })).toBeVisible();
   await expect(canvas.getByText("api", { exact: true })).toHaveCount(0);
 
-  await expandPorts(tree, 3);
-  const api = tree.getByRole("checkbox", { name: "Show port api" });
-  const bus = tree.getByRole("checkbox", { name: "Show port bus" });
-  await expect(api).not.toBeChecked();
+  // Ports are listed under their component with an eye toggle.
+  const api = tree.getByRole("button", { name: "Show port api" });
+  const bus = tree.getByRole("button", { name: "Show port bus" });
+  await expect(api).toHaveAttribute("aria-pressed", "false");
   // A port a drawn connection uses is always shown: locked on.
-  await expect(bus).toBeChecked();
+  await expect(bus).toHaveAttribute("aria-pressed", "true");
   await expect(bus).toBeDisabled();
 
-  await api.check();
+  await api.click();
   await expect(canvas.getByText("api", { exact: true })).toBeVisible();
   await expect(canvas.getByText("debug", { exact: true })).toHaveCount(0);
 
@@ -85,8 +77,7 @@ test("shows an unconnected port in the view from the Components tree", async ({
     })
     .toBe(1);
 
-  await expandPorts(tree, 3);
-  await tree.getByRole("checkbox", { name: "Show port api" }).uncheck();
+  await tree.getByRole("button", { name: "Show port api" }).click();
   await expect(canvas.getByText("api", { exact: true })).toHaveCount(0);
 });
 

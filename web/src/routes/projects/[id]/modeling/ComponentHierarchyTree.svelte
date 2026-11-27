@@ -8,10 +8,11 @@
   //   - a label that selects the node (drives the canvas highlight +
   //     NodeInspector, all driven by ModelingPage's selection),
   //   - a component icon when one is provided.
-  // Below a component (after its subcomponents) come its declared ports, each
-  // with a checkbox showing/hiding it in the open view — so an unconnected
-  // port (e.g. a public interface) can be drawn. Clicking a port's label
-  // selects its component.
+  // Below a component (after its subcomponents) come its declared ports:
+  // a role-coloured dot, a smaller muted label, and an eye toggle that
+  // shows/hides the port in the open view — so an unconnected port (e.g. a
+  // public interface) can be drawn. Clicking a port's label selects its
+  // component.
   // It does no I/O and owns no model state — everything is passed in, so all
   // readProjectSources/compile/write logic stays in ModelingPage.svelte.
   import Tree from "../../../../components/Tree.svelte";
@@ -140,18 +141,34 @@
 {#snippet portLeading(index: number, label: string)}
   {@const state = portState?.(index, label) ?? "hidden"}
   {@const port = portsOf?.(index).find((entry) => entry.label === label)}
-  <input
-    type="checkbox"
-    class="checkbox checkbox-xs shrink-0"
+  {@const on = state === "connected" || state === "shown"}
+  {@const icon = resolveIcon(on ? "eye" : "eye-slash")}
+  <!-- An eye toggle, not a checkbox: sets port rows apart from subcomponent
+       rows, whose checkbox places them on the canvas. -->
+  <button
+    type="button"
+    class="btn btn-ghost btn-xs btn-square h-4 min-h-0 w-4 shrink-0 {on
+      ? 'text-base-content/80'
+      : 'text-base-content/30'}"
     data-testid="port-visibility"
     aria-label={`Show port ${label}`}
+    aria-pressed={on}
     title={PORT_TITLE[state]}
-    checked={state === "connected" || state === "shown"}
     disabled={onTogglePort === undefined ||
       state === "unplaced" ||
       state === "connected"}
-    onchange={() => onTogglePort?.(index, label)}
-  />
+    onclick={() => onTogglePort?.(index, label)}
+  >
+    {#if icon}
+      <svg
+        viewBox={`0 0 ${icon.width} ${icon.height}`}
+        class="w-3 h-3 fill-current"
+        aria-hidden="true"
+      >
+        <path d={icon.svgPath} />
+      </svg>
+    {/if}
+  </button>
   <span
     class="status shrink-0 {PORT_STATUS[port?.role ?? 'peer']}"
     title={`${port?.role ?? "peer"}, ${port?.protocol || "untyped"}`}
