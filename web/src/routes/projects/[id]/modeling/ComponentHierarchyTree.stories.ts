@@ -110,6 +110,11 @@ export const PortRows: Story = {
     await expect(toggle("debug")).toHaveAttribute("aria-pressed", "false");
     await expect(toggle("i2c")).toBeDisabled();
 
+    // Hovering a port's role dot says it is a port.
+    await expect(
+      canvas.getByTitle("Port uart (provider, serial)"),
+    ).toHaveAttribute("data-testid", "port-role-dot");
+
     await userEvent.click(toggle("debug"));
     await expect(args.onTogglePort).toHaveBeenLastCalledWith(0, "debug");
 
