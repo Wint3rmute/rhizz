@@ -75,7 +75,9 @@ test("a duplicate connection name is refused in the dialog", async ({
   // The tree panel selects nodes by row click (canvas clicks hit the
   // topmost of the stacked nodes, so it cannot address each one).
   const treeRow = (name: string) =>
-    page.getByTestId("modeling-pane-right").getByRole("button", { name });
+    page
+      .getByTestId("modeling-pane-right")
+      .getByRole("button", { name, exact: true });
 
   async function nodeCenter(name: string): Promise<{ x: number; y: number }> {
     const box = await canvas

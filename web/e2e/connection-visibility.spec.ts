@@ -35,7 +35,9 @@ test("hiding a connection removes it from the canvas and survives reload", async
 
   const canvas = page.getByTestId("diagram-canvas");
   const treeRow = (name: string) =>
-    page.getByTestId("modeling-pane-right").getByRole("button", { name });
+    page
+      .getByTestId("modeling-pane-right")
+      .getByRole("button", { name, exact: true });
 
   async function nodeCenter(name: string): Promise<{ x: number; y: number }> {
     const box = await canvas
@@ -219,7 +221,9 @@ test("Delete on a selected connection hides it instead of removing it", async ({
 
   const canvas = page.getByTestId("diagram-canvas");
   const treeRow = (name: string) =>
-    page.getByTestId("modeling-pane-right").getByRole("button", { name });
+    page
+      .getByTestId("modeling-pane-right")
+      .getByRole("button", { name, exact: true });
 
   async function nodeCenter(name: string): Promise<{ x: number; y: number }> {
     const box = await canvas
