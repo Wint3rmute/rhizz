@@ -62,6 +62,10 @@ def parse_args():
                    help="fog density (default: 0.014 for dark, 0 for blueprint)")
     p.add_argument("--glitch", type=float, default=1.0,
                    help="strength of the digital glitch pass (dark style), 0 disables")
+    p.add_argument("--frames", type=int, default=1,
+                   help="render an animation of N frames; --out is then a directory")
+    p.add_argument("--part", default="0/1",
+                   help="i/n: render only every n-th frame starting at i (parallel jobs)")
     p.add_argument("--seed", type=int, default=7, help="seed for the wreckage and worn-paper pass")
     return p.parse_args(argv)
 
@@ -445,12 +449,46 @@ def main():
     w, h = (int(v) for v in args.res.split("x"))
     scene.render.resolution_x, scene.render.resolution_y = w, h
     scene.render.resolution_percentage = args.percent
-    scene.render.filepath = args.out
+    if args.frames <= 1:
+        render_frame(scene, args, args.out, frame=0)
+        return
+
+    # Animation: slow push-in with a slight orbit around the lockup.
+    os.makedirs(args.out, exist_ok=True)
+    start, end = Vector((-1.25, -7.6, -3.05)), Vector((-0.3, -6.3, -2.45))
+    aim0, aim1 = Vector((-0.5, 0, 0.2)), Vector((-0.2, 0, 0.3))
+    part, parts = (int(v) for v in args.part.split("/"))
+    for f in range(args.frames):
+        if f % parts != part:
+            continue
+        t = f / max(1, args.frames - 1)
+        e = t * t * (3 - 2 * t)  # ease in-out
+        cam.location = start.lerp(end, e)
+        aim = aim0.lerp(aim1, e)
+        cam.rotation_euler = (aim - cam.location).to_track_quat("-Z", "Y").to_euler()
+        scene.frame_set(f + 1)
+        render_frame(scene, args, os.path.join(args.out, f"frame_{f:04d}.png"), frame=f)
+
+
+def render_frame(scene, args, path, frame):
+    scene.render.filepath = path
     bpy.ops.render.render(write_still=True)
-    if args.style == "dark":
-        worn(args.out, args.seed)
-        if args.glitch > 0:
-            glitch(args.out, args.seed, args.glitch)
+    if args.style != "dark":
+        return
+    worn(path, args.seed, frame)
+    if args.glitch > 0:
+        strength = args.glitch
+        if args.frames > 1:
+            # Mostly calm with occasional bursts.
+            burst = random_unit(args.seed, frame)
+            strength *= 1.4 if burst > 0.88 else (0.15 + 0.35 * burst)
+        glitch(path, args.seed + 7919 * frame, strength)
+
+
+def random_unit(seed, frame):
+    import random
+
+    return random.Random(seed * 100003 + frame).random()
 
 
 def _upsample(a, h, w):
@@ -483,7 +521,7 @@ def _fbm(rng, h, w, base, octaves=4):
     return out / total
 
 
-def worn(path, seed):
+def worn(path, seed, frame=0):
     """Photocopied, stained, used-up look: grayscale, toner dropout in the
     lines, blotchy stains, grain, dust, scratches and a vignette."""
     import numpy as np
@@ -507,9 +545,11 @@ def worn(path, seed):
     lum += ring * 0.05
 
     # Grain and dust specks.
-    lum += rng.normal(0, 0.035, (h, w))
-    specks = rng.random((h, w)) > 0.9993
-    lum[specks] = rng.uniform(0.5, 1.0, specks.sum())
+    # Grain and dust change every frame; stains and scratches stay put.
+    live = np.random.default_rng(seed * 7 + 1000 * frame + 1)
+    lum += live.normal(0, 0.035, (h, w))
+    specks = live.random((h, w)) > 0.9993
+    lum[specks] = live.uniform(0.5, 1.0, specks.sum())
 
     # Long hairline scratches and a few heavier ones.
     for _ in range(int(14 * w / 1920) + 6):
