@@ -736,8 +736,15 @@ fn serialize_node_layout(out: &mut String, node: &NodeLayout) {
     for port in sorted_ports {
         out.push('\n');
         let _ = writeln!(out, "    port {} {{", escape_string(&port.port));
-        let _ = writeln!(out, "      side   = {}", escape_string(port.side.as_str()));
-        let _ = writeln!(out, "      offset = {}", format_number(port.offset));
+        // Align `=` with the longest key present, as for other blocks.
+        let pad = if port.visible { " " } else { "" };
+        if let Some(side) = port.side {
+            let _ = writeln!(out, "      side   {pad}= {}", escape_string(side.as_str()));
+            let _ = writeln!(out, "      offset {pad}= {}", format_number(port.offset));
+        }
+        if port.visible {
+            let _ = writeln!(out, "      visible = true");
+        }
         out.push_str("    }\n");
     }
     out.push_str("  }\n");
@@ -820,6 +827,7 @@ struct RawConnectionLayoutAttrs {
 struct RawPortLayoutAttrs {
     side: Option<String>,
     offset: Option<f64>,
+    visible: Option<bool>,
 }
 
 #[derive(Deserialize, Default)]
@@ -842,8 +850,8 @@ fn parse_side(s: Option<&str>) -> Option<ConnectionSide> {
 }
 
 /// Parses nested `port` blocks of a view `node` block into [`PortLayout`]s.
-/// Unknown sides are skipped, so a newer side value round-trips as absent
-/// rather than failing the whole view.
+/// Unknown sides are treated as absent, so a newer side value round-trips as
+/// the role default rather than failing the whole view.
 fn parse_port_layouts(body: &hcl::Body) -> anyhow::Result<Vec<PortLayout>> {
     let mut ports = Vec::new();
     for port_block in body.blocks() {
@@ -859,11 +867,16 @@ fn parse_port_layouts(body: &hcl::Body) -> anyhow::Result<Vec<PortLayout>> {
             port_block.body(),
             "failed to deserialize port layout attributes",
         )?;
-        if let Some(side) = parse_side(pa.side.as_deref()) {
+        let side = parse_side(pa.side.as_deref());
+        let visible = pa.visible.unwrap_or(false);
+        // A block that neither pins a spot nor shows the port carries no
+        // information; drop it so it round-trips as absent.
+        if side.is_some() || visible {
             ports.push(PortLayout {
                 port: port_label,
                 side,
                 offset: pa.offset.unwrap_or(0.5).clamp(0.0, 1.0),
+                visible,
             });
         }
     }
@@ -1821,13 +1834,67 @@ system "apollo" {
         assert_eq!(node.component, "fc");
         assert_eq!(node.ports.len(), 2);
         assert_eq!(node.ports[0].port, "in");
-        assert_eq!(node.ports[0].side, crate::model::ConnectionSide::Left);
+        assert_eq!(node.ports[0].side, Some(crate::model::ConnectionSide::Left));
         assert!((node.ports[0].offset - 0.25).abs() < f64::EPSILON);
         let serialized1 = serialize_views(&parsed1);
         assert_eq!(serialized1, hcl);
 
         let parsed2 = parse_views(&serialized1).expect("should parse serialized views");
         assert_eq!(parsed1, parsed2);
+    }
+
+    #[test]
+    fn port_visibility_round_trips_through_views_hcl() {
+        let hcl = r#"view "overview" {
+  system      = "s"
+
+  node "fc" {
+    x          = 100
+    y          = 200
+
+    port "debug" {
+      visible = true
+    }
+
+    port "out" {
+      side    = "right"
+      offset  = 0.75
+      visible = true
+    }
+  }
+}
+"#;
+
+        let parsed1 = parse_views(hcl).expect("should parse views HCL with visible ports");
+        let node = &parsed1[0].nodes[0];
+        assert_eq!(node.ports.len(), 2);
+        assert_eq!(node.ports[0].port, "debug");
+        assert_eq!(node.ports[0].side, None);
+        assert!(node.ports[0].visible);
+        assert_eq!(
+            node.ports[1].side,
+            Some(crate::model::ConnectionSide::Right)
+        );
+        assert!(node.ports[1].visible);
+        let serialized1 = serialize_views(&parsed1);
+        assert_eq!(serialized1, hcl);
+        assert_eq!(parse_views(&serialized1).expect("reparse"), parsed1);
+    }
+
+    #[test]
+    fn port_block_without_side_or_visibility_is_dropped() {
+        let hcl = r#"view "main" {
+  system = "s"
+  node "a" {
+    x = 1
+    y = 2
+    port "p" {
+      visible = false
+    }
+  }
+}"#;
+        let parsed = parse_views(hcl).expect("should parse");
+        assert_eq!(parsed[0].nodes[0].ports, vec![]);
     }
 
     #[test]

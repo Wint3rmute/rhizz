@@ -17,8 +17,15 @@ export interface NodeLayout {
   width?: number;
   height?: number;
   text_align?: string;
-  /** Per-view port outline spots. Empty/absent means role defaults apply. */
-  ports?: { port: string; side: string; offset: number }[];
+  /** Per-view port presentation: an outline spot (`side` + `offset`; absent
+   * side means the role default applies) and/or `visible`, which shows the
+   * port even when no drawn connection names it. */
+  ports?: {
+    port: string;
+    side?: string | null;
+    offset?: number;
+    visible?: boolean;
+  }[];
 }
 
 export interface ConnectionLayout {

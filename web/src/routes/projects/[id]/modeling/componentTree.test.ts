@@ -4,6 +4,9 @@ import {
   buildComponentTree,
   buildSystemSubtree,
   componentInSystem,
+  parsePortRowId,
+  portGroupId,
+  portRowId,
   type ComponentTreeComponent,
   type ComponentTreeSystem,
   systemIndexOfComponent,
@@ -176,5 +179,80 @@ describe("buildSystemSubtree", () => {
 
   it("returns empty for an unknown system", () => {
     expect(buildSystemSubtree([sys("a")], [], "missing")).toEqual([]);
+  });
+});
+
+describe("port rows", () => {
+  const portsOf = (index: number) => (index === 0 ? ["out", "in"] : []);
+
+  it("groups a component's ports under a collapsed row after its subcomponents", () => {
+    const tree = buildComponentTree(
+      [sys("s")],
+      [
+        comp("big", { parent_system_index: 0 }),
+        comp("child", { parent_component_index: 0 }),
+      ],
+      portsOf,
+    );
+    expect(shape(tree)[0]?.children).toEqual([
+      {
+        id: "0",
+        isExpandable: true,
+        children: [
+          { id: "1", isExpandable: false, children: [] },
+          {
+            id: portGroupId(0),
+            isExpandable: true,
+            children: [
+              { id: portRowId(0, "out"), isExpandable: false, children: [] },
+              { id: portRowId(0, "in"), isExpandable: false, children: [] },
+            ],
+          },
+        ],
+      },
+    ]);
+    const group = tree[0]?.children[0]?.children[1];
+    expect(group?.name).toBe("Ports (2)");
+    expect(group?.initiallyCollapsed).toBe(true);
+    expect(group?.children[0]?.name).toBe("out");
+  });
+
+  it("adds no group to a component without ports", () => {
+    const tree = buildComponentTree(
+      [sys("s")],
+      [
+        comp("a", { parent_system_index: 0 }),
+        comp("b", { parent_system_index: 0 }),
+      ],
+      portsOf,
+    );
+    expect(shape(tree)[0]?.children[1]).toEqual({
+      id: "1",
+      isExpandable: false,
+      children: [],
+    });
+  });
+
+  it("carries port rows into a system subtree", () => {
+    const tree = buildSystemSubtree(
+      [sys("s")],
+      [comp("big", { parent_system_index: 0 })],
+      "s",
+      portsOf,
+    );
+    expect(tree[0]?.children[0]?.children.map((n) => n.id)).toEqual([
+      portRowId(0, "out"),
+      portRowId(0, "in"),
+    ]);
+  });
+
+  it("round-trips row ids, including labels with separators", () => {
+    expect(parsePortRowId(portRowId(3, "B/in:x"))).toEqual({
+      index: 3,
+      label: "B/in:x",
+    });
+    expect(parsePortRowId("3")).toBeNull();
+    expect(parsePortRowId("sys:0")).toBeNull();
+    expect(parsePortRowId(portGroupId(3))).toBeNull();
   });
 });

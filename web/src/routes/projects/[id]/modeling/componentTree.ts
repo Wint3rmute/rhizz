@@ -64,6 +64,34 @@ export function componentInSystem(
   return systemIndexOfComponent(components, index) === systemIndex;
 }
 
+/** Labels of the ports declared on the component at an arena index. */
+export type PortsOf = (index: number) => readonly string[];
+
+const PORT_ROW_PREFIX = "port:";
+
+/** Tree id of the "Ports (n)" group row of the component at `index`. */
+export function portGroupId(index: number): string {
+  return `ports:${String(index)}`;
+}
+
+/** Tree id of the row for port `label` on the component at `index`. */
+export function portRowId(index: number, label: string): string {
+  return `${PORT_ROW_PREFIX}${String(index)}:${label}`;
+}
+
+/** Inverse of {@link portRowId}; `null` for component and system rows. */
+export function parsePortRowId(
+  id: string,
+): { index: number; label: string } | null {
+  if (!id.startsWith(PORT_ROW_PREFIX)) return null;
+  const rest = id.slice(PORT_ROW_PREFIX.length);
+  const colon = rest.indexOf(":");
+  if (colon === -1) return null;
+  const index = Number(rest.slice(0, colon));
+  if (!Number.isInteger(index)) return null;
+  return { index, label: rest.slice(colon + 1) };
+}
+
 /**
  * Builds the `TreeNode[]` for a single system only, hiding the system root
  * itself — returns its top-level components (and their subtrees) as roots.
@@ -73,11 +101,12 @@ export function buildSystemSubtree(
   systems: ComponentTreeSystem[],
   components: ComponentTreeComponent[],
   systemLabel: string,
+  portsOf?: PortsOf,
 ): TreeNode[] {
   const systemIndex = systems.findIndex((s) => s.label === systemLabel);
   if (systemIndex === -1) return [];
   return (
-    buildComponentTree(systems, components).find(
+    buildComponentTree(systems, components, portsOf).find(
       (n) => n.id === `sys:${String(systemIndex)}`,
     )?.children ?? []
   );
@@ -101,6 +130,7 @@ export function buildSystemSubtree(
 export function buildComponentTree(
   systems: ComponentTreeSystem[],
   components: ComponentTreeComponent[],
+  portsOf?: PortsOf,
 ): TreeNode[] {
   const orphanRoots: TreeNode[] = [];
 
@@ -150,8 +180,30 @@ export function buildComponentTree(
     }
   });
 
-  // Pass 3 — set the expandable flag from actual child counts, so a composite
-  // nested component (and only it) shows an expand/collapse toggle.
+  // Pass 3 — a component's declared ports become leaf rows, grouped under a
+  // collapsed "Ports (n)" row after its subcomponents, so the tree can toggle
+  // their visibility per view without crowding the hierarchy.
+  if (portsOf !== undefined) {
+    componentNodeByIndex.forEach((node, index) => {
+      const labels = portsOf(index);
+      if (labels.length === 0) return;
+      node.children.push({
+        id: portGroupId(index),
+        name: `Ports (${String(labels.length)})`,
+        isExpandable: true,
+        initiallyCollapsed: true,
+        children: labels.map((label) => ({
+          id: portRowId(index, label),
+          name: label,
+          isExpandable: false,
+          children: [],
+        })),
+      });
+    });
+  }
+
+  // Pass 4 — set the expandable flag from actual child counts, so a composite
+  // nested component, or one with ports, shows an expand/collapse toggle.
   const markExpandability = (nodes: TreeNode[]) => {
     for (const node of nodes) {
       node.isExpandable = node.children.length > 0;

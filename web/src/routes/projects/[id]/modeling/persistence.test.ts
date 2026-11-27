@@ -343,6 +343,54 @@ describe("HCL View conversion and persistence", () => {
     expect(layout.ports?.["sys/b"]).toBeUndefined();
   });
 
+  it("persists ports shown in the view even without a pinned spot", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: {
+        "sys/a": { x: 10, y: 20, width: 100, height: 50 },
+      },
+      ports: {
+        "sys/a": { out: { side: "right" as const, offset: 0.75 } },
+      },
+      visiblePorts: { "sys/a": ["out", "debug"] },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+
+    const content = await fs.readFile(MAIN_DIAGRAM_PATH);
+    expect(content).toContain('port "debug" {\n      visible = true\n    }');
+    expect(content).toContain('side    = "right"');
+
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.ports?.["sys/a"]).toEqual({
+      out: { side: "right", offset: 0.75 },
+    });
+    expect(read.visiblePorts?.["sys/a"]).toEqual(["debug", "out"]);
+  });
+
+  it("omits visibility for components with no shown ports", async () => {
+    const fs = await projectFs();
+    const layout = {
+      checked: { "sys/a": { x: 10, y: 20 } },
+      visiblePorts: { "sys/a": [] },
+    };
+    await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, layout, "sys");
+    expect(await fs.readFile(MAIN_DIAGRAM_PATH)).not.toContain('port "');
+    const read = await readDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH);
+    expect(read.visiblePorts ?? {}).toEqual({});
+  });
+
+  it("carries shown ports for selected components into a cut-out view", () => {
+    const layout = layoutFromSelection(
+      "sys",
+      { "sys/a": { x: 10, y: 20 }, "sys/b": { x: 200, y: 20 } },
+      ["sys/a"],
+      [],
+      {},
+      { "sys/a": ["p"], "sys/b": ["q"] },
+    );
+    expect(layout.visiblePorts).toEqual({ "sys/a": ["p"] });
+  });
+
   it("creates the containing directory on first write", async () => {
     const fs = await projectFs();
     await writeDiagramLayoutFile(fs, MAIN_DIAGRAM_PATH, emptyDiagramLayout());

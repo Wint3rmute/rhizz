@@ -249,6 +249,7 @@
       model,
       componentKeys,
       viewsToLayout(selectedViews).ports,
+      viewsToLayout(selectedViews).visiblePorts,
     )) {
       out[index] = ports;
     }

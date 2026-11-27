@@ -161,7 +161,8 @@ function textAlignOf(align: TextAlign | undefined): TextAlign {
 }
 
 // Merges a component's own ports with indexed spots: the component owns
-// label/role/protocol, the index overlays outline spots by label (and may
+// label/role/protocol, the index overlays outline spots and per-view
+// visibility by label (and may
 // contribute whole ports the component does not declare). Either side may
 // be absent.
 function mergePorts(
@@ -169,13 +170,15 @@ function mergePorts(
   indexed: DiagramStaticPort[] | undefined,
 ): DiagramStaticPort[] {
   const out: DiagramStaticPort[] = (base ?? []).map((port) => {
-    const spot =
-      indexed?.find((entry) => entry.label === port.label)?.spot ?? port.spot;
+    const entry = indexed?.find((other) => other.label === port.label);
+    const spot = entry?.spot ?? port.spot;
+    const visible = entry?.visible === true || port.visible === true;
     return {
       label: port.label,
       role: port.role,
       ...(port.protocol ? { protocol: port.protocol } : {}),
       ...(spot !== undefined ? { spot } : {}),
+      ...(visible ? { visible } : {}),
     };
   });
   for (const port of indexed ?? []) {
@@ -185,6 +188,7 @@ function mergePorts(
         role: port.role,
         ...(port.protocol ? { protocol: port.protocol } : {}),
         ...(port.spot !== undefined ? { spot: port.spot } : {}),
+        ...(port.visible === true ? { visible: true } : {}),
       });
     }
   }

@@ -8,6 +8,8 @@ export interface DiagramStaticPort {
   protocol?: string;
   /** Per-view outline spot. Absent means the role default applies. */
   spot?: PortSpot;
+  /** Shown in this view even when no drawn connection names it. */
+  visible?: boolean;
 }
 
 export interface DiagramStaticComponent {

@@ -552,15 +552,29 @@ pub struct NodeLayout {
     pub ports: Vec<PortLayout>,
 }
 
-/// Per-view outline spot of a port on its node's border.
+/// Per-view presentation of one port of a placed node: where its dot sits on
+/// the outline and whether it is shown even when no drawn connection uses it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PortLayout {
     /// Port label on the component.
     pub port: String,
-    /// Outline side the dot sits on.
-    pub side: ConnectionSide,
+    /// Outline side the dot sits on. `None` means the role default applies.
+    #[serde(default)]
+    pub side: Option<ConnectionSide>,
     /// Position along the side, 0..1 (0 = top/left end, 1 = bottom/right end).
+    /// Only meaningful together with `side`.
+    #[serde(default = "default_port_offset")]
     pub offset: f64,
+    /// Show the port in this view even when no drawn connection names it
+    /// (e.g. a view outlining a component's public interface). Omitted from
+    /// canonical HCL when `false`.
+    #[serde(default)]
+    pub visible: bool,
+}
+
+/// Default position of a port dot along its side: the middle.
+const fn default_port_offset() -> f64 {
+    0.5
 }
 
 /// Optional rendering attributes for a component/connection box.

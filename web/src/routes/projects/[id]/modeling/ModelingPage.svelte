@@ -37,6 +37,7 @@
   import ViewFilterPanel from "./ViewFilterPanel.svelte";
   import { missingFilteredComponents } from "./viewFilter";
   import { componentInSystem, systemIndexOfComponent } from "./componentTree";
+  import { portRowState, togglePortVisibility } from "./portVisibility";
   import {
     type DetailViewTarget,
     detailViewTarget,
@@ -135,7 +136,11 @@
   } from "./newConnection";
   import DiagramCanvas from "./DiagramCanvas.svelte";
   import { fitCamera, sceneBounds } from "./blend";
-  import { buildEditorScene, type EditorSceneEdgeInput } from "./scene";
+  import {
+    buildEditorScene,
+    type EditorSceneEdgeInput,
+    portsUsedByEdges,
+  } from "./scene";
   import { isPlacedInSystem } from "./connectionVisibility";
   import {
     delegationArrowDirection,
@@ -474,6 +479,10 @@
   // debounced layout save as boxes. Survives uncheck/re-check (keyed
   // separately from `checked`, never pruned on unplace).
   let portPositions = $state<Record<string, Record<string, PortSpot>>>({});
+  // Per-view shown ports, component key → port labels drawn even when no
+  // connection in the view names them (toggled from the Components tree).
+  // Persisted with the layout; like `portPositions`, never pruned on unplace.
+  let visiblePorts = $state<Record<string, string[]>>({});
   let annotations = $state<Annotation[]>([]);
   // Indices into `annotations` currently selected (for drag/delete).
   // SvelteSet (not a plain Set in $state) so in-place add/delete/clear are
@@ -952,6 +961,7 @@
       savedLayout = {};
       savedConnections = {};
       portPositions = {};
+      visiblePorts = {};
       annotations = [];
       carriedMeta = {};
       selectedSystem = "";
@@ -978,6 +988,7 @@
         savedLayout = { ...layout.checked };
         savedConnections = layout.connections ?? {};
         portPositions = layout.ports ?? {};
+        visiblePorts = layout.visiblePorts ?? {};
         annotations = layout.annotations ?? [];
         carriedMeta = {
           fullName: layout.fullName,
@@ -1031,6 +1042,7 @@
       checked: $state.snapshot(checked),
       connections: $state.snapshot(savedConnections),
       ports: $state.snapshot(portPositions),
+      visiblePorts: $state.snapshot(visiblePorts),
       annotations: $state.snapshot(annotations),
       // Carried, not owned: read back from the file this view was loaded from.
       fullName: carriedMeta.fullName,
@@ -1527,6 +1539,7 @@
     savedLayout: Record<string, StoredBox>;
     connections: Record<string, StoredConnection>;
     ports: Record<string, Record<string, PortSpot>>;
+    visiblePorts: Record<string, string[]>;
     annotations: Annotation[];
     /** The view's filter, so a tag chip edit is one undo step like a drag. */
     filter?: ViewFilterDefinition | undefined;
@@ -1578,6 +1591,9 @@
           { ...byPort },
         ]),
       ),
+      visiblePorts: Object.fromEntries(
+        Object.entries(visiblePorts).map(([key, labels]) => [key, [...labels]]),
+      ),
       annotations: annotations.map((ann) => ({ ...ann })),
       filter: $state.snapshot(carriedMeta.filter),
     };
@@ -1592,6 +1608,12 @@
       Object.entries(snapshot.ports ?? {}).map(([key, byPort]) => [
         key,
         { ...byPort },
+      ]),
+    );
+    visiblePorts = Object.fromEntries(
+      Object.entries(snapshot.visiblePorts).map(([key, labels]) => [
+        key,
+        [...labels],
       ]),
     );
     annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
@@ -2086,6 +2108,7 @@
           selectedKeys,
           notes,
           portPositions,
+          visiblePorts,
         ),
         system,
       );
@@ -2558,11 +2581,27 @@
   ): Promise<void> {
     if (!selectedKey) return;
     const key = selectedKey;
-    await runModelLayoutTransaction(`update ${key}`, {
-      kind: "update_component",
-      path: key,
-      patch,
-    });
+    // A port added while a view is open is shown in it right away —
+    // otherwise an unconnected port would vanish the moment it is created.
+    const before = new Set(
+      (componentData.get(key)?.ports ?? []).map((port) => port.label),
+    );
+    const added = (patch.ports ?? [])
+      .map((port) => port.label)
+      .filter((label) => !before.has(label));
+    await runModelLayoutTransaction(
+      `update ${key}`,
+      { kind: "update_component", path: key, patch },
+      added.length === 0
+        ? undefined
+        : () => {
+            for (const label of added) {
+              if (visiblePorts[key]?.includes(label) !== true) {
+                visiblePorts = togglePortVisibility(visiblePorts, key, label);
+              }
+            }
+          },
+    );
   }
 
   async function handleRenameSelectedComponent(
@@ -2594,6 +2633,10 @@
         if (savedLayout[oldKey]) {
           savedLayout[newKey] = savedLayout[oldKey];
           delete savedLayout[oldKey];
+        }
+        if (visiblePorts[oldKey]) {
+          visiblePorts[newKey] = visiblePorts[oldKey];
+          delete visiblePorts[oldKey];
         }
         if (selectedKeys.delete(oldKey)) selectedKeys.add(newKey);
       },
@@ -2695,6 +2738,40 @@
       componentIndex: compIndex,
       portLabel,
     };
+  }
+
+  // Shows/hides a port in the open view (Components tree checkbox). One
+  // undo point per click, persisted with the layout like port spots.
+  function togglePortShown(compIndex: number, portLabel: string): void {
+    recordUndoPoint();
+    noteDiagramEdited();
+    visiblePorts = togglePortVisibility(
+      visiblePorts,
+      getComponentKey(compIndex),
+      portLabel,
+    );
+  }
+
+  // Ports named by a drawn edge in the open view, per arena index: these
+  // show regardless of the shown flag, so their tree checkbox is locked on.
+  // (Read through a closure: `renderOrder`/`editorScene` are declared below.)
+  let connectedPortsByIndex = $derived.by(
+    () =>
+      new Map(
+        renderOrder.map(
+          (index) =>
+            [index, portsUsedByEdges(editorScene.edges, index)] as const,
+        ),
+      ),
+  );
+
+  function treePortState(compIndex: number, portLabel: string) {
+    return portRowState({
+      placed: checkedIndices.has(compIndex),
+      connected: connectedPortsByIndex.get(compIndex)?.has(portLabel) === true,
+      shown:
+        visiblePorts[getComponentKey(compIndex)]?.includes(portLabel) === true,
+    });
   }
 
   function writePortSpot(
@@ -3948,11 +4025,13 @@
       const compKey = getComponentKey(index);
       const compData = componentData.get(compKey);
       const spots = portPositions[compKey];
+      const shown = visiblePorts[compKey] ?? [];
       const withSpot = <T extends { label: string }>(port: T) => ({
         ...port,
         ...(spots?.[port.label] !== undefined
           ? { spot: spots[port.label] }
           : {}),
+        ...(shown.includes(port.label) ? { visible: true } : {}),
       });
       return [
         {
@@ -4433,6 +4512,7 @@
     savedLayout = { ...layout.checked };
     savedConnections = layout.connections ?? {};
     portPositions = layout.ports ?? {};
+    visiblePorts = layout.visiblePorts ?? {};
     annotations = layout.annotations ?? [];
     carriedMeta = {
       fullName: layout.fullName,
@@ -4896,6 +4976,12 @@
             onToggleChecked={readonly
               ? undefined
               : (index) => toggleComponentChecked(index)}
+            portsOf={(index) =>
+              componentData.get(getComponentKey(index))?.ports ?? []}
+            portState={treePortState}
+            onTogglePort={readonly
+              ? undefined
+              : (index, label) => togglePortShown(index, label)}
             onDeleteComponent={readonly
               ? undefined
               : (index) =>

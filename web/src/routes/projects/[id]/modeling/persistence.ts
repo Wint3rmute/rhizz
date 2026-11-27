@@ -74,6 +74,10 @@ export interface DiagramLayout {
    * Absent entries mean role defaults apply. Survives uncheck/re-check like
    * `savedLayout` (keyed separately so unplacing never prunes it). */
   ports?: Record<string, Record<string, PortSpot>>;
+  /** Per-view shown ports: component key → labels of ports drawn even when
+   * no connection in the view names them (e.g. a public-interface view).
+   * Like `ports`, survives uncheck/re-check. */
+  visiblePorts?: Record<string, string[]>;
   annotations?: Annotation[];
   /**
    * View-level attributes the canvas does not own, carried verbatim so a
@@ -90,7 +94,14 @@ export interface DiagramLayout {
 }
 
 export function emptyDiagramLayout(system = ""): DiagramLayout {
-  return { system, checked: {}, connections: {}, ports: {}, annotations: [] };
+  return {
+    system,
+    checked: {},
+    connections: {},
+    ports: {},
+    visiblePorts: {},
+    annotations: [],
+  };
 }
 
 /**
@@ -110,6 +121,7 @@ export function layoutFromSelection(
   selectedKeys: Iterable<string>,
   selectedNotes: readonly Annotation[] = [],
   ports: Record<string, Record<string, PortSpot>> = {},
+  visiblePorts: Record<string, string[]> = {},
 ): DiagramLayout {
   const layout = emptyDiagramLayout(system);
   for (const key of selectedKeys) {
@@ -122,6 +134,10 @@ export function layoutFromSelection(
     if (box && ports[key] !== undefined) {
       layout.ports ??= {};
       layout.ports[key] = { ...ports[key] };
+    }
+    if (box && visiblePorts[key] !== undefined) {
+      layout.visiblePorts ??= {};
+      layout.visiblePorts[key] = [...visiblePorts[key]];
     }
   }
   layout.annotations = selectedNotes.map((note) => ({ ...note }));
@@ -202,17 +218,21 @@ export function layoutToHcl(
     if (box.width !== undefined) node.width = box.width;
     if (box.height !== undefined) node.height = box.height;
     if (box.textAlign !== undefined) node.text_align = box.textAlign;
-    const spots = layout.ports?.[component];
-    if (spots !== undefined) {
-      const ports = Object.entries(spots)
-        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-        .map(([port, spot]) => ({
-          port,
-          side: spot.side,
-          offset: spot.offset,
-        }));
-      if (ports.length > 0) node.ports = ports;
-    }
+    // One `port` block per port with a pinned spot and/or shown in the view.
+    const spots = layout.ports?.[component] ?? {};
+    const shown = new Set(layout.visiblePorts?.[component] ?? []);
+    const labels = [...new Set([...Object.keys(spots), ...shown])].sort(
+      (a, b) => (a < b ? -1 : a > b ? 1 : 0),
+    );
+    const ports = labels.map((port) => {
+      const spot = spots[port];
+      return {
+        port,
+        ...(spot !== undefined ? { side: spot.side, offset: spot.offset } : {}),
+        ...(shown.has(port) ? { visible: true } : {}),
+      };
+    });
+    if (ports.length > 0) node.ports = ports;
     return node;
   });
 
@@ -259,6 +279,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
   const checked: Record<string, StoredBox> = {};
   const connections: Record<string, StoredConnection> = {};
   const ports: Record<string, Record<string, PortSpot>> = {};
+  const visiblePorts: Record<string, string[]> = {};
   const annotations: Annotation[] = [];
   const system = views[0]?.system ?? "";
   // Carried through verbatim from the first view: these are view-block
@@ -268,6 +289,7 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
     checked,
     connections,
     ports,
+    visiblePorts,
     annotations,
   };
   if (views[0]?.full_name !== undefined) layout.fullName = views[0].full_name;
@@ -285,7 +307,10 @@ export function viewsToLayout(views: ViewDefinition[]): DiagramLayout {
       if (textAlign !== undefined) box.textAlign = textAlign;
       checked[node.component] = box;
       for (const port of node.ports ?? []) {
-        const side = asConnectionSide(port.side);
+        if (port.visible === true) {
+          (visiblePorts[node.component] ??= []).push(port.port);
+        }
+        const side = asConnectionSide(port.side ?? undefined);
         if (side === undefined) continue;
         const offset =
           typeof port.offset === "number" && !Number.isNaN(port.offset)

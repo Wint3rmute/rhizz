@@ -69,6 +69,58 @@ export const Default: Story = {
   },
 };
 
+// Ports per component, grouped under a collapsed "Ports (n)" row. Each port
+// row's checkbox shows/hides the port in the open view: a port a drawn
+// connection uses is locked on, ports of an unplaced component are disabled.
+const PORTS = {
+  0: [
+    { label: "uart", role: "provider" as const, protocol: "serial" },
+    { label: "debug", role: "peer" as const },
+  ],
+  1: [{ label: "spi", role: "consumer" as const, protocol: "spi" }],
+  2: [{ label: "i2c", role: "provider" as const, protocol: "i2c" }],
+};
+
+export const PortRows: Story = {
+  args: {
+    // fc and mcu placed; imu not.
+    isChecked: (index: number) => index !== 2,
+    portsOf: (index: number) => PORTS[index as keyof typeof PORTS],
+    portState: (index: number, label: string) => {
+      if (index === 2) return "unplaced";
+      if (label === "uart") return "connected";
+      if (label === "spi") return "shown";
+      return "hidden";
+    },
+    onTogglePort: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    // Groups start collapsed: only the 3 component checkboxes render.
+    await expect(canvas.getAllByRole("checkbox")).toHaveLength(3);
+    await expect(canvas.getByText("Ports (2)")).toBeInTheDocument();
+
+    await userEvent.click(canvas.getByRole("button", { name: "Expand all" }));
+    const uart = canvas.getByRole("checkbox", { name: "Show port uart" });
+    const debug = canvas.getByRole("checkbox", { name: "Show port debug" });
+    const spi = canvas.getByRole("checkbox", { name: "Show port spi" });
+    const i2c = canvas.getByRole("checkbox", { name: "Show port i2c" });
+    await expect(uart).toBeChecked();
+    await expect(uart).toBeDisabled();
+    await expect(spi).toBeChecked();
+    await expect(debug).not.toBeChecked();
+    await expect(i2c).toBeDisabled();
+
+    await userEvent.click(debug);
+    await expect(args.onTogglePort).toHaveBeenLastCalledWith(0, "debug");
+
+    // A port's label selects the component that owns it.
+    await userEvent.click(canvas.getByText("spi"));
+    await expect(args.onSelectComponent).toHaveBeenLastCalledWith(1);
+  },
+};
+
 // System-bound view: with filterSystemLabel set, only that system's subtree
 // is shown and the system root row itself is hidden — the view header
 // already names the system, so the root would be redundant.
