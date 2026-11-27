@@ -513,9 +513,15 @@ view "overview" {
 | `height`     | number | no       | —       | Box height in world units                 |
 | `text_align` | string | no       | —       | Label placement (`center`, `top-center`)  |
 
-A `node` may carry nested `port` blocks (zero or more) pinning a port dot to
-an exact outline spot in this view. Ports without a block fall back to the
-role default (consumers left, providers right, peers bottom).
+A `node` may carry nested `port` blocks (zero or more) customizing how a port
+looks in this view: pinning its dot to an exact outline spot, and/or showing
+it. Ports without a `side` fall back to the role default (consumers left,
+providers right, peers bottom).
+
+A port is drawn in a view when a drawn connection names it. `visible = true`
+also draws it when no connection in the view does — e.g. a view outlining a
+component's public interface without naming its eventual consumers. In the
+Modeling editor this is the checkbox on the port's row in the Components tree.
 
 ```hcl
 node "mini-drone/flight-controller" {
@@ -535,6 +541,19 @@ node "mini-drone/flight-controller" {
 | --------- | ------ | -------- | ------- | ------------------------------------------------------- |
 | `side`    | string | no       | —       | Outline side (`top`, `bottom`, `left`, `right`)         |
 | `offset`  | number | no       | `0.5`   | Position along the side, 0..1 (clamped; 0 = top/left end) |
+| `visible` | bool   | no       | `false` | Show the port even when no drawn connection names it    |
+
+```hcl
+node "mini-drone/flight-controller" {
+  x = 20
+  y = 50
+
+  # Unconnected in this view, shown as part of the public interface.
+  port "debug-uart" {
+    visible = true
+  }
+}
+```
 
 A `port` block inside a `node` may also customize a *projected port* (see
 §6.4). The port label is then the view-local projected name

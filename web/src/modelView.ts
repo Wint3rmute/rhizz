@@ -73,14 +73,16 @@ export interface ComponentData {
 
 /**
  * Ports for read-only scenes, keyed by arena index: the model's port data
- * with per-view outline spots applied. Drives labels and edge anchoring in
- * Explore, Inventory, embeds, and the book example — the same placement the
- * editor shows, minus the dots (no interactivity there).
+ * with per-view outline spots and shown-port flags (`visiblePorts`) applied.
+ * Drives labels and edge anchoring in Explore, Inventory, embeds, and the
+ * book example — the same placement and visibility the editor shows, minus
+ * the dots (no interactivity there).
  */
 export function staticPortsByIndex(
   model: ModelJS | undefined,
   componentKeys: readonly string[],
   layoutPorts: Record<string, Record<string, PortSpot>> | undefined,
+  visiblePorts?: Record<string, readonly string[]>,
 ): Map<number, DiagramStaticPort[]> {
   const out = new Map<number, DiagramStaticPort[]>();
   if (model === undefined) return out;
@@ -89,6 +91,7 @@ export function staticPortsByIndex(
     const data = byKey.get(key);
     if (data === undefined || data.ports.length === 0) return;
     const spots = layoutPorts?.[key];
+    const shown = visiblePorts?.[key] ?? [];
     out.set(
       index,
       data.ports.map((port) => ({
@@ -99,6 +102,7 @@ export function staticPortsByIndex(
         ...(spots?.[port.label] !== undefined
           ? { spot: spots[port.label] }
           : {}),
+        ...(shown.includes(port.label) ? { visible: true } : {}),
       })),
     );
   });

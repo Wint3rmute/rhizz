@@ -144,9 +144,12 @@ The same layout entry controls both direct and projected renderings of that
 system connection.
 
 A view `node` block may carry nested `port` blocks (`PortLayout`: port label,
-`side`, `offset` 0..1 clamped). They pin port dots to exact outline spots in
-that view; ports without a block use the role default. Unknown sides are
-skipped on parse; `offset` defaults to `0.5`. A
+optional `side`, `offset` 0..1 clamped, `visible` flag). `side`/`offset` pin
+port dots to exact outline spots in that view; ports without a side use the
+role default. `visible = true` draws the port in that view even when no drawn
+connection names it (omitted when `false`). Unknown sides parse as absent; a
+block left with neither a side nor `visible` is dropped. `offset` defaults to
+`0.5` and is only written next to a `side`. A
 `PortLayout` port label names either a direct port on the node's component or
 a view-local projected port (`<relative-component-path>/<original-port-name>`,
 see SPEC.md §6.4) resolved against that node's component in that view only.

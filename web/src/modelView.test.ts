@@ -666,6 +666,25 @@ system "demo" {
     expect(staticPortsByIndex(undefined, ["demo/fc"], undefined).size).toBe(0);
   });
 
+  it("marks ports the view shows as visible", () => {
+    const model = modelOf([{ filename: "system.hcl", content: HCL }]);
+    const keys = model?.component_keys() ?? [];
+    const index = keys.indexOf("demo/fc");
+    const byIndex = staticPortsByIndex(model, keys, undefined, {
+      "demo/fc": ["in"],
+    });
+    expect(byIndex.get(index)).toEqual([
+      {
+        label: "in",
+        role: "consumer",
+        roleRaw: "consumer",
+        protocol: "spi",
+        visible: true,
+      },
+      { label: "out", role: "provider", roleRaw: "provider", protocol: "spi" },
+    ]);
+  });
+
   it("projects model ports keyed by arena index, spots applied", () => {
     const model = modelOf([{ filename: "system.hcl", content: HCL }]);
     const keys = model?.component_keys() ?? [];

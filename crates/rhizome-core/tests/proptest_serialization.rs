@@ -347,7 +347,15 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                     Just("center".to_owned()),
                     Just("top-left".to_owned())
                 ]),
-                prop::collection::vec((identifier_suffix(), side(), 0.0_f64..1.0), 0..3),
+                prop::collection::vec(
+                    (
+                        identifier_suffix(),
+                        prop::option::of(side()),
+                        0.0_f64..1.0,
+                        any::<bool>(),
+                    ),
+                    0..3,
+                ),
             ),
             0..5,
         ),
@@ -392,10 +400,14 @@ fn view_definition() -> impl Strategy<Value = ViewDefinition> {
                             ports: ports
                                 .into_iter()
                                 .enumerate()
-                                .map(|(port_index, (port, side, offset))| PortLayout {
+                                .map(|(port_index, (port, side, offset, visible))| PortLayout {
                                     port: format!("port-{port_index}-{port}"),
+                                    // A block with neither a spot nor `visible`
+                                    // is dropped on parse, and `offset` only
+                                    // survives next to a `side`.
                                     side,
-                                    offset,
+                                    offset: if side.is_some() { offset } else { 0.5 },
+                                    visible: visible || side.is_none(),
                                 })
                                 .collect(),
                         },

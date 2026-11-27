@@ -278,6 +278,7 @@
       projectModel.model,
       componentKeys,
       layout.ports,
+      layout.visiblePorts,
     )) {
       out[index] = ports;
     }

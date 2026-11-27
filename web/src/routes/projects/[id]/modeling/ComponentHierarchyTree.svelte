@@ -8,6 +8,10 @@
   //   - a label that selects the node (drives the canvas highlight +
   //     NodeInspector, all driven by ModelingPage's selection),
   //   - a component icon when one is provided.
+  // Below a component (after its subcomponents) come its declared ports, each
+  // with a checkbox showing/hiding it in the open view — so an unconnected
+  // port (e.g. a public interface) can be drawn. Clicking a port's label
+  // selects its component.
   // It does no I/O and owns no model state — everything is passed in, so all
   // readProjectSources/compile/write logic stays in ModelingPage.svelte.
   import Tree from "../../../../components/Tree.svelte";
@@ -18,7 +22,16 @@
     buildSystemSubtree,
     type ComponentTreeComponent,
     type ComponentTreeSystem,
+    parsePortRowId,
   } from "./componentTree";
+  import type { PortRowState } from "./portVisibility";
+
+  /** A declared port, as the tree lists it. */
+  interface TreePort {
+    label: string;
+    role: "provider" | "consumer" | "peer";
+    protocol?: string | undefined;
+  }
 
   let {
     systems,
@@ -29,6 +42,9 @@
     isChecked,
     onDeleteComponent,
     filterSystemLabel = null,
+    portsOf,
+    portState,
+    onTogglePort,
   }: {
     systems: ComponentTreeSystem[];
     components: ComponentTreeComponent[];
@@ -48,13 +64,42 @@
     onToggleChecked?: ((index: number) => void) | undefined;
     /** Fired when a row's trash button is clicked; ModelingPage.svelte removes it from the model (after a confirm). */
     onDeleteComponent?: ((index: number) => void) | undefined;
+    /** Declared ports of the component at an arena index. Omitted: no port rows. */
+    portsOf?: ((index: number) => readonly TreePort[]) | undefined;
+    /** How a port row's checkbox presents in the open view. */
+    portState?: ((index: number, label: string) => PortRowState) | undefined;
+    /**
+     * Fired when a port row's checkbox is toggled; ModelingPage.svelte shows
+     * or hides the port in the open view. Omitted while someone else holds
+     * the project — the checkbox then renders disabled.
+     */
+    onTogglePort?: ((index: number, label: string) => void) | undefined;
   } = $props();
+
+  let portLabelsOf = $derived(
+    portsOf === undefined
+      ? undefined
+      : (index: number) => portsOf(index).map((port) => port.label),
+  );
 
   let nodes = $derived(
     filterSystemLabel
-      ? buildSystemSubtree(systems, components, filterSystemLabel)
-      : buildComponentTree(systems, components),
+      ? buildSystemSubtree(systems, components, filterSystemLabel, portLabelsOf)
+      : buildComponentTree(systems, components, portLabelsOf),
   );
+
+  const PORT_STATUS: Record<TreePort["role"], string> = {
+    provider: "status-success",
+    consumer: "status-warning",
+    peer: "status-info",
+  };
+
+  const PORT_TITLE: Record<PortRowState, string> = {
+    unplaced: "Place the component to show its ports",
+    connected: "Shown: a connection in this view uses this port",
+    shown: "Shown in this view",
+    hidden: "Hidden in this view",
+  };
 
   // The `Tree` shell highlights a single `selectedId`. When exactly one
   // component is selected, that component's row is highlighted.
@@ -63,13 +108,16 @@
   );
 
   function onSelectRow(entry: TreeNode) {
-    const index = nodeIndex(entry);
+    // A port row selects the component that owns it.
+    const port = parsePortRowId(entry.id);
+    const index = port !== null ? port.index : nodeIndex(entry);
     if (index === null) return;
     onSelectComponent(index);
   }
 
   function nodeIndex(entry: TreeNode): number | null {
-    // Only component rows have numeric ids; system roots start with "sys:".
+    // Only component rows have numeric ids; system roots start with "sys:",
+    // port rows with "port:".
     if (entry.id.startsWith("sys:")) return null;
     const n = Number(entry.id);
     return Number.isNaN(n) ? null : n;
@@ -89,8 +137,39 @@
   {/if}
 {/snippet}
 
+{#snippet portLeading(index: number, label: string)}
+  {@const state = portState?.(index, label) ?? "hidden"}
+  {@const port = portsOf?.(index).find((entry) => entry.label === label)}
+  <input
+    type="checkbox"
+    class="checkbox checkbox-xs shrink-0"
+    data-testid="port-visibility"
+    aria-label={`Show port ${label}`}
+    title={PORT_TITLE[state]}
+    checked={state === "connected" || state === "shown"}
+    disabled={onTogglePort === undefined ||
+      state === "unplaced" ||
+      state === "connected"}
+    onchange={() => onTogglePort?.(index, label)}
+  />
+  <span
+    class="status shrink-0 {PORT_STATUS[port?.role ?? 'peer']}"
+    title={`${port?.role ?? "peer"}, ${port?.protocol || "untyped"}`}
+    aria-hidden="true"
+  ></span>
+{/snippet}
+
 {#snippet compLeading(entry: TreeNode)}
-  {@const index = nodeIndex(entry)}
+  {@const port = parsePortRowId(entry.id)}
+  {@const index = port === null ? nodeIndex(entry) : null}
+  {#if port !== null}
+    {@render portLeading(port.index, port.label)}
+  {:else}
+    {@render componentLeading(index)}
+  {/if}
+{/snippet}
+
+{#snippet componentLeading(index: number | null)}
   {@const icon =
     index !== null ? resolveIcon(components[index]?.icon ?? "") : null}
   {#if index !== null}

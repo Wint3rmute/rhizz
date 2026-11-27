@@ -497,18 +497,20 @@
   would then bury the dot (worse when selected: thicker + primary). This
   layer re-draws ports on top of every edge.
 
-  Visibility: a label shows for every port a drawn edge names (or while a
-  connection drag reveals all drop targets) — ports whose connections are
-  not in this view stay hidden. The dot (hit area + dot) is an editing
-  affordance and shows only for those named ports when their component is
-  selected, or when a selected connection names that port, or while a drag
-  reveals all drop targets. Positions stay stable (computed from all ports)
+  Visibility: a label shows for every port a drawn edge names, every port
+  the view marks as shown (`port.visible`, e.g. a public-interface view),
+  and while a connection drag reveals all drop targets — other ports stay
+  hidden. The dot (hit area + dot) is an editing affordance and shows only
+  for those labelled ports when their component is selected, or when a
+  selected connection names that port, or while a drag reveals all drop
+  targets. Positions stay stable (computed from all ports)
   so showing or hiding labels never reflows the outline.
 
   Fading: the port rides its naming edges' tween opacity (strongest wins),
   multiplied by the node's own fade — so during view transitions added
   ports fade in with their arriving edge and removed ones fade out with
-  their leaving edge, instead of blinking at a transition boundary.
+  their leaving edge, instead of blinking at a transition boundary. A shown
+  port stays regardless of its edges, so it only rides the node's fade.
 -->
 {#each scene.nodes as node (node.id)}
   {@const allPortPositions =
@@ -523,6 +525,11 @@
     visibleEdges.map((visible) => visible.conn),
     node.index,
   )}
+  {@const shownPortLabels = new Set(
+    node.ports
+      .filter((port) => port.visible === true)
+      .map((port) => port.label),
+  )}
   {@const selectedPortLabels = portsUsedByEdges(
     visibleEdges.map((visible) => visible.conn).filter((conn) => conn.selected),
     node.index,
@@ -531,14 +538,15 @@
     {@const portKey = `${String(node.index)}:${port.label}`}
     {@const hovered = hoveredPortKey === portKey}
     {@const world = worldPoint(node, port)}
-    {@const labelVisible = revealAllPorts || usedPortLabels.has(port.label)}
+    {@const shown = shownPortLabels.has(port.label)}
+    {@const labelled = shown || usedPortLabels.has(port.label)}
+    {@const labelVisible = revealAllPorts || labelled}
     {@const dotVisible =
       portsInteractive &&
       (revealAllPorts ||
-        (usedPortLabels.has(port.label) &&
-          (node.selected || selectedPortLabels.has(port.label))))}
+        (labelled && (node.selected || selectedPortLabels.has(port.label))))}
     {@const portOpacity =
-      (node.opacity ?? 1) * (portFades.get(port.label) ?? 1)}
+      (node.opacity ?? 1) * (shown ? 1 : (portFades.get(port.label) ?? 1))}
     {#if labelVisible || dotVisible}
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <g
