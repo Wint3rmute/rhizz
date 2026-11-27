@@ -531,30 +531,38 @@ let
     # CI guard: runs `assets`, then fails if anything in the working tree
     # changed. The two PNGs are the exception: `assets` rewrites them with
     # different bytes on every run (PNG metadata for the hero, Chromium
-    # rendering for the social preview), so they are compared by pixels with a
-    # small tolerance against the committed copy, then restored. The downloaded
+    # rendering for the social preview), so they are compared by pixels
+    # against the committed copy, then restored. The downloaded
     # wasm package (crates/rhizome-wasm/pkg/) is ignored.
     assets-verify = write {
       name = "assets-verify";
       runtimeInputs = taskInputs."assets-verify";
       text = ''
         set -euo pipefail
-        pngs=(logo/renders/landing/rhizome_landing.png logo/renders/social/social-preview.png)
+        # file:max differing pixels. The hero is deterministic (ImageMagick), so
+        # it must match exactly. Chromium's render of the social preview varies
+        # a little between machines (CI differed in ~0.6% of its 819200 pixels
+        # from a local run), so up to 1% may differ.
+        pngs=(logo/renders/landing/rhizome_landing.png:0 logo/renders/social/social-preview.png:8192)
         saved=$(mktemp -d)
         trap 'rm -rf "$saved"' EXIT
-        for f in "''${pngs[@]}"; do
+        for entry in "''${pngs[@]}"; do
+          f=''${entry%:*}
           cp "$f" "$saved/$(basename "$f")"
         done
 
         ${scripts.assets}/bin/assets
 
         stale=0
-        for f in "''${pngs[@]}"; do
+        for entry in "''${pngs[@]}"; do
+          f=''${entry%:*}
+          max=''${entry#*:}
           # ImageMagick 7 prints "<count> (<fraction>)"; keep the count.
           diff_px=$(magick compare -metric AE -fuzz 1% "$f" "$saved/$(basename "$f")" null: 2>&1 || true)
           diff_px=''${diff_px%% *}
-          if [ "$diff_px" != "0" ]; then
-            echo "$f is out of date ($diff_px differing pixels)" >&2
+          diff_px=''${diff_px%.*}
+          if ! [[ "$diff_px" =~ ^[0-9]+$ ]] || [ "$diff_px" -gt "$max" ]; then
+            echo "$f is out of date ($diff_px differing pixels, allowed $max)" >&2
             stale=1
           fi
           cp "$saved/$(basename "$f")" "$f"
