@@ -141,12 +141,15 @@ test("an edit still persists, and keeps the view's own attributes", async ({
   await skipTourIfPresent(page);
 
   // Open a filtered view, so an edit has attributes it does not own to lose.
-  await page.locator("button", { hasText: "fc-internals.hcl" }).first().click();
-  await expect(page).toHaveURL(/fc-internals\.hcl$/);
+  await page
+    .locator("button", { hasText: "ground-station.hcl" })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/ground-station\.hcl$/);
   await page.waitForTimeout(1000);
 
   const before = await storedFiles(page);
-  const path = `${project}/views/fc-internals.hcl`;
+  const path = `${project}/views/ground-station.hcl`;
   expect(before[path]).toContain("filter {");
 
   // Place a component: the smallest edit that must reach disk.
@@ -161,5 +164,9 @@ test("an edit still persists, and keeps the view's own attributes", async ({
   // The parts the canvas does not model must have survived the rewrite.
   expect(after[path]).toContain("filter {");
   expect(after[path]).toContain("max_level");
-  if (wasChecked) expect(after[path]).not.toContain("node ");
+  // Toggling one component adds or removes exactly one placed node.
+  const nodeCount = (hcl: string) => viewFacts(hcl).nodes.length;
+  expect(nodeCount(after[path])).toBe(
+    nodeCount(before[path]) + (wasChecked ? -1 : 1),
+  );
 });
