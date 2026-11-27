@@ -36,11 +36,12 @@
   // Quoted so the inlined data URI cannot break the url() token.
   const maskImage = `url("${logoMarkUrl}")`;
 
-  // Four equal cards: which one matters depends on who is visiting — New
-  // project while learning the app, Your projects every day after that — so
-  // none of them is styled as the primary action.
+  // Four cards of the same size; New project keeps the primary colour so a
+  // first-time visitor sees where to start.
   const cardClass =
-    "card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-4 sm:p-5 cursor-pointer border border-base-content/10";
+    "card bg-base-200 shadow hover:bg-base-300 hover:border-primary/50 transition text-left p-5 cursor-pointer border border-base-content/10";
+  const primaryCardClass =
+    "card bg-primary text-primary-content shadow hover:bg-primary/90 transition text-left p-5 cursor-pointer border border-primary/20";
 </script>
 
 <div class="flex-1 w-full bg-base-100 overflow-y-auto">
@@ -86,13 +87,14 @@
           pieces, improve your systems completion metrics. All open source, all
           owned by you.
         </p>
-        <!-- A 2x2 grid at every width, phones included: start or continue on
-             the top row, learn on the bottom row. -->
-        <div class="grid grid-cols-2 gap-3 sm:gap-4 w-full max-w-2xl">
-          <button class={cardClass} onclick={createEmptyProject}>
+        <!-- A 2x2 grid from `sm` up (start or continue on the top row, learn
+             on the bottom row); on phones a single column of full-width
+             cards in the same order. -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full max-w-2xl">
+          <button class={primaryCardClass} onclick={createEmptyProject}>
             <div class="text-2xl mb-2">✨</div>
-            <div class="font-semibold text-base-content">New project</div>
-            <p class="text-xs text-base-content/70 mt-1">
+            <div class="font-semibold">New project</div>
+            <p class="text-xs opacity-80 mt-1">
               Start from a blank model and build your own system.
             </p>
           </button>

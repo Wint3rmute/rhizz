@@ -3,7 +3,7 @@ import { createNewProject } from "./helpers";
 
 // `/` is always the landing page and `/projects` is always the projects list:
 // what an address shows no longer depends on whether projects exist. The
-// landing offers four equal ways in (a 2x2 grid), one of which leads to the
+// landing offers four ways in (a 2x2 grid on desktop), one of which leads to the
 // list.
 
 const HERO = /Model your system architecture and verify it\./;
@@ -39,7 +39,8 @@ test("landing offers four ways in, including the projects list", async ({
   expect(b.x).toBeGreaterThan(a.x + a.width - 1);
   expect(c.y).toBeGreaterThan(a.y + a.height - 1);
   expect(Math.abs(a.x - c.x)).toBeLessThanOrEqual(1);
-  // Equal cards: no single primary spanning the row.
+  // Same-size cards: New project stands out by colour, not by spanning the
+  // row.
   expect(Math.abs(a.width - b.width)).toBeLessThanOrEqual(1);
 });
 
