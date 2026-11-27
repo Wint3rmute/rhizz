@@ -1,2 +1,3 @@
 web/vrt/__screenshots__/*.png filter=lfs diff=lfs merge=lfs -text
 logo/renders/video/*.mp4 filter=lfs diff=lfs merge=lfs -text
+logo/renders/3d/*.png filter=lfs diff=lfs merge=lfs -text
