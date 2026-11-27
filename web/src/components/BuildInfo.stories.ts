@@ -28,7 +28,7 @@ export const Commit: Story = {
     const link = canvas.getByRole("link", { name: /rhizome build 07265fb/ });
     await expect(link).toHaveAttribute(
       "href",
-      "https://github.com/Wint3rmute/rhizz/commit/07265fb",
+      "https://github.com/Wint3rmute/Rhizome/commit/07265fb",
     );
   },
 };
@@ -43,7 +43,7 @@ export const Tagged: Story = {
     });
     await expect(link).toHaveAttribute(
       "href",
-      "https://github.com/Wint3rmute/rhizz/releases/tag/0.10.0",
+      "https://github.com/Wint3rmute/Rhizome/releases/tag/0.10.0",
     );
   },
 };

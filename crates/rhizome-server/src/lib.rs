@@ -1,6 +1,6 @@
 //! `rhizome-server` — HTTP server library for the `rhizome web` subcommand.
 //!
-//! The server serves the compiled [`web`](https://github.com/wint3rmute/rhizz/tree/main/web)
+//! The server serves the compiled [`web`](https://github.com/Wint3rmute/Rhizome/tree/main/web)
 //! frontend over HTTP and gives the browser-based virtual filesystem (VFS) a
 //! place to keep its projects on disk: one directory of ordinary files per
 //! project, so a data dir is a plain directory tree. No authentication or

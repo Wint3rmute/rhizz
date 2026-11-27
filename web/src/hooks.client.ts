@@ -89,10 +89,14 @@ if (deployment === "prod") {
     // URLs for which distributed tracing headers are attached. Matched
     // against the full request URL, so the API pattern must allow any host:
     // localhost covers dev servers, /\/api\// covers the same-origin VFS
-    // API wherever the app is deployed (including https://rhizz.fly.dev,
+    // API wherever the app is deployed (including https://rhizome.fly.dev,
     // listed explicitly so the production origin keeps working even if the
     // pattern above ever changes).
-    tracePropagationTargets: ["localhost", "https://rhizz.fly.dev", /\/api\//],
+    tracePropagationTargets: [
+      "localhost",
+      "https://rhizome.fly.dev",
+      /\/api\//,
+    ],
   });
 
   // Announced *after* init, never before: the consoleLoggingIntegration above

@@ -3,7 +3,7 @@ name = "rhizome-wasm"
 version = "0.1.0"
 edition = "2024"
 description = "WebAssembly bindings for rhizome-core"
-repository = "https://github.com/Wint3rmute/rhizz"
+repository = "https://github.com/Wint3rmute/Rhizome"
 license.workspace = true
 
 [lints]

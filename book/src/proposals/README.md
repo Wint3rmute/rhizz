@@ -4,7 +4,7 @@
 > Proposals do not describe the current state of the project. Proposals keep the
 > history of changes proposed to the Rhizome project, documenting how the project
 > has evolved. Up-to-date spec of how Rhizome works can always be found in
-> [SPEC.md](https://github.com/Wint3rmute/rhizz/blob/main/SPEC.md).
+> [SPEC.md](https://github.com/Wint3rmute/Rhizome/blob/main/SPEC.md).
 
 Proposals are design documents for changes to the Rhizome language, its
 diagnostics, scoring, views, or CLI. Each proposal is numbered and carries a

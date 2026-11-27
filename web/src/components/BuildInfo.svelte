@@ -48,8 +48,8 @@
     info?.git_tag !== undefined && info.git_tag !== "" ? info.git_tag : null,
   );
 
-  const COMMIT_URL = "https://github.com/Wint3rmute/rhizz/commit/";
-  const TAG_URL = "https://github.com/Wint3rmute/rhizz/releases/tag/";
+  const COMMIT_URL = "https://github.com/Wint3rmute/Rhizome/commit/";
+  const TAG_URL = "https://github.com/Wint3rmute/Rhizome/releases/tag/";
 </script>
 
 {#if info}

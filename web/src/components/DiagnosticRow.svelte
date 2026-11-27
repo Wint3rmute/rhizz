@@ -15,7 +15,7 @@
   let isError = $derived(diagnostic.code.startsWith("E"));
 
   function specUrl(code: string): string {
-    return `https://github.com/Wint3rmute/rhizz/blob/main/SPEC/diagnostics/${code}.md`;
+    return `https://github.com/Wint3rmute/Rhizome/blob/main/SPEC/diagnostics/${code}.md`;
   }
 </script>
 
