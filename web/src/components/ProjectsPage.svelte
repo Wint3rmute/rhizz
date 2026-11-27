@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { resolve } from "$app/paths";
   import ScrollingBackground from "./ScrollingBackground.svelte";
   import TipsPanel from "./TipsPanel.svelte";
   import BuildInfo from "./BuildInfo.svelte";
@@ -97,14 +96,6 @@
           class="card bg-base-100 shadow-2xl border border-base-content/10 min-h-[100vh]"
         >
           <div class="card-body p-6 sm:p-8 flex flex-col grow">
-            <!-- The way back to the landing page: the navbar logo leads here,
-                 so without this link `/` would only be reachable by URL. -->
-            <div class="breadcrumbs text-sm text-base-content/70 py-0">
-              <ul>
-                <li><a href={resolve("/")}>Home</a></li>
-                <li>Projects</li>
-              </ul>
-            </div>
             <!-- Stacks below `sm` so the actions sit under the heading
                    instead of overflowing a narrow viewport; `sm:flex-row`
                    restores the original side-by-side layout. -->

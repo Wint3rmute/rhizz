@@ -73,11 +73,6 @@ test("landing stays the landing page once projects exist", async ({ page }) => {
   await projectsCard(page).click();
   await expect(page).toHaveURL(/\/projects$/);
   await expect(page.getByRole("button", { name: /Kept around/ })).toBeVisible();
-
-  // …and the list leads back home.
-  await page.getByRole("link", { name: "Home" }).click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByText(HERO)).toBeVisible();
 });
 
 test("navbar logo leads to the projects list", async ({ page }) => {
