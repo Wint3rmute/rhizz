@@ -81,6 +81,14 @@ holds.
   <a href="renders/video/rhizome-intro-dark.mp4">Dark</a>
 </p>
 
+  <video src="renders/video/rhizome-intro-dark.mp4">Dark</video>
+
+
+<video controls width="250">
+  <source src="renders/video/rhizome-intro-dark.mp4" type="video/mp4" />
+</video>
+
+
 **Gradient loop.** Eight seconds of a pastel gradient flowing through the mark.
 It loops seamlessly, for backgrounds and holding screens.
 
