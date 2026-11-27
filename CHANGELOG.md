@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Feat
+
+- **web**: always open on the landing page, with your projects one click away
+
 ### Fix
 
 - **book**: make `just bs` work in a clean environment
