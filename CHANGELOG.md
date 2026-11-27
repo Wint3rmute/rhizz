@@ -2,6 +2,8 @@
 
 ### Feat
 
+- **web**: edit a view's filter tags as chips in the Modeling sidebar
+- **core**: warn when a view misses components its include_tags filter requires
 - **web**: always open on the landing page, with your projects one click away
 
 ### Fix
