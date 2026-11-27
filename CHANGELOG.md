@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: add a reset to default button for diagram transition time
 - **web**: explain why a connected port cannot be hidden
 - **web**: explain view filters in a tooltip next to Include tags
 - **web**: ease diagram transitions in and out so they start and stop gently
