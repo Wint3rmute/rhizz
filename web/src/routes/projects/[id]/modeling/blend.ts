@@ -48,9 +48,12 @@ export function prefersReducedMotion(): boolean {
   return matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-export function easeOutCubic(t: number): number {
+// Cubic ease-in-out: accelerates from rest over the first half and settles
+// to rest over the second, so neither the start nor the end of a transition
+// is abrupt.
+export function easeInOutCubic(t: number): number {
   const clamped = Math.min(1, Math.max(0, t));
-  return 1 - (1 - clamped) ** 3;
+  return clamped < 0.5 ? 4 * clamped ** 3 : 1 - (-2 * clamped + 2) ** 3 / 2;
 }
 
 function lerp(from: number, to: number, t: number): number {
@@ -295,7 +298,7 @@ export function frameAt(
       done: true,
     };
   }
-  const t = easeOutCubic(Math.max(0, raw));
+  const t = easeInOutCubic(Math.max(0, raw));
   return {
     scene: blendScenes(tween.fromScene, tween.toScene, t),
     camera: tween.moveCamera
