@@ -36,6 +36,20 @@ export const Complete: Story = {
   },
 };
 
+/** The "Include tags" label carries a "?" tooltip explaining the filter. */
+export const IncludeTagsHelp: Story = {
+  tags: ["no-vrt"],
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await expect(
+      canvas.getByTestId("filter-include-tags-help"),
+    ).toHaveAttribute(
+      "data-tip",
+      expect.stringContaining("must be shown in this view"),
+    );
+  },
+};
+
 /** Space confirms a chip; the chip's ✕ and Backspace remove one. */
 export const AddAndRemoveTags: Story = {
   tags: ["no-vrt"],

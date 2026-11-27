@@ -51,14 +51,25 @@
   >
     Filters
   </h3>
-  <p class="text-xs text-base-content/50 mb-2">
-    Components tagged with any of these must be shown in this view.
-  </p>
-
   <fieldset disabled={readonly} class="fieldset p-0">
-    <label class="fieldset-label text-xs" for="view-filter-tag-input">
-      Include tags
-    </label>
+    <div class="flex items-center gap-1">
+      <label class="fieldset-label text-xs" for="view-filter-tag-input">
+        Include tags
+      </label>
+      <span
+        class="tooltip tooltip-right"
+        data-tip="Components tagged with any of these must be shown in this view."
+        data-testid="filter-include-tags-help"
+      >
+        <span
+          class="badge badge-ghost badge-xs cursor-help"
+          role="img"
+          tabindex="0"
+          aria-label="Components tagged with any of these must be shown in this view."
+          >?</span
+        >
+      </span>
+    </div>
     <div class="flex flex-wrap gap-1 items-center">
       {#each includeTags as tag (tag)}
         <span
