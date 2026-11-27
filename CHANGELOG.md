@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fix
+
+- **book**: make `just bs` work in a clean environment
+
 ## 0.15.0 (2026-11-27)
 
 ### BREAKING CHANGE
