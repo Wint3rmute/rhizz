@@ -41,8 +41,8 @@ export function composeHtml({ lockup, gradient, back, front }) {
   <img class="shot back" src="${back}">
   <img class="shot front" src="${front}">
   <img class="lockup" src="${lockup}">
-  <div class="tag">Systems architecture,<br>modeled as code.</div>
-  <div class="sub">System models · Architecture views · Completion score</div>
+  <div class="tag">System architecture,<br>modeled as code.</div>
+  <div class="sub">System models · Derived diagrams · Source of truth</div>
   </body></html>`;
 }
 
