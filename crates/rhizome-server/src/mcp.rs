@@ -2592,7 +2592,7 @@ mod tests {
         let request = Request::builder()
             .method("POST")
             .uri("/mcp")
-            .header(header::HOST, "rhizz.fly.dev")
+            .header(header::HOST, "rhizome.fly.dev")
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::ACCEPT, "application/json, text/event-stream")
             .body(Body::from(initialize_request().to_string()))

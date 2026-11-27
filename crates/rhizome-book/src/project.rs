@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 pub type ProjectPayloads = HashMap<BlockKey, String>;
 /// Fallback `/book-example` host, used when `book.toml` sets no
 /// `[preprocessor.rhizome] book-example-base-url`.
-pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizz.fly.dev";
+pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizome.fly.dev";
 
 /// iframe height (px) for `rhizome-project` embeds without an explicit height.
 pub const DEFAULT_PROJECT_HEIGHT: u32 = 500;
@@ -607,11 +607,11 @@ mod tests {
             open: None,
             level: WarningLevel::Component,
         };
-        let html = render_project_html("https://rhizz.fly.dev/", &attrs, "PAYLOAD");
+        let html = render_project_html("https://rhizome.fly.dev/", &attrs, "PAYLOAD");
         assert!(html.contains("<div class=\"rhizome-project\">"));
         assert!(html.contains("<iframe class=\"rhizome-example\""));
         assert!(
-            html.contains("src=\"https://rhizz.fly.dev/book-example?level=component#p=PAYLOAD\"")
+            html.contains("src=\"https://rhizome.fly.dev/book-example?level=component#p=PAYLOAD\"")
         );
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
@@ -635,9 +635,9 @@ mod tests {
             open: Some("views/main.hcl".to_owned()),
             level: WarningLevel::Component,
         };
-        let html = render_project_html("https://rhizz.fly.dev", &attrs, "PAYLOAD");
+        let html = render_project_html("https://rhizome.fly.dev", &attrs, "PAYLOAD");
         assert!(html.contains(
-            "src=\"https://rhizz.fly.dev/book-example?level=component&open=views%2Fmain.hcl#p=PAYLOAD\""
+            "src=\"https://rhizome.fly.dev/book-example?level=component&open=views%2Fmain.hcl#p=PAYLOAD\""
         ));
         // Without `open` the level query still travels: every embed is
         // self-describing.
@@ -647,12 +647,10 @@ mod tests {
             open: None,
             level: WarningLevel::Architectural,
         };
-        let html = render_project_html("https://rhizz.fly.dev", &plain, "PAYLOAD");
-        assert!(
-            html.contains(
-                "src=\"https://rhizz.fly.dev/book-example?level=architectural#p=PAYLOAD\""
-            )
-        );
+        let html = render_project_html("https://rhizome.fly.dev", &plain, "PAYLOAD");
+        assert!(html.contains(
+            "src=\"https://rhizome.fly.dev/book-example?level=architectural#p=PAYLOAD\""
+        ));
     }
 
     #[test]

@@ -50,7 +50,7 @@ pub fn app(data_dir: PathBuf) -> Router {
             "localhost",
             "127.0.0.1",
             "::1",
-            "rhizz.fly.dev",
+            "rhizome.fly.dev",
         ]),
     );
     Router::new()

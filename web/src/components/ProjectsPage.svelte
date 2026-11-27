@@ -52,7 +52,7 @@
 
   // Where the "Read the book" card sends you: the mdBook build of `book/`,
   // published via GitHub Pages.
-  const BOOK_URL = "https://wint3rmute.github.io/rhizz/book/";
+  const BOOK_URL = "https://wint3rmute.github.io/Rhizome/book/";
 
   let localProjects = $state<Project[]>([]);
   let localLoading = $state(true);
