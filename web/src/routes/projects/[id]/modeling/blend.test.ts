@@ -198,6 +198,29 @@ describe("blendScenes", () => {
     expect(mid.edges[0]).toMatchObject({ fromPort: "p", toPort: "q" });
   });
 
+  it("paints an arriving container behind the children it already holds", () => {
+    // Switching from a view without the parent (`main`) to one that places it
+    // (`drone-overview`): the arriving container must not cover its children.
+    const from = scene({
+      nodes: [
+        node("drone/fc", 100, 100, { index: 1, parentIndex: 0 }),
+        node("drone/fc/mcu", 120, 120, { index: 2, parentIndex: 1 }),
+      ],
+    });
+    const to = scene({
+      nodes: [
+        node("drone", 0, 0, { index: 0 }),
+        node("drone/fc", 100, 100, { index: 1, parentIndex: 0 }),
+      ],
+    });
+    const mid = blendScenes(from, to, 0.5);
+    expect(mid.nodes.map((n) => n.id)).toEqual([
+      "drone",
+      "drone/fc",
+      "drone/fc/mcu",
+    ]);
+  });
+
   it("returns the destination scene unchanged at t = 1", () => {
     const to = scene({
       nodes: [node("a", 1, 2, { selected: true, handles: "both" })],
