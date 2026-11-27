@@ -235,27 +235,11 @@ jobs:
 
       # Generated graphics (landing hero from the VRT landing screenshot, logo
       # SVGs, favicons, social preview) must match what `just assets` produces:
-      # regenerate them and fail if anything in the repo changed (modified or
-      # new files). Lives here because this job already has the LFS screenshots
-      # the hero is built from.
-      #
-      # Three things differ from a byte-for-byte rerun and are handled apart:
-      #   - the landing hero differs in PNG metadata, so `assets-check` (which
-      #     compares pixels) runs first, before `assets` overwrites it;
-      #   - the social preview is rendered by headless Chromium, which is not
-      #     byte-stable, so it is restored and not checked;
-      #   - crates/rhizome-wasm/pkg/ is the downloaded wasm artifact.
-      - name: Regenerate assets and fail on any repo change
-        run: |
-          nix run .#assets-check
-          nix run .#assets
-          git checkout -- logo/renders/social/social-preview.png logo/renders/landing/rhizome_landing.png
-          changes=$(git status --porcelain -- . ':!crates/rhizome-wasm/pkg')
-          if [ -n "$changes" ]; then
-            echo "::error::Generated assets are out of date. Run 'just assets' and commit the result."
-            echo "$changes"
-            exit 1
-          fi
+      # regenerate them and fail if anything in the repo changed. The two PNGs
+      # are compared by pixels (see `assets-verify` in nix/tasks.nix). Lives
+      # here because this job already has the LFS screenshots the hero is built
+      # from.
+      - run: nix run .#assets-verify
 
       # Static diff gallery: download, unzip, open index.html.
       - uses: actions/upload-artifact@v7

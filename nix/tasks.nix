@@ -140,6 +140,7 @@ let
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
     assets = [ imagemagick nodejs playwright-driver.browsers coreutils bash ];
     "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
+    "assets-verify" = [ imagemagick git coreutils bash ];
     "logo-video" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     "logo-intro" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     "logo-social-shots" = [ nodejs playwright-driver.browsers curl coreutils bash ];
@@ -148,7 +149,7 @@ let
     serve = [ cargo rustc lld coreutils bash ];
   };
 
-  scripts = {
+  scripts = rec {
     bump = write {
       name = "bump";
       runtimeInputs = taskInputs.bump;
@@ -519,6 +520,51 @@ let
           fi
         done
 
+        if [ "$stale" -ne 0 ]; then
+          echo "Run \`just assets\` and commit the regenerated files." >&2
+          exit 1
+        fi
+        echo "generated assets are up to date"
+      '';
+    };
+
+    # CI guard: runs `assets`, then fails if anything in the working tree
+    # changed. The two PNGs are the exception: `assets` rewrites them with
+    # different bytes on every run (PNG metadata for the hero, Chromium
+    # rendering for the social preview), so they are compared by pixels with a
+    # small tolerance against the committed copy, then restored. The downloaded
+    # wasm package (crates/rhizome-wasm/pkg/) is ignored.
+    assets-verify = write {
+      name = "assets-verify";
+      runtimeInputs = taskInputs."assets-verify";
+      text = ''
+        set -euo pipefail
+        pngs=(logo/renders/landing/rhizome_landing.png logo/renders/social/social-preview.png)
+        saved=$(mktemp -d)
+        trap 'rm -rf "$saved"' EXIT
+        for f in "''${pngs[@]}"; do
+          cp "$f" "$saved/$(basename "$f")"
+        done
+
+        ${scripts.assets}/bin/assets
+
+        stale=0
+        for f in "''${pngs[@]}"; do
+          # ImageMagick 7 prints "<count> (<fraction>)"; keep the count.
+          diff_px=$(magick compare -metric AE -fuzz 1% "$f" "$saved/$(basename "$f")" null: 2>&1 || true)
+          diff_px=''${diff_px%% *}
+          if [ "$diff_px" != "0" ]; then
+            echo "$f is out of date ($diff_px differing pixels)" >&2
+            stale=1
+          fi
+          cp "$saved/$(basename "$f")" "$f"
+        done
+
+        changes=$(git status --porcelain -- . ':!crates/rhizome-wasm/pkg')
+        if [ -n "$changes" ]; then
+          echo "$changes" >&2
+          stale=1
+        fi
         if [ "$stale" -ne 0 ]; then
           echo "Run \`just assets\` and commit the regenerated files." >&2
           exit 1
