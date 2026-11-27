@@ -134,7 +134,7 @@ let
     build = [ cargo rustc lld nodejs coreutils bash ];
     book = [ cargo rustc mdbook lld coreutils bash ];
     "book-accept" = [ cargo rustc mdbook lld coreutils bash ];
-    "book-serve" = [ mdbook coreutils bash ];
+    "book-serve" = [ cargo rustc mdbook lld coreutils bash ];
     vrt = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
@@ -358,6 +358,7 @@ let
       runtimeInputs = taskInputs."book-serve";
       text = ''
         set -euo pipefail
+        ${pkgs.cargo}/bin/cargo build --release --quiet --bin rhizome-book
         exec ${pkgs.mdbook}/bin/mdbook serve book
       '';
     };
