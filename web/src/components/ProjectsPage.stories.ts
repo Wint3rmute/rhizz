@@ -43,47 +43,6 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-// The hero's cards are a `grid-cols-1 sm:grid-cols-2` grid, so below `sm`
-// they become one column. Nothing pinned that, and it is easy to undo by
-// lowering the breakpoint at which the row starts — three cards side by side
-// at phone width is unreadable. `mobile1` is the same viewport the sibling
-// MobileHeaderStacks story uses; VRT captures at 1280 wide, so without this
-// story the stacked layout had no screenshot at all.
-export const MobileLandingStacks: Story = {
-  args: {
-    projects: [],
-  },
-  globals: {
-    viewport: { value: "mobile1" },
-  },
-  parameters: {
-    viewport: { defaultViewport: "mobile1" },
-  },
-  play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
-    const newProject = canvas.getByRole("button", { name: /New project/ });
-    const fromExample = canvas.getByRole("button", {
-      name: /Learn by example/,
-    });
-    const book = canvas.getByRole("link", { name: /Read the book/ });
-
-    await expect(newProject).toBeInTheDocument();
-    await expect(fromExample).toBeInTheDocument();
-    await expect(book).toBeInTheDocument();
-
-    // One column, not one row: each card starts below the previous card's
-    // bottom edge. Comparing rects rather than reading the class list, so a
-    // change that keeps `grid-cols-1` on the element but restructures the
-    // grid still gets caught.
-    await expect(
-      fromExample.getBoundingClientRect().top,
-    ).toBeGreaterThanOrEqual(newProject.getBoundingClientRect().bottom);
-    await expect(book.getBoundingClientRect().top).toBeGreaterThanOrEqual(
-      fromExample.getBoundingClientRect().bottom,
-    );
-  },
-};
-
 export const WithProjects: Story = {
   args: {
     projects,
@@ -115,48 +74,35 @@ export const WithProjects: Story = {
   },
 };
 
-export const EmptyLanding: Story = {
-  // Rendered inside the app content shell: without a definite-height parent
-  // the hero is content-height and the full-page capture pads the rest with
-  // white. The shell reproduces the running app, so the card sits centered
-  // with even margins — the shot used for README/docs.
+// The list's own empty state: the landing page lives at `/`, so `/projects`
+// with nothing in it says so and offers to start a project right there.
+export const EmptyProjects: Story = {
   decorators: [() => ({ Component: AppContentShell })],
   args: {
     projects: [],
   },
-  // With no projects the hero *is* the landing page, so this is the only place
-  // its three cards are rendered. Previously this story asserted nothing,
-  // which is why the set of entry points could change unnoticed.
-  //
-  // Content only. The two-column layout above `sm` — primary spanning both
-  // columns, the two secondaries sharing the row beneath — cannot be measured
-  // here: the viewport addon fills the preview area, which is ~414px under
-  // Vitest, so `sm` never applies. It is pinned by this story's VRT baseline
-  // instead (1280 wide), the same way MobileLandingStacks pins the stacked
-  // layout's pixels.
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    // A regex, not the sentence: the hero paragraph continues past this
-    // clause, so an exact string match would never match the element.
     await expect(
-      canvas.getByText(/Model your system architecture and verify it\./),
+      canvas.getByRole("heading", { name: "Projects" }),
     ).toBeInTheDocument();
-
-    await expect(canvas.getByTestId("landing-logo")).toBeInTheDocument();
-
+    const empty = within(canvas.getByTestId("projects-empty"));
+    await expect(empty.getByText("No projects yet")).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", { name: /New project/ }),
+      empty.getByRole("button", { name: "New project" }),
     ).toBeInTheDocument();
     await expect(
-      canvas.getByRole("button", { name: /Learn by example/ }),
+      empty.getByRole("button", { name: "New from example" }),
     ).toBeInTheDocument();
-
-    // The book is the third way in. It leaves the app, so it is a link and
-    // not a button — "link" is the honest role, and it is what makes
-    // middle-click, focus order and the browser's own affordances work.
-    const book = canvas.getByRole("link", { name: /Read the book/ });
-    await expect(book).toBeInTheDocument();
-    await expect(book).toHaveAttribute("href");
+    // The landing hero is not repeated here.
+    await expect(
+      canvas.queryByText(/Model your system architecture/),
+    ).not.toBeInTheDocument();
+    // The way back to the landing page.
+    await expect(canvas.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
   },
 };
 

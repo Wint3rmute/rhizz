@@ -111,6 +111,7 @@ export default ts.config(
     // files that import such modules.
     files: [
       "src/ProjectModel.svelte.ts",
+      "src/components/projectActions.ts",
       "src/ProjectState.test.ts",
       "**/explore/Explore.stories.ts",
       "**/inventory/InventoryPage.stories.ts",
