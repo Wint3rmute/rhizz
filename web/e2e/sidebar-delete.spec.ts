@@ -178,7 +178,11 @@ test("deleting a component that has a connection removes both, without a refusal
   await linkTwoComponents(page, ["trash-d", "trash-e"], "link-de");
 
   const tree = page.getByTestId("modeling-pane-right");
-  const row = tree.locator("li", { hasText: "trash-d" }).first();
+  // The component's own row (not its whole <li>, which also holds its
+  // "Ports (n)" group): hover reveals the trash button per row.
+  const row = tree
+    .getByRole("button", { name: "trash-d", exact: true })
+    .locator("xpath=parent::*");
   page.once("dialog", (dialog) => void dialog.accept());
   await row.hover();
   await row.getByRole("button", { name: "Delete component trash-d" }).click();
@@ -245,7 +249,11 @@ test("a component that cannot be deleted is refused without a confirm prompt", a
   });
 
   const tree = page.getByTestId("modeling-pane-right");
-  const row = tree.locator("li", { hasText: "mcu" }).first();
+  // The component's own row (not its whole <li>, which also holds its
+  // "Ports (n)" group): hover reveals the trash button per row.
+  const row = tree
+    .getByRole("button", { name: "mcu", exact: true })
+    .locator("xpath=parent::*");
   await expect(row).toBeVisible();
   await row.hover();
   await row.getByRole("button", { name: "Delete component mcu" }).click();
