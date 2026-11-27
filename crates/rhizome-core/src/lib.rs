@@ -18,6 +18,12 @@ pub mod score;
 pub mod serialize;
 pub mod validate;
 
+/// Hostname of the public deployment. The single Rust source for it: the
+/// server allow-lists it and the book embeds examples from it.
+pub const PUBLIC_HOST: &str = "rhizome.fly.dev";
+/// Origin of the public deployment (`https://` + [`PUBLIC_HOST`]).
+pub const PUBLIC_URL: &str = "https://rhizome.fly.dev";
+
 pub use diagnostics::{Diagnostic, DiagnosticCode, Level, ParseWarningLevelError, WarningLevel};
 pub use examples::{ExampleFile, ExampleProject, example_projects};
 pub use model::{
@@ -1055,5 +1061,15 @@ system \"s\" {\n\
                 "expected E014 at {level}, got {raised:?}"
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod public_site_tests {
+    use super::{PUBLIC_HOST, PUBLIC_URL};
+
+    #[test]
+    fn public_url_is_https_plus_public_host() {
+        assert_eq!(PUBLIC_URL, format!("https://{PUBLIC_HOST}"));
     }
 }

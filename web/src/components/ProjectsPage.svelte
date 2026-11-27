@@ -12,6 +12,7 @@
   } from "../ProjectState.svelte";
   import { pendTourStart } from "../tour/tourRequest.svelte";
   import { toastState } from "../ToastState.svelte";
+  import { BOOK_URL } from "../links";
   import {
     type ExampleProject,
     get_empty_project,
@@ -49,10 +50,6 @@
     tipIndex = null,
     buildInfo,
   }: Props = $props();
-
-  // Where the "Read the book" card sends you: the mdBook build of `book/`,
-  // published via GitHub Pages.
-  const BOOK_URL = "https://wint3rmute.github.io/Rhizome/book/";
 
   let localProjects = $state<Project[]>([]);
   let localLoading = $state(true);

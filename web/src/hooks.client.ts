@@ -10,6 +10,7 @@ import type { HandleClientError } from "@sveltejs/kit/hooks";
 //   - anything else (including unset): nothing is sent, and no SDK is set up.
 //     Local development, Storybook, Vitest and the Playwright suite run this way.
 import * as Sentry from "@sentry/sveltekit";
+import { APP_URL } from "./links";
 
 const deployment = import.meta.env.VITE_RHIZOME_DEPLOYMENT as
   string | undefined;
@@ -92,11 +93,7 @@ if (deployment === "prod") {
     // API wherever the app is deployed (including https://rhizome.fly.dev,
     // listed explicitly so the production origin keeps working even if the
     // pattern above ever changes).
-    tracePropagationTargets: [
-      "localhost",
-      "https://rhizome.fly.dev",
-      /\/api\//,
-    ],
+    tracePropagationTargets: ["localhost", APP_URL, /\/api\//],
   });
 
   // Announced *after* init, never before: the consoleLoggingIntegration above

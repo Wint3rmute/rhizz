@@ -5,6 +5,7 @@
   // bottom DiagnosticsStatusBar's expanded panel and shared with the book
   // embed's VerdictPanel so both surfaces render identical rows.
   import { renderMarkdownInline } from "./markdownRenderer";
+  import { REPO_URL } from "../links";
 
   let {
     diagnostic,
@@ -15,7 +16,7 @@
   let isError = $derived(diagnostic.code.startsWith("E"));
 
   function specUrl(code: string): string {
-    return `https://github.com/Wint3rmute/Rhizome/blob/main/SPEC/diagnostics/${code}.md`;
+    return `${REPO_URL}/blob/main/SPEC/diagnostics/${code}.md`;
   }
 </script>
 

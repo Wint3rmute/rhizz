@@ -29,7 +29,7 @@ use std::path::{Path, PathBuf};
 pub type ProjectPayloads = HashMap<BlockKey, String>;
 /// Fallback `/book-example` host, used when `book.toml` sets no
 /// `[preprocessor.rhizome] book-example-base-url`.
-pub const DEFAULT_EXAMPLE_BASE_URL: &str = "https://rhizome.fly.dev";
+pub const DEFAULT_EXAMPLE_BASE_URL: &str = rhizome_core::PUBLIC_URL;
 
 /// iframe height (px) for `rhizome-project` embeds without an explicit height.
 pub const DEFAULT_PROJECT_HEIGHT: u32 = 500;
@@ -385,8 +385,8 @@ pub fn render_project_html(base_url: &str, attrs: &ProjectAttrs, payload: &str) 
 #[cfg(test)]
 mod tests {
     use super::{
-        DEFAULT_PROJECT_HEIGHT, block_embed_height, compile_project, encode_payload, load_project,
-        parse_project_attrs, render_project_html,
+        DEFAULT_EXAMPLE_BASE_URL, DEFAULT_PROJECT_HEIGHT, block_embed_height, compile_project,
+        encode_payload, load_project, parse_project_attrs, render_project_html,
     };
     use crate::project::ProjectAttrs;
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -607,12 +607,12 @@ mod tests {
             open: None,
             level: WarningLevel::Component,
         };
-        let html = render_project_html("https://rhizome.fly.dev/", &attrs, "PAYLOAD");
+        let html = render_project_html(&format!("{DEFAULT_EXAMPLE_BASE_URL}/"), &attrs, "PAYLOAD");
         assert!(html.contains("<div class=\"rhizome-project\">"));
         assert!(html.contains("<iframe class=\"rhizome-example\""));
-        assert!(
-            html.contains("src=\"https://rhizome.fly.dev/book-example?level=component#p=PAYLOAD\"")
-        );
+        assert!(html.contains(&format!(
+            "src=\"{DEFAULT_EXAMPLE_BASE_URL}/book-example?level=component#p=PAYLOAD\""
+        )));
         assert!(html.contains("height=\"600\""));
         assert!(html.contains("loading=\"lazy\""));
         assert!(html.contains("allow=\"clipboard-write\""));
@@ -635,9 +635,11 @@ mod tests {
             open: Some("views/main.hcl".to_owned()),
             level: WarningLevel::Component,
         };
-        let html = render_project_html("https://rhizome.fly.dev", &attrs, "PAYLOAD");
+        let html = render_project_html(DEFAULT_EXAMPLE_BASE_URL, &attrs, "PAYLOAD");
         assert!(html.contains(
-            "src=\"https://rhizome.fly.dev/book-example?level=component&open=views%2Fmain.hcl#p=PAYLOAD\""
+            &format!(
+                "src=\"{DEFAULT_EXAMPLE_BASE_URL}/book-example?level=component&open=views%2Fmain.hcl#p=PAYLOAD\""
+            )
         ));
         // Without `open` the level query still travels: every embed is
         // self-describing.
@@ -647,10 +649,10 @@ mod tests {
             open: None,
             level: WarningLevel::Architectural,
         };
-        let html = render_project_html("https://rhizome.fly.dev", &plain, "PAYLOAD");
-        assert!(html.contains(
-            "src=\"https://rhizome.fly.dev/book-example?level=architectural#p=PAYLOAD\""
-        ));
+        let html = render_project_html(DEFAULT_EXAMPLE_BASE_URL, &plain, "PAYLOAD");
+        assert!(html.contains(&format!(
+            "src=\"{DEFAULT_EXAMPLE_BASE_URL}/book-example?level=architectural#p=PAYLOAD\""
+        )));
     }
 
     #[test]

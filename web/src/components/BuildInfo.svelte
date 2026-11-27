@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fetchBuildInfo, type BuildInfo } from "../buildInfo";
   import { trackedFetch } from "../netActivity";
+  import { REPO_URL } from "../links";
 
   // The commit the running `rhizome web` server was built from, shown as a
   // footer. Only a server build exposes `/api/version`; the browser-only build
@@ -48,8 +49,8 @@
     info?.git_tag !== undefined && info.git_tag !== "" ? info.git_tag : null,
   );
 
-  const COMMIT_URL = "https://github.com/Wint3rmute/Rhizome/commit/";
-  const TAG_URL = "https://github.com/Wint3rmute/Rhizome/releases/tag/";
+  const COMMIT_URL = `${REPO_URL}/commit/`;
+  const TAG_URL = `${REPO_URL}/releases/tag/`;
 </script>
 
 {#if info}

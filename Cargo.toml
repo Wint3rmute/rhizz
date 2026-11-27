@@ -10,6 +10,7 @@ resolver = "3"
 
 [workspace.package]
 license = "EUPL-1.2"
+repository = "https://github.com/Wint3rmute/Rhizome"
 
 # Clippy settings from Tris' recommendations. Credit goes to:
 # https://www.namtao.com/rust-toolkit-2026/
