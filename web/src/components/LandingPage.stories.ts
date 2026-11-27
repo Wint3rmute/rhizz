@@ -66,10 +66,11 @@ export const WithProjects: Story = {
   },
 };
 
-// The four cards are a 2x2 grid at every width, phones included. Storybook's
-// test runner renders ~414px wide, so this also pins the phone layout; the
-// VRT baseline at `mobile1` keeps its pixels.
-export const MobileGrid: Story = {
+// Below `sm` the cards are one column of full-width cards rather than a
+// grid. Storybook's test runner renders ~414px wide, so this pins the phone
+// layout; the VRT baseline at `mobile1` keeps its pixels. (The 2x2 grid above
+// `sm` is covered by e2e/landing.spec.ts and the NoProjects baseline.)
+export const MobileStacks: Story = {
   globals: {
     viewport: { value: "mobile1" },
   },
@@ -78,18 +79,20 @@ export const MobileGrid: Story = {
   },
   play: async ({ canvasElement }) => {
     const { newProject, projects, example, book } = cards(canvasElement);
-    const [a, b, c, d] = [newProject, projects, example, book].map((el) =>
+    const rects = [newProject, projects, example, book].map((el) =>
       el.getBoundingClientRect(),
     );
-    if (!a || !b || !c || !d) throw new Error("cards not laid out");
 
-    // Top row: New project | Your projects. Bottom row: example | book.
-    await expect(Math.abs(a.top - b.top)).toBeLessThanOrEqual(1);
-    await expect(Math.abs(c.top - d.top)).toBeLessThanOrEqual(1);
-    await expect(b.left).toBeGreaterThanOrEqual(a.right);
-    await expect(c.top).toBeGreaterThanOrEqual(a.bottom);
-    // Equal cards: none of them spans the row as a primary action.
-    await expect(Math.abs(a.width - b.width)).toBeLessThanOrEqual(1);
+    // One column, in reading order: each card starts below the previous
+    // one, and all share the same left edge and full width.
+    for (let i = 1; i < rects.length; i++) {
+      const prev = rects[i - 1];
+      const cur = rects[i];
+      if (!prev || !cur) throw new Error("cards not laid out");
+      await expect(cur.top).toBeGreaterThanOrEqual(prev.bottom);
+      await expect(Math.abs(cur.left - prev.left)).toBeLessThanOrEqual(1);
+      await expect(Math.abs(cur.width - prev.width)).toBeLessThanOrEqual(1);
+    }
 
     // On a phone the card is taller than the screen: it must scroll, not be
     // clipped. A vertically centred, fixed-height hero pushed its top (the
