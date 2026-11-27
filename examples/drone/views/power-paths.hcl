@@ -7,16 +7,16 @@ view "power-paths" {
   }
 
   node "quadcopter/drone" {
-    x          = 90
-    y          = 760
+    x          = 220
+    y          = 850
     width      = 580
     height     = 150
     text_align = "top-center"
   }
 
   node "quadcopter/drone/battery" {
-    x          = 100
-    y          = 800
+    x          = 230
+    y          = 890
     width      = 100
     height     = 100
     text_align = "center"
@@ -28,8 +28,8 @@ view "power-paths" {
   }
 
   node "quadcopter/drone/esc" {
-    x          = 300
-    y          = 800
+    x          = 430
+    y          = 890
     width      = 100
     height     = 100
     text_align = "center"
@@ -51,8 +51,8 @@ view "power-paths" {
   }
 
   node "quadcopter/drone/flight-controller" {
-    x          = 500
-    y          = 800
+    x          = 630
+    y          = 890
     width      = 160
     height     = 100
     text_align = "center"

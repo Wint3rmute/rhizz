@@ -50,12 +50,12 @@ view "drone-overview" {
 
     port "motor-in" {
       side   = "right"
-      offset = 0.7
+      offset = 0.8
     }
 
     port "power-in" {
       side   = "bottom"
-      offset = 0.5
+      offset = 0.3
     }
   }
 
@@ -73,7 +73,7 @@ view "drone-overview" {
 
     port "motor-out" {
       side   = "left"
-      offset = 0.7
+      offset = 0.8
     }
 
     port "power-in" {
