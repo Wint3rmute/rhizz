@@ -238,13 +238,26 @@ jobs:
       # regenerate them and fail if anything in the repo changed (modified or
       # new files). Lives here because this job already has the LFS screenshots
       # the hero is built from.
+      #
+      # Three things in the tree legitimately differ from a byte-for-byte run:
+      #   - the social preview is rendered by headless Chromium, which is not
+      #     byte-stable, so it is restored and not checked;
+      #   - the landing hero is compared by pixels (PNG metadata differs);
+      #   - crates/rhizome-wasm/pkg/ is the downloaded wasm artifact.
       - name: Regenerate assets and fail on any repo change
         run: |
           nix run .#assets
-          if [ -n "$(git status --porcelain)" ]; then
+          git checkout -- logo/renders/social/social-preview.png
+          hero=logo/renders/landing/rhizome_landing.png
+          git show "HEAD:$hero" > "$RUNNER_TEMP/hero-head.png"
+          diff_px=$(nix shell nixpkgs#imagemagick -c magick compare -metric AE "$hero" "$RUNNER_TEMP/hero-head.png" null: 2>&1 || true)
+          if [ "${diff_px%% *}" = "0" ]; then
+            git checkout -- "$hero"
+          fi
+          changes=$(git status --porcelain -- . ':!crates/rhizome-wasm/pkg')
+          if [ -n "$changes" ]; then
             echo "::error::Generated assets are out of date. Run 'just assets' and commit the result."
-            git status --short
-            git diff --stat
+            echo "$changes"
             exit 1
           fi
 
