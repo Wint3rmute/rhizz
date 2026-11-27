@@ -7,8 +7,8 @@ view "ground-station" {
   }
 
   node "ground-control/goggles" {
-    x          = 100
-    y          = 1600
+    x          = 500
+    y          = 1200
     width      = 100
     height     = 100
     text_align = "center"
@@ -20,8 +20,8 @@ view "ground-station" {
   }
 
   node "ground-control/ground-station-pc" {
-    x          = 50
-    y          = 1400
+    x          = 450
+    y          = 1000
     width      = 200
     height     = 100
     text_align = "center"
@@ -38,8 +38,8 @@ view "ground-station" {
   }
 
   node "ground-control/transmitter" {
-    x          = 100
-    y          = 1200
+    x          = 500
+    y          = 800
     width      = 100
     height     = 100
     text_align = "center"
@@ -51,8 +51,8 @@ view "ground-station" {
   }
 
   annotation {
-    x     = -270
-    y     = 1360
+    x     = 130
+    y     = 960
     text  = "Ground station shown with optional goggles"
     scale = 1.5
   }
