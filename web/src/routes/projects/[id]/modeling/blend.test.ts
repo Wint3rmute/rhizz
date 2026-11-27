@@ -4,7 +4,7 @@ import {
   blendCamera,
   blendScenes,
   type Camera,
-  easeOutCubic,
+  easeInOutCubic,
   FIT_FRACTION,
   fitCamera,
   frameAt,
@@ -406,8 +406,38 @@ describe("advance", () => {
     expect(retargeted.tween?.startedAt).toBe(500);
   });
 
-  it("eases rather than jumping halfway", () => {
-    expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
+  it("eases in and out: slow at both ends, symmetric around the middle", () => {
+    expect(easeInOutCubic(0)).toBe(0);
+    expect(easeInOutCubic(1)).toBe(1);
+    expect(easeInOutCubic(0.5)).toBe(0.5);
+    // Gentle start and gentle finish, rather than an abrupt one.
+    expect(easeInOutCubic(0.1)).toBeLessThan(0.1);
+    expect(easeInOutCubic(0.9)).toBeGreaterThan(0.9);
+    expect(easeInOutCubic(0.25) + easeInOutCubic(0.75)).toBeCloseTo(1);
+    // Out-of-range progress clamps instead of overshooting.
+    expect(easeInOutCubic(-1)).toBe(0);
+    expect(easeInOutCubic(2)).toBe(1);
+  });
+
+  it("starts a tween slowly instead of jumping ahead", () => {
+    const started = advance(
+      { scene: from, camera },
+      { scene: to, camera },
+      {
+        transition: true,
+        moveCamera: false,
+        reducedMotion: false,
+        now: 0,
+        tween: null,
+        durationMs: 1000,
+      },
+    );
+    if (!started.tween) throw new Error("expected a tween to be in flight");
+    const early = frameAt(started.tween, 100).scene.nodes[0]?.box.y ?? 0;
+    const fromY = from.nodes[0]?.box.y ?? 0;
+    const toY = to.nodes[0]?.box.y ?? 0;
+    // 10% of the time in covers less than 10% of the distance.
+    expect(Math.abs(early - fromY)).toBeLessThan(Math.abs(toY - fromY) * 0.1);
   });
 
   it("uses a custom duration when provided", () => {
