@@ -18,8 +18,8 @@ export interface TreeNode {
   name: string;
   /** Whether the row shows an expand/collapse toggle. */
   isExpandable: boolean;
-  /** Starts collapsed the first time the shell sees this id (later
-   *  expand/collapse by the user sticks). Default: expanded. */
-  initiallyCollapsed?: boolean;
+  /** Extra classes for the row's label (e.g. a muted, smaller style that
+   *  sets a kind of row apart from its siblings). */
+  labelClass?: string;
   children: TreeNode[];
 }

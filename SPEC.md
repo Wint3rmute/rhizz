@@ -521,7 +521,7 @@ providers right, peers bottom).
 A port is drawn in a view when a drawn connection names it. `visible = true`
 also draws it when no connection in the view does — e.g. a view outlining a
 component's public interface without naming its eventual consumers. In the
-Modeling editor this is the checkbox on the port's row in the Components tree.
+Modeling editor this is the eye toggle on the port's row in the Components tree.
 
 ```hcl
 node "mini-drone/flight-controller" {

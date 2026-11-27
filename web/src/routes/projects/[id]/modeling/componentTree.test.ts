@@ -5,7 +5,6 @@ import {
   buildSystemSubtree,
   componentInSystem,
   parsePortRowId,
-  portGroupId,
   portRowId,
   type ComponentTreeComponent,
   type ComponentTreeSystem,
@@ -185,7 +184,7 @@ describe("buildSystemSubtree", () => {
 describe("port rows", () => {
   const portsOf = (index: number) => (index === 0 ? ["out", "in"] : []);
 
-  it("groups a component's ports under a collapsed row after its subcomponents", () => {
+  it("lists a component's ports as leaves after its subcomponents", () => {
     const tree = buildComponentTree(
       [sys("s")],
       [
@@ -200,37 +199,16 @@ describe("port rows", () => {
         isExpandable: true,
         children: [
           { id: "1", isExpandable: false, children: [] },
-          {
-            id: portGroupId(0),
-            isExpandable: true,
-            children: [
-              { id: portRowId(0, "out"), isExpandable: false, children: [] },
-              { id: portRowId(0, "in"), isExpandable: false, children: [] },
-            ],
-          },
+          { id: portRowId(0, "out"), isExpandable: false, children: [] },
+          { id: portRowId(0, "in"), isExpandable: false, children: [] },
         ],
       },
     ]);
-    const group = tree[0]?.children[0]?.children[1];
-    expect(group?.name).toBe("Ports (2)");
-    expect(group?.initiallyCollapsed).toBe(true);
-    expect(group?.children[0]?.name).toBe("out");
-  });
-
-  it("adds no group to a component without ports", () => {
-    const tree = buildComponentTree(
-      [sys("s")],
-      [
-        comp("a", { parent_system_index: 0 }),
-        comp("b", { parent_system_index: 0 }),
-      ],
-      portsOf,
-    );
-    expect(shape(tree)[0]?.children[1]).toEqual({
-      id: "1",
-      isExpandable: false,
-      children: [],
-    });
+    const port = tree[0]?.children[0]?.children[1];
+    expect(port?.name).toBe("out");
+    // Set apart from subcomponent rows by a smaller, muted label.
+    expect(port?.labelClass).toContain("text-xs");
+    expect(tree[0]?.children[0]?.children[0]?.labelClass).toBeUndefined();
   });
 
   it("carries port rows into a system subtree", () => {
@@ -240,7 +218,7 @@ describe("port rows", () => {
       "s",
       portsOf,
     );
-    expect(tree[0]?.children[0]?.children.map((n) => n.id)).toEqual([
+    expect(tree[0]?.children.map((n) => n.id)).toEqual([
       portRowId(0, "out"),
       portRowId(0, "in"),
     ]);
@@ -253,6 +231,5 @@ describe("port rows", () => {
     });
     expect(parsePortRowId("3")).toBeNull();
     expect(parsePortRowId("sys:0")).toBeNull();
-    expect(parsePortRowId(portGroupId(3))).toBeNull();
   });
 });
