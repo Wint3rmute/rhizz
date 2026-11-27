@@ -114,7 +114,9 @@ messages / fields. Key semantics:
    appear in `realized_by`.
 8. Views (separate pass): one `view` per file with label matching the filename
    (E016), `system` resolving to a real system (E006); every `node` path checked
-   against component keys (W016).
+   against component keys (W016) and the view's system (W017); every
+   component of that system carrying one of `filter.include_tags` must be
+   placed (W023).
 9. Checks: unconnected ports on placed instances only (definitions never warn;
     `external` + `required` logic → W010), protocol/role compatibility (W008/W009).
 10. Orphans: top-level component never named by an `instance.source` → W012.

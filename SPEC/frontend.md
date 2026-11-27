@@ -183,6 +183,21 @@ connection and both endpoints. Delete/Enter confirms and Esc cancels.
   removal shows a success toast: ``connection `name` removed!`` (the name is
   inline code).
 
+## View filters
+
+With nothing selected, the Modeling page's left sidebar shows a **Filters**
+section below the Diagrams tree. It edits the open view's
+`filter.include_tags` (SPEC.md §2.10) as chips:
+
+- Typing a tag and pressing Space (or Enter, or leaving the field) adds it as a
+  chip. Tags cannot contain spaces, and duplicates are ignored. Tags used in the
+  model are offered as completions.
+- A chip's ✕, or Backspace in the empty field, removes a tag.
+- Each change is one undo step and is saved with the view, like a drag.
+- Under the chips, the section lists the tagged components the view does not
+  show yet. This is the editor-side mirror of W023, computed on the unsaved
+  canvas state (`viewFilter.ts`), so ticking a component clears it at once.
+
 ## Persistence
 
 The editor keeps every project in a virtual filesystem (`web/src/vfs/`), which

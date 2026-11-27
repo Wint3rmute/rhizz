@@ -524,6 +524,8 @@ fn has_doc(label: &str, doc_keys: &HashSet<String, impl std::hash::BuildHasher>)
 /// - **W016** — every `node` path must resolve to a known component (the
 ///   structurally-stable keys the diagram editor persists).
 /// - **W017** — every `node` path must belong to the view's own system.
+/// - **W023** — every component of the view's system carrying one of the
+///   filter's `include_tags` must be placed as a `node`.
 #[must_use]
 pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) -> Vec<Diagnostic> {
     let mut diagnostics = Vec::new();
@@ -609,6 +611,7 @@ pub fn validate_view(model: &Model, views: &[ViewDefinition], filename: &str) ->
 
     if system_known {
         validate_view_nodes(model, view, &file, filename, &mut diagnostics);
+        validate_view_filter(model, view, &file, filename, &mut diagnostics);
     }
 
     diagnostics
@@ -659,6 +662,58 @@ fn validate_view_nodes(
             format!(
                 "{filename}: view `{}` node `{}` belongs to system `{}`, not the view's system `{}`",
                 view.label, node.component, owner, view.system
+            ),
+        ));
+    }
+}
+
+/// Emit **W023** for every component of the view's system that carries one of
+/// the filter's `include_tags` but has no `node` block in the view.
+///
+/// The filter is a coverage contract: it never selects what is drawn, it only
+/// checks that the hand-placed diagram shows everything it promises to.
+fn validate_view_filter(
+    model: &Model,
+    view: &ViewDefinition,
+    file: &Path,
+    filename: &str,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let include = &view.filter.include_tags;
+    if include.is_empty() {
+        return;
+    }
+    let placed: HashSet<&str> = view.nodes.iter().map(|n| n.component.as_str()).collect();
+    let keys = model.component_keys();
+    let mut missing: Vec<(&str, Vec<&str>)> = model
+        .components
+        .iter()
+        .zip(&keys)
+        .enumerate()
+        .filter(|(index, _)| system_label_of(model, *index) == Some(view.system.as_str()))
+        .filter_map(|(_, (component, key))| {
+            let matched: Vec<&str> = component
+                .tags
+                .iter()
+                .filter(|tag| include.contains(tag))
+                .map(String::as_str)
+                .collect();
+            (!matched.is_empty() && !placed.contains(key.as_str()))
+                .then_some((key.as_str(), matched))
+        })
+        .collect();
+    missing.sort_by_key(|(key, _)| *key);
+    for (key, tags) in missing {
+        diagnostics.push(view_diagnostic(
+            DiagnosticCode::W023,
+            file,
+            format!(
+                "{filename}: view `{}` filters on {} but does not show `{key}`",
+                view.label,
+                tags.iter()
+                    .map(|tag| format!("`{tag}`"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         ));
     }
@@ -2004,5 +2059,112 @@ system "s" {
         };
         assert!(!codes_at(WarningLevel::Business).contains(&"W019"));
         assert!(codes_at(WarningLevel::Architectural).contains(&"W019"));
+    }
+
+    // ── validate_view: include_tags filter coverage (W023) ───────────────
+
+    fn tagged_model() -> Model {
+        let src = r#"
+component "battery" {
+  leaf = true
+  tags = ["power"]
+}
+component "esc" {
+  leaf = true
+  tags = ["power", "motor"]
+}
+component "camera" {
+  leaf = true
+  tags = ["video"]
+}
+component "drone" {
+  instance "battery" { source = "battery" }
+  instance "esc" { source = "esc" }
+  instance "camera" { source = "camera" }
+}
+system "quad" {
+  instance "drone" { source = "drone" }
+}
+system "spare" {
+  instance "battery" { source = "battery" }
+}
+"#;
+        let raw = crate::parse::parse_file(src, Path::new("system.hcl")).expect("parse");
+        resolve(raw).expect("resolve").0
+    }
+
+    fn filtered_view(include_tags: &[&str], nodes: &[&str]) -> ViewDefinition {
+        let mut view = view_with_nodes("power", "quad", nodes);
+        view.filter.include_tags = include_tags.iter().map(|t| (*t).to_owned()).collect();
+        view
+    }
+
+    fn w023_messages(diagnostics: &[Diagnostic]) -> Vec<&str> {
+        diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::W023)
+            .map(|d| d.message.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn view_without_filter_requires_nothing() {
+        let model = tagged_model();
+        let view = filtered_view(&[], &[]);
+        let diags = validate_view(&model, &[view], "views/power.hcl");
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+    }
+
+    #[test]
+    fn view_with_every_tagged_component_placed_is_clean() {
+        let model = tagged_model();
+        let view = filtered_view(&["power"], &["quad/drone/battery", "quad/drone/esc"]);
+        let diags = validate_view(&model, &[view], "views/power.hcl");
+        assert!(diags.is_empty(), "expected no diagnostics, got {diags:?}");
+    }
+
+    #[test]
+    fn view_missing_a_tagged_component_emits_w023() {
+        let model = tagged_model();
+        let view = filtered_view(&["power"], &["quad/drone/battery"]);
+        let diags = validate_view(&model, &[view], "views/power.hcl");
+        let codes: Vec<&str> = diags.iter().map(|d| d.code.code).collect();
+        assert_eq!(codes, vec!["W023"], "got {diags:?}");
+        let message = w023_messages(&diags)[0];
+        assert!(
+            message.contains("quad/drone/esc"),
+            "names the path: {message}"
+        );
+        assert!(message.contains("power"), "names the tag: {message}");
+        assert_eq!(diags[0].file, Some(PathBuf::from("views/power.hcl")));
+    }
+
+    #[test]
+    fn include_tags_match_any_listed_tag() {
+        let model = tagged_model();
+        let view = filtered_view(&["video", "motor"], &[]);
+        let diags = validate_view(&model, &[view], "views/power.hcl");
+        let messages = w023_messages(&diags);
+        assert_eq!(messages.len(), 2, "got {diags:?}");
+        assert!(messages.iter().any(|m| m.contains("quad/drone/camera")));
+        assert!(messages.iter().any(|m| m.contains("quad/drone/esc")));
+    }
+
+    #[test]
+    fn include_tags_only_require_components_of_the_views_system() {
+        // `spare/battery` and the bare `battery` definition are tagged too,
+        // but neither belongs to the view's system.
+        let model = tagged_model();
+        let view = filtered_view(&["power"], &["quad/drone/battery", "quad/drone/esc"]);
+        let diags = validate_view(&model, &[view], "views/power.hcl");
+        assert!(w023_messages(&diags).is_empty(), "got {diags:?}");
+    }
+
+    #[test]
+    fn w023_is_an_architectural_warning() {
+        assert_eq!(
+            DiagnosticCode::W023.min_warning_level,
+            crate::diagnostics::WarningLevel::Architectural
+        );
     }
 }
