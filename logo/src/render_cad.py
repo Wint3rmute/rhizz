@@ -134,7 +134,7 @@ def construction(mark, coll):
     for a, b in MARK_EDGES:
         pa, pb = Vector(L(*mark_pt(a)[:2])), Vector(L(*mark_pt(b)[:2]))
         d = (pb - pa).normalized()
-        lines.append([pa - d * 0.5, pb + d * 0.9])
+        lines.append([pa - d * 0.25, pb + d * 0.45])
     # Type guides across the whole lockup and beyond.
     x0 = L(-60, 0).x
     x1 = L(WORD_X[1] + 80, 0).x
@@ -152,19 +152,14 @@ def construction(mark, coll):
     # Horizontal and vertical lines through every dot centre.
     for i in range(1, len(MARK_NODES)):
         c = Vector(L(*mark_pt(i)[:2]))
-        lines.append([(c.x - 0.35, c.y), (c.x + 0.35, c.y)])
-        lines.append([(c.x, c.y - 0.35), (c.x, c.y + 0.35)])
-    # 45-degree lattice through the hub, like a drafting grid.
-    hub = Vector(L(*mark_pt(0)[:2]))
-    for a in (math.radians(45), math.radians(-45)):
-        d = Vector((math.cos(a), math.sin(a)))
-        lines.append([hub - d * 1.4, hub + d * 1.4])
+        lines.append([(c.x - 0.12, c.y), (c.x + 0.12, c.y)])
+        lines.append([(c.x, c.y - 0.12), (c.x, c.y + 0.12)])
     guides_object("Guides", lines, mark, depth + 0.002, 0.004, emission("Guide", GUIDE), coll)
 
     # Projection lines: from the dot centres straight back along the depth
     # axis, past the back face, as if extruding the plan into a section.
     proj = []
-    for i in range(len(MARK_NODES)):
+    for i in (0, 1, 3, 6):
         c = L(*mark_pt(i)[:2])
         proj.append([(c.x, c.y, depth + 0.6), (c.x, c.y, -1.6)])
     for x, y in ((WORD_X[0], CAP), (WORD_X[1], CAP), (WORD_X[1], BASELINE)):
@@ -194,15 +189,16 @@ def construction(mark, coll):
     r = (Vector(L(mark_pt(1)[0] + mark_pt(1)[2], 0)) - Vector(L(mark_pt(1)[0], 0))).length
     c1 = Vector(L(*mark_pt(1)[:2]))
     text("Ø 35.5", c1 + Vector((r * 1.5, r * 0.9)), 0, mark, depth + 0.002, dim, coll)
-    text("A", hub + Vector((-1.4, -1.4)) * 0.72, 0, mark, depth + 0.002, dim, coll)
-    text("B", hub + Vector((1.4, 1.4)) * 0.72, 0, mark, depth + 0.002, dim, coll)
+
 
     # Guide circles around each dot.
     circles = []
     for i in range(len(MARK_NODES)):
         x, y, r = mark_pt(i)
         c = Vector(L(x, y))
-        rr = (Vector(L(x + r, y)) - c).length * (1.35 if i else 2.2)
+        if i == 0:
+            continue  # no circle at the hub: nothing sits at the centre
+        rr = (Vector(L(x + r, y)) - c).length * 1.6
         circles.append([c + Vector((math.cos(t), math.sin(t))) * rr
                         for t in (k * math.tau / 72 for k in range(73))])
     guides_object("Circles", circles, mark, depth + 0.002, 0.003, emission("Guide2", GUIDE), coll)
@@ -249,7 +245,7 @@ def main():
     white.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
     mark.data.materials.append(white)
     # Rotate so the camera, below and to the left, sees the undersides.
-    mark.rotation_euler = (math.radians(90), 0, math.radians(-28))
+    mark.rotation_euler = (math.radians(90), 0, math.radians(24))
     mark.location = (0, 0, 0)
 
     coll = bpy.data.collections.new("Construction")
@@ -261,8 +257,8 @@ def main():
     cam_data.lens = 35
     cam = bpy.data.objects.new("Cam", cam_data)
     scene.collection.objects.link(cam)
-    cam.location = (-2.1, -6.6, -2.7)
-    cam.rotation_euler = (Vector((0.3, 0, 0.1)) - cam.location).to_track_quat("-Z", "Y").to_euler()
+    cam.location = (-0.75, -6.9, -2.75)
+    cam.rotation_euler = (Vector((-0.35, 0, 0.25)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
 
     sun = bpy.data.lights.new("Sun", "SUN")
