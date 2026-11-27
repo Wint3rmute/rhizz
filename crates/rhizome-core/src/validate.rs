@@ -10,11 +10,11 @@ use tracing::instrument;
 
 /// Run the warning pass over a fully resolved [`Model`].
 ///
-/// Returns a list of non-blocking [`Diagnostic`] values with codes W001-W011.
+/// Returns the model-level warnings as non-blocking [`Diagnostic`] values.
 /// This function never emits E-codes; errors are produced by the resolution pass.
 /// It also never emits W018: the missing-documentation check needs the
 /// project's `docs/` listing, which [`validate_with_docs`] takes explicitly.
-// Long but linear: one loop per warning rule (W001-W011), each independent.
+// Long but linear: one loop per warning rule, each independent.
 #[allow(clippy::too_many_lines)]
 #[instrument(skip(model))]
 pub fn validate(model: &Model) -> Vec<Diagnostic> {
