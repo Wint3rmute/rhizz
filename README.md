@@ -7,7 +7,7 @@ description, all the way to a byte-by-byte interface definition.
 
 In other words - a code-first [MBSE](https://baczek.me/mbse) tool.
 
-![Landing page screenshot](book/src/rhizome_landing.png)
+![Rhizome: the lockup and tagline beside two screenshots of the app](logo/renders/social/social-preview.png)
 
 ## Core Ideas
 
