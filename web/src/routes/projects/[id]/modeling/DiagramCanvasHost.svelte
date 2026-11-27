@@ -11,6 +11,9 @@
     onNodeClick,
     onPortPointerDown,
     onPortDragStart,
+    width = 640,
+    height = 240,
+    viewBox = "-20 -40 640 240",
   }: {
     scene: DiagramScene;
     markerId?: string | undefined;
@@ -27,10 +30,14 @@
     onPortDragStart?:
       | ((event: MouseEvent, index: number, portLabel: string) => void)
       | undefined;
+    /** Size and world window of the host <svg>; screenshot stories enlarge it. */
+    width?: number | undefined;
+    height?: number | undefined;
+    viewBox?: string | undefined;
   } = $props();
 </script>
 
-<svg width="640" height="240" viewBox="-20 -40 640 240">
+<svg {width} {height} {viewBox}>
   <DiagramCanvas
     {scene}
     {markerId}
