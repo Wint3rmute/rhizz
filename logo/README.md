@@ -144,7 +144,8 @@ Settings → Social preview). It pairs the lockup with two **real screenshots of
 the app**, the drone example's `drone-overview.hcl` and `main.hcl` views, on the
 landing gradient.
 
-`just logo-social` composes it from the committed screenshots in
+`just assets` composes it from the committed screenshots in
 `renders/social/shots/`. When the UI changes, run `just wasm` and
 `just logo-social-shots` to re-capture them from the running app, then
-`just logo-social` again. Like the videos it is not covered by `assets-check`.
+`just assets` again. Unlike the other assets it is not covered by `assets-check`
+(Chromium output is not byte-stable).

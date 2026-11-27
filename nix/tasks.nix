@@ -138,11 +138,10 @@ let
     vrt = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-quick" = [ nodejs playwright-driver.browsers coreutils bash ];
     "vrt-accept" = [ nodejs playwright-driver.browsers imagemagick coreutils bash ];
-    assets = [ imagemagick nodejs coreutils bash ];
+    assets = [ imagemagick nodejs playwright-driver.browsers coreutils bash ];
     "assets-check" = [ imagemagick nodejs diffutils coreutils bash ];
     "logo-video" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
     "logo-intro" = [ nodejs playwright-driver.browsers ffmpeg coreutils bash ];
-    "logo-social" = [ nodejs playwright-driver.browsers coreutils bash ];
     "logo-social-shots" = [ nodejs playwright-driver.browsers curl coreutils bash ];
     dev = [ nodejs coreutils bash ];
     storybook = [ nodejs coreutils bash ];
@@ -418,6 +417,9 @@ let
     #     mark at web/assets/logo-mark.svg, and the favicon at
     #     web/static/favicon.svg and its legacy favicon.ico), with Roboto Bold from nixpkgs
     #     (pinned by flake.lock) via ROBOTO_BOLD. `assets-check` is the CI guard.
+    #   - the GitHub social preview (logo/renders/social/social-preview.png),
+    #     composed by headless Chromium from the committed shots. Chromium
+    #     output is not byte-stable, so `assets-check` cannot cover it.
     assets = write {
       name = "assets";
       runtimeInputs = taskInputs.assets;
@@ -441,6 +443,13 @@ let
         (cd logo && npm run -s gen:favicon)
       '' + faviconIcoLib + ''
         render_favicon_ico web/static/favicon.ico
+
+        echo "== social preview"
+      '' + playwrightEnv + ''
+        if [ ! -d web/node_modules/playwright ]; then
+          npm ci --prefix web --no-audit --no-fund
+        fi
+        (cd logo && node src/social.mjs)
       '';
     };
 
@@ -556,25 +565,7 @@ let
       '';
     };
 
-    # Composes the GitHub social preview (logo/renders/social/social-preview.png,
-    # 1280x640): the lockup and tagline on the landing gradient beside the two
-    # committed app screenshots (renders/social/shots/). Chromium output is not
-    # byte-stable, so like the videos it is not part of `assets`.
-    logo-social = write {
-      name = "logo-social";
-      runtimeInputs = taskInputs."logo-social";
-      text = ''
-        set -euo pipefail
-      '' + playwrightEnv + ''
-        if [ ! -d web/node_modules/playwright ]; then
-          npm ci --prefix web --no-audit --no-fund
-        fi
-        cd logo
-        node src/social.mjs "$@"
-      '';
-    };
-
-    # Re-captures the screenshots `logo-social` composes: starts the web dev
+    # Re-captures the screenshots `assets` composes: starts the web dev
     # server, drives the Quadcopter Drone example in real Chromium and saves
     # logo/renders/social/shots/*.png. Needs the wasm package (`just wasm`).
     logo-social-shots = write {

@@ -4,7 +4,7 @@
 // screenshots of the app (captured by social-shots.mjs). The lockup is the
 // committed SVG, so the brand cannot drift from this image.
 //
-// Run through `just logo-social`: it provides Chromium.
+// Run through `just assets`: it provides Chromium.
 //
 //   node src/social.mjs --out renders/social/social-preview.png
 
