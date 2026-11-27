@@ -243,7 +243,7 @@ test("expanded diagnostics panel spans the full width of a wide window", async (
   page,
 }) => {
   // Wider than the old `max-w-7xl` (1280px) content column, which left the
-  // header rule and its Hide button stopping short of the window edge.
+  // header and its Hide button stopping short of the window edge.
   await page.setViewportSize({ width: 1920, height: 900 });
   const id = await openProject(page, "E2E bar width");
   await page.goto(`/projects/${id}/overview`);

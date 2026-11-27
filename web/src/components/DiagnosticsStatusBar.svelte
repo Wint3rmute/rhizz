@@ -146,13 +146,12 @@
            panels. The chevron points down — the direction this panel
            collapses — mirroring how side-pane chevrons point at their
            rail. The strip toggle below stays the primary control. -->
-      <!-- Header, rule and list all span the full width of the window,
-           like the strip below, rather than a centred content column: on a
-           wide screen a capped column left the rule and the hide button
-           short of the edge. -->
-      <header
-        class="flex items-center gap-2 px-3 py-2 border-b border-base-300"
-      >
+      <!-- Header and list span the full width of the window, like the
+           strip below, rather than a centred content column: on a wide
+           screen a capped column left the hide button short of the edge.
+           No rule under the title: the panel's own top border and shadow
+           already frame it. -->
+      <header class="flex items-center gap-2 px-3 py-2">
         <h2 class="font-semibold text-lg flex-1 min-w-0 truncate">
           Diagnostics
         </h2>
