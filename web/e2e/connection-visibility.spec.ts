@@ -153,11 +153,12 @@ test("hiding a connection removes it from the canvas and survives reload", async
   // Unchecking and re-checking an endpoint component keeps the connection
   // hidden: the flag survives the component leaving the view.
   const tree = page.getByTestId("modeling-pane-right");
+  // vis-b's own row: other components' port rows (named after the
+  // component they connect to) also contain the text "vis-b".
   const visBPlacement = tree
-    .locator("li", { hasText: "vis-b" })
-    .first()
-    .getByRole("checkbox")
-    .first();
+    .getByRole("button", { name: "vis-b", exact: true })
+    .locator("xpath=parent::*")
+    .getByRole("checkbox");
   await visBPlacement.uncheck();
   // With an endpoint unplaced, both connections stay listed but unchecked
   // (nothing placed to project through here — no badge either).
