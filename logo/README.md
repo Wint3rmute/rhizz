@@ -7,7 +7,7 @@
   </picture>
 </p>
 
-The Rhizome identity is generated from code, not drawn by hand. Every graphic
+The Rhizome logo and related materials are generated from code. Every graphic
 on this page is a build output of the scripts in `src/`. To change the brand,
 change the parameters and regenerate (see [Files](#files)).
 
