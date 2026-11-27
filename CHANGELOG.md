@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: slide block labels smoothly when a diagram switch changes their alignment
 - **modeling**: show unconnected ports in a view from the Components tree
 - **web**: edit a view's filter tags as chips in the Modeling sidebar
 - **core**: warn when a view misses components its include_tags filter requires
