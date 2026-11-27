@@ -8,7 +8,9 @@
   } from "../WarningLevelState.svelte";
   import {
     getTransitionMs,
+    resetTransitionMs,
     setTransitionMs,
+    TRANSITION_MS_DEFAULT,
     TRANSITION_MS_MAX,
     TRANSITION_MS_MIN,
   } from "../TransitionState.svelte";
@@ -148,12 +150,23 @@
             class="range range-primary"
             aria-describedby="settings-transition-help"
           />
-          <p
-            id="settings-transition-help"
-            class="mt-1 text-xs text-base-content/60"
-          >
-            0 is instant, 3000 is 3 seconds. Honors reduced-motion.
-          </p>
+          <div class="mt-1 flex items-start justify-between gap-2">
+            <p
+              id="settings-transition-help"
+              class="text-xs text-base-content/60"
+            >
+              0 is instant, 3000 is 3 seconds. Honors reduced-motion.
+            </p>
+            <button
+              type="button"
+              class="btn btn-xs btn-ghost shrink-0"
+              data-testid="settings-transition-reset"
+              disabled={getTransitionMs() === TRANSITION_MS_DEFAULT}
+              onclick={resetTransitionMs}
+            >
+              Reset to default
+            </button>
+          </div>
         </div>
 
         <div class="divider my-0"></div>

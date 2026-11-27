@@ -57,6 +57,32 @@ test("settings modal edits global settings and persists them", async ({
   await expect(page.locator("input#settings-transition")).toHaveValue("1200");
 });
 
+test("reset to default restores the diagram transition time", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Open settings" }).click();
+  const reset = page.getByTestId("settings-transition-reset");
+  // At the default, there is nothing to reset.
+  await expect(reset).toBeDisabled();
+
+  await page.locator("input#settings-transition").fill("1200");
+  await expect(reset).toBeEnabled();
+  await reset.click();
+
+  await expect(page.locator("input#settings-transition")).toHaveValue("320");
+  await expect(page.getByTestId("settings-transition-value")).toContainText(
+    "320 ms",
+  );
+  await expect(reset).toBeDisabled();
+  await expect
+    .poll(
+      async () =>
+        await page.evaluate((k) => localStorage.getItem(k), TRANSITION_KEY),
+    )
+    .toBe("320");
+});
+
 test("a corrupt stored transition falls back to the default", async ({
   page,
 }) => {
