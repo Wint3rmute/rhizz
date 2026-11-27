@@ -35,6 +35,7 @@ MARK_EDGES = [(0, 1), (0, 2), (2, 3), (0, 4), (0, 5), (5, 6)]
 FIRST_POINT = (303.74 * MARK_T[2] + MARK_T[0], 197.33 * MARK_T[2] + MARK_T[1])
 # Wordmark (Roboto Bold outlines): baseline, x-height and cap height.
 WORD_X = (280.36, 1041.20)
+GLYPH_X = [280.36, 404.57, 517.27, 563.56, 661.51, 777.33, 945.20]  # left edges
 BASELINE, X_HEIGHT, CAP = 0.0, -105.66, -142.19
 
 INK = (0.07, 0.11, 0.2, 1)
@@ -90,6 +91,41 @@ def guides_object(name, polylines, parent, z, radius, mat, coll):
     return ob
 
 
+def guides_3d(name, polylines, parent, radius, mat, coll):
+    """Tubes along local-XYZ polylines (for lines leaving the logo plane)."""
+    cu = bpy.data.curves.new(name, "CURVE")
+    cu.dimensions = "3D"
+    cu.bevel_depth = radius
+    cu.bevel_resolution = 1
+    for pts in polylines:
+        sp = cu.splines.new("POLY")
+        sp.points.add(len(pts) - 1)
+        for p, q in zip(sp.points, pts):
+            p.co = (*q, 1)
+    ob = bpy.data.objects.new(name, cu)
+    coll.objects.link(ob)
+    ob.parent = parent
+    ob.data.materials.append(mat)
+    ob.visible_shadow = False
+    return ob
+
+
+def text(body, pos, angle, parent, z, mat, coll, size=0.09):
+    cu = bpy.data.curves.new("Label", "FONT")
+    cu.body = body
+    cu.size = size
+    cu.align_x = "CENTER"
+    cu.align_y = "BOTTOM"
+    ob = bpy.data.objects.new("Label", cu)
+    coll.objects.link(ob)
+    ob.parent = parent
+    ob.location = (pos[0], pos[1], z)
+    ob.rotation_euler = (0, 0, angle)
+    ob.data.materials.append(mat)
+    ob.visible_shadow = False
+    return ob
+
+
 def construction(mark, coll):
     L = render3d.svg_to_local
     depth = render3d.FIT["depth"]
@@ -109,7 +145,57 @@ def construction(mark, coll):
     for x in WORD_X:
         xl = L(x, 0).x
         lines.append([(xl, L(0, 40).y), (xl, L(0, -200).y)])
+    # Verticals at each glyph's left edge, short ticks above the cap line.
+    for x in GLYPH_X[1:]:
+        xl = L(x, 0).x
+        lines.append([(xl, L(0, CAP - 18).y), (xl, L(0, CAP - 70).y)])
+    # Horizontal and vertical lines through every dot centre.
+    for i in range(1, len(MARK_NODES)):
+        c = Vector(L(*mark_pt(i)[:2]))
+        lines.append([(c.x - 0.35, c.y), (c.x + 0.35, c.y)])
+        lines.append([(c.x, c.y - 0.35), (c.x, c.y + 0.35)])
+    # 45-degree lattice through the hub, like a drafting grid.
+    hub = Vector(L(*mark_pt(0)[:2]))
+    for a in (math.radians(45), math.radians(-45)):
+        d = Vector((math.cos(a), math.sin(a)))
+        lines.append([hub - d * 1.4, hub + d * 1.4])
     guides_object("Guides", lines, mark, depth + 0.002, 0.004, emission("Guide", GUIDE), coll)
+
+    # Projection lines: from the dot centres straight back along the depth
+    # axis, past the back face, as if extruding the plan into a section.
+    proj = []
+    for i in range(len(MARK_NODES)):
+        c = L(*mark_pt(i)[:2])
+        proj.append([(c.x, c.y, depth + 0.6), (c.x, c.y, -1.6)])
+    for x, y in ((WORD_X[0], CAP), (WORD_X[1], CAP), (WORD_X[1], BASELINE)):
+        c = L(x, y)
+        proj.append([(c.x, c.y, depth + 0.6), (c.x, c.y, -1.6)])
+    guides_3d("Projection", proj, mark, 0.003, emission("Guide3", GUIDE), coll)
+
+    # Dimension lines with end ticks and labels, as in a drawing sheet.
+    dim = emission("Dim", INK)
+    def dimension(a, b, offset, label, z=depth + 0.002):
+        a, b = Vector(a), Vector(b)
+        d = (b - a).normalized()
+        n = Vector((-d.y, d.x)) * offset
+        pa, pb = a + n, b + n
+        t = Vector((-d.y, d.x)).normalized() * 0.07
+        segs = [[pa, pb], [a, pa + n.normalized() * 0.05], [b, pb + n.normalized() * 0.05]]
+        for q in (pa, pb):  # architectural slash ticks
+            segs.append([q - (d + t / 0.07) * 0.05, q + (d + t / 0.07) * 0.05])
+        guides_object("Dim", segs, mark, z, 0.003, dim, coll)
+        mid = (pa + pb) / 2 + n.normalized() * 0.06
+        text(label, mid, math.atan2(d.y, d.x), mark, z, dim, coll)
+
+    left = L(mark_pt(3)[0] - mark_pt(3)[2], 0).x
+    dimension((left, L(0, CAP).y), (L(WORD_X[1], 0).x, L(0, CAP).y), 0.55, "1052.57")
+    dimension((L(WORD_X[1], 0).x, L(0, BASELINE).y), (L(WORD_X[1], 0).x, L(0, CAP).y), -0.45, "142.19")
+    dimension((L(WORD_X[0], 0).x, L(0, BASELINE).y), (L(GLYPH_X[1], 0).x, L(0, BASELINE).y), -0.35, "124.21")
+    r = (Vector(L(mark_pt(1)[0] + mark_pt(1)[2], 0)) - Vector(L(mark_pt(1)[0], 0))).length
+    c1 = Vector(L(*mark_pt(1)[:2]))
+    text("Ø 35.5", c1 + Vector((r * 1.5, r * 0.9)), 0, mark, depth + 0.002, dim, coll)
+    text("A", hub + Vector((-1.4, -1.4)) * 0.72, 0, mark, depth + 0.002, dim, coll)
+    text("B", hub + Vector((1.4, 1.4)) * 0.72, 0, mark, depth + 0.002, dim, coll)
 
     # Guide circles around each dot.
     circles = []
@@ -132,8 +218,8 @@ def freestyle(scene, exclude):
     for ls in list(fs.linesets):
         fs.linesets.remove(ls)
     for name, vis, color, thick, dashed in (
-        ("Visible", "VISIBLE", INK, 2.2, False),
-        ("Hidden", "HIDDEN", GUIDE, 1.2, True),
+        ("Visible", "VISIBLE", INK, 3.4, False),
+        ("Hidden", "HIDDEN", GUIDE, 0.9, True),
     ):
         ls = fs.linesets.new(name)
         ls.select_by_visibility = True
@@ -155,7 +241,7 @@ def main():
     args = parse_args()
     scene = render3d.reset_scene()
 
-    mark = render3d.import_mark(args.svg, 6.2, depth=0.6, bevel=0, first_point_svg=FIRST_POINT)
+    mark = render3d.import_mark(args.svg, 6.2, depth=0.22, bevel=0, first_point_svg=FIRST_POINT)
     mark.data.materials.clear()
     white = bpy.data.materials.new("Paper")
     white.use_nodes = True
@@ -175,7 +261,7 @@ def main():
     cam_data.lens = 35
     cam = bpy.data.objects.new("Cam", cam_data)
     scene.collection.objects.link(cam)
-    cam.location = (-2.5, -8.0, -3.2)
+    cam.location = (-2.1, -6.6, -2.7)
     cam.rotation_euler = (Vector((0.3, 0, 0.1)) - cam.location).to_track_quat("-Z", "Y").to_euler()
     scene.camera = cam
 
