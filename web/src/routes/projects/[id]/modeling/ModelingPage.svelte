@@ -34,6 +34,8 @@
   import { page } from "$app/state";
   import FileTree from "../code/FileTree.svelte";
   import ComponentHierarchyTree from "./ComponentHierarchyTree.svelte";
+  import ViewFilterPanel from "./ViewFilterPanel.svelte";
+  import { missingFilteredComponents } from "./viewFilter";
   import { componentInSystem, systemIndexOfComponent } from "./componentTree";
   import {
     type DetailViewTarget,
@@ -533,6 +535,32 @@
     });
     return out;
   });
+
+  // The open view's `filter.include_tags`: a coverage contract, not a
+  // selection — every tagged component of the view's system must be placed
+  // (W023). The list below mirrors the compiler on unsaved canvas state.
+  let viewIncludeTags = $derived(carriedMeta.filter?.include_tags ?? []);
+  let knownTags = $derived(
+    [...new Set(components.flatMap((c) => c.tags))].sort(),
+  );
+  let filterMissing = $derived(
+    missingFilteredComponents(
+      components,
+      componentKeys,
+      selectedSystemIndex,
+      viewIncludeTags,
+      new Set(Object.keys(checked)),
+    ),
+  );
+
+  function setViewIncludeTags(tags: string[]): void {
+    recordUndoPoint();
+    carriedMeta = {
+      ...carriedMeta,
+      filter: { ...carriedMeta.filter, include_tags: tags },
+    };
+    noteDiagramEdited();
+  }
 
   // Placed nodes whose component no longer belongs to this view's system
   // (legacy mixed diagrams). Hidden, never deleted — unchecking prunes them.
@@ -1500,6 +1528,8 @@
     connections: Record<string, StoredConnection>;
     ports: Record<string, Record<string, PortSpot>>;
     annotations: Annotation[];
+    /** The view's filter, so a tag chip edit is one undo step like a drag. */
+    filter?: ViewFilterDefinition | undefined;
   };
 
   // How many undo steps (and, independently, redo steps) are kept.
@@ -1549,6 +1579,7 @@
         ]),
       ),
       annotations: annotations.map((ann) => ({ ...ann })),
+      filter: $state.snapshot(carriedMeta.filter),
     };
   }
 
@@ -1564,6 +1595,7 @@
       ]),
     );
     annotations = (snapshot.annotations ?? []).map((ann) => ({ ...ann }));
+    carriedMeta = { ...carriedMeta, filter: snapshot.filter };
     clearSelection();
     selectedConnection = null;
   }
@@ -3688,6 +3720,15 @@
     };
   });
 
+  // Mirrors the inspector's fallback branch below: the sidebar has nothing
+  // selected to inspect, so it shows the open view's own settings (Filters).
+  let nothingSelected = $derived(
+    selected.size <= 1 &&
+      !(selectedKey && selectedComponentData) &&
+      !selectedAnnotation &&
+      !selectedConnectionInspector,
+  );
+
   // Applies a patch to the inspected connection's model declaration. One
   // undo step per edit; a refused edit shows the "Change refused" toast.
   async function handleUpdateSelectedConnection(
@@ -4550,6 +4591,19 @@
         onrename={readonly ? undefined : handleRenameDiagram}
         ondelete={readonly ? undefined : handleDeleteDiagram}
       />
+
+      <!-- Only with nothing selected: the view itself is then what the
+           sidebar inspects. -->
+      {#if nothingSelected && fullDiagramPath !== null && diagramLayoutLoaded}
+        <div class="divider"></div>
+        <ViewFilterPanel
+          includeTags={viewIncludeTags}
+          {knownTags}
+          missing={filterMissing}
+          {readonly}
+          onchange={setViewIncludeTags}
+        />
+      {/if}
     </div>
   </Pane>
 
