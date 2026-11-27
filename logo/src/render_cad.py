@@ -38,9 +38,15 @@ WORD_X = (280.36, 1041.20)
 GLYPH_X = [280.36, 404.57, 517.27, 563.56, 661.51, 777.33, 945.20]  # left edges
 BASELINE, X_HEIGHT, CAP = 0.0, -105.66, -142.19
 
-INK = (0.07, 0.11, 0.2, 1)
-GUIDE = (0.42, 0.55, 0.75, 1)
-PAPER = (0.93, 0.955, 0.985, 1)
+# Colour schemes: "blueprint" (navy on pale blue) and "dark" (white ink on
+# black, photocopied and worn, after the "A Thousand Plateaus" cover).
+STYLES = {
+    "blueprint": dict(ink=(0.07, 0.11, 0.2, 1), guide=(0.42, 0.55, 0.75, 1),
+                      paper=(0.93, 0.955, 0.985, 1), face=(1, 1, 1, 1), sun=2.0),
+    "dark": dict(ink=(0.95, 0.95, 0.93, 1), guide=(0.55, 0.55, 0.53, 1),
+                 paper=(0.012, 0.012, 0.012, 1), face=(0.02, 0.02, 0.02, 1), sun=0.4),
+}
+INK = GUIDE = PAPER = None  # set from --style in main()
 
 
 def parse_args():
@@ -51,6 +57,8 @@ def parse_args():
     p.add_argument("--samples", type=int, default=16)
     p.add_argument("--res", default="1920x1080")
     p.add_argument("--percent", type=int, default=100)
+    p.add_argument("--style", choices=sorted(STYLES), default="blueprint")
+    p.add_argument("--seed", type=int, default=7, help="seed for the worn-paper pass")
     return p.parse_args(argv)
 
 
@@ -204,7 +212,7 @@ def construction(mark, coll):
     guides_object("Circles", circles, mark, depth + 0.002, 0.003, emission("Guide2", GUIDE), coll)
 
 
-def freestyle(scene, exclude):
+def freestyle(scene, exclude, sketchy=False):
     scene.render.use_freestyle = True
     scene.render.line_thickness_mode = "ABSOLUTE"
     vl = scene.view_layers[0]
@@ -231,17 +239,27 @@ def freestyle(scene, exclude):
         st.use_dashed_line = dashed
         if dashed:
             st.dash1, st.gap1 = 8, 6
+        if sketchy:
+            # Several wobbly passes per edge, running past the corners.
+            st.chaining = "SKETCHY"
+            st.rounds = 3
+            st.geometry_modifiers.new("Overshoot", "BACKBONE_STRETCHER").backbone_length = 6
+            noise = st.geometry_modifiers.new("Wobble", "PERLIN_NOISE_1D")
+            noise.amplitude, noise.frequency = 0.9, 12
 
 
 def main():
     args = parse_args()
+    global INK, GUIDE, PAPER
+    style = STYLES[args.style]
+    INK, GUIDE, PAPER = style["ink"], style["guide"], style["paper"]
     scene = render3d.reset_scene()
 
     mark = render3d.import_mark(args.svg, 6.2, depth=0.22, bevel=0, first_point_svg=FIRST_POINT)
     mark.data.materials.clear()
     white = bpy.data.materials.new("Paper")
     white.use_nodes = True
-    white.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (1, 1, 1, 1)
+    white.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = style["face"]
     white.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 0.9
     mark.data.materials.append(white)
     # Rotate so the camera, below and to the left, sees the undersides.
@@ -262,7 +280,7 @@ def main():
     scene.camera = cam
 
     sun = bpy.data.lights.new("Sun", "SUN")
-    sun.energy = 2.0
+    sun.energy = style["sun"]
     so = bpy.data.objects.new("Sun", sun)
     scene.collection.objects.link(so)
     so.rotation_euler = (math.radians(40), math.radians(-30), 0)
@@ -273,7 +291,7 @@ def main():
     world.node_tree.nodes["Background"].inputs["Color"].default_value = PAPER
     world.node_tree.nodes["Background"].inputs["Strength"].default_value = 1.0
 
-    freestyle(scene, coll)
+    freestyle(scene, coll, sketchy=args.style == "dark")
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
     scene.cycles.samples = args.samples
@@ -284,6 +302,93 @@ def main():
     scene.render.resolution_percentage = args.percent
     scene.render.filepath = args.out
     bpy.ops.render.render(write_still=True)
+    if args.style == "dark":
+        worn(args.out, args.seed)
 
 
-main()
+def _upsample(a, h, w):
+    """Bilinear resize of a 2D array to (h, w)."""
+    import numpy as np
+
+    ys = np.linspace(0, a.shape[0] - 1, h)
+    xs = np.linspace(0, a.shape[1] - 1, w)
+    y0 = np.floor(ys).astype(int).clip(0, a.shape[0] - 2)
+    x0 = np.floor(xs).astype(int).clip(0, a.shape[1] - 2)
+    fy, fx = (ys - y0)[:, None], (xs - x0)[None, :]
+    a00 = a[y0][:, x0]
+    a01 = a[y0][:, x0 + 1]
+    a10 = a[y0 + 1][:, x0]
+    a11 = a[y0 + 1][:, x0 + 1]
+    return (a00 * (1 - fx) + a01 * fx) * (1 - fy) + (a10 * (1 - fx) + a11 * fx) * fy
+
+
+def _fbm(rng, h, w, base, octaves=4):
+    """Fractal value noise in [0, 1]: stains, toner density."""
+    import numpy as np
+
+    out = np.zeros((h, w))
+    amp, total = 1.0, 0.0
+    for o in range(octaves):
+        cells = base * 2 ** o
+        out += amp * _upsample(rng.random((cells + 2, int(cells * w / h) + 2)), h, w)
+        total += amp
+        amp *= 0.5
+    return out / total
+
+
+def worn(path, seed):
+    """Photocopied, stained, used-up look: grayscale, toner dropout in the
+    lines, blotchy stains, grain, dust, scratches and a vignette."""
+    import numpy as np
+
+    img = bpy.data.images.load(path)
+    w, h = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    rng = np.random.default_rng(seed)
+
+    lum = px[..., :3] @ np.array([0.2126, 0.7152, 0.0722], dtype=np.float32)
+    # Toner dropout: bright ink breaks up where the copier ran thin.
+    toner = _fbm(rng, h, w, 6) * 0.6 + rng.random((h, w)) * 0.4
+    lum = lum * np.clip((toner - 0.18) * 2.4, 0.25, 1.0)
+    # Hard photocopy contrast.
+    lum = np.clip((lum - 0.04) * 1.35, 0, 1) ** 0.9
+
+    # Stains: large soft blotches lifting the black, plus darker rings.
+    stain = _fbm(rng, h, w, 3, octaves=5)
+    lum += np.clip(stain - 0.55, 0, None) * 0.35
+    ring = np.abs(_fbm(rng, h, w, 2, octaves=3) - 0.5) < 0.012
+    lum += ring * 0.05
+
+    # Grain and dust specks.
+    lum += rng.normal(0, 0.035, (h, w))
+    specks = rng.random((h, w)) > 0.9993
+    lum[specks] = rng.uniform(0.5, 1.0, specks.sum())
+
+    # Long hairline scratches and a few heavier ones.
+    for _ in range(int(14 * w / 1920) + 6):
+        x0, y0 = rng.uniform(0, w), rng.uniform(0, h)
+        a = rng.uniform(0, math.tau)
+        length = rng.uniform(0.1, 0.6) * w
+        n = int(length)
+        t = np.linspace(0, 1, n)
+        xs = (x0 + np.cos(a) * length * t + np.sin(t * 9) * 3).astype(int)
+        ys = (y0 + np.sin(a) * length * t).astype(int)
+        ok = (xs >= 0) & (xs < w) & (ys >= 0) & (ys < h) & (rng.random(n) > 0.3)
+        lum[ys[ok], xs[ok]] = np.maximum(lum[ys[ok], xs[ok]], rng.uniform(0.25, 0.7))
+
+    # Vignette: copier edges fall off.
+    yy, xx = np.mgrid[0:h, 0:w]
+    r = np.hypot((xx - w / 2) / (w / 2), (yy - h / 2) / (h / 2))
+    lum *= np.clip(1.15 - 0.45 * r ** 2, 0, 1)
+
+    lum = np.clip(lum, 0, 1)
+    px[..., 0] = px[..., 1] = px[..., 2] = lum
+    px[..., 3] = 1
+    img.pixels[:] = px.ravel()
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+
+
+if __name__ == "__main__":
+    main()
