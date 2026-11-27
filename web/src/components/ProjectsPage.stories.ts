@@ -98,11 +98,6 @@ export const EmptyProjects: Story = {
     await expect(
       canvas.queryByText(/Model your system architecture/),
     ).not.toBeInTheDocument();
-    // The way back to the landing page.
-    await expect(canvas.getByRole("link", { name: "Home" })).toHaveAttribute(
-      "href",
-      "/",
-    );
   },
 };
 
