@@ -404,12 +404,12 @@ let
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
         INPUT="web/vrt/__screenshots__/pages-landing--no-projects--light.png"
         BG="web/assets/landing-gradient.jpg"
-        OUTPUT="book/src/rhizome_landing.png"
+        OUTPUT="logo/renders/landing/rhizome_landing.png"
       '' + landingLib;
     };
 
     # Regenerates every declaratively generated graphic:
-    #   - the README/book landing hero (book/src/rhizome_landing.png), from a
+    #   - the README/book landing hero (logo/renders/landing/rhizome_landing.png), from a
     #     screenshot (defaults to the VRT landing capture; pass another one as
     #     the first argument: `nix run .#assets -- my-shot.png`)
     #   - the logo SVGs (logo/renders/molecule/: mark, lockup and construction
@@ -429,7 +429,7 @@ let
         echo "== landing hero"
         INPUT="''${1:-web/vrt/__screenshots__/pages-landing--no-projects--light.png}"
         BG="web/assets/landing-gradient.jpg"
-        OUTPUT="book/src/rhizome_landing.png"
+        OUTPUT="logo/renders/landing/rhizome_landing.png"
       '' + landingLib + ''
 
         echo "== logo"
@@ -475,10 +475,10 @@ let
         # landingLib installed its own EXIT trap; replace it with one for both dirs.
         trap 'rm -rf "$TMPDIR" "$OUTDIR"' EXIT
         # ImageMagick 7 prints "<count> (<fraction>)", e.g. "0 (0)"; keep the count.
-        diff_px=$(magick compare -metric AE "$OUTPUT" book/src/rhizome_landing.png null: 2>&1 || true)
+        diff_px=$(magick compare -metric AE "$OUTPUT" logo/renders/landing/rhizome_landing.png null: 2>&1 || true)
         diff_px=''${diff_px%% *}
         if [ "$diff_px" != "0" ]; then
-          echo "book/src/rhizome_landing.png is out of date ($diff_px differing pixels)" >&2
+          echo "logo/renders/landing/rhizome_landing.png is out of date ($diff_px differing pixels)" >&2
           stale=1
         fi
 

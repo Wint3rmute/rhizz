@@ -152,7 +152,7 @@ vrt-accept *args:
     nix run .#vrt-accept -- {{args}}
 
 # Regenerates all declaratively generated graphics: the 3D README/book hero
-# (book/src/rhizome_landing.png, from the VRT landing screenshot) and the logo
+# (logo/renders/landing/rhizome_landing.png, from the VRT landing screenshot) and the logo
 # SVGs (logo/renders/molecule/). Pass a custom screenshot to preview the hero
 # with your own capture, e.g.:
 #   just assets my-apollo-shot.png

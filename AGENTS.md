@@ -130,10 +130,10 @@ use `npx`, `pnpm`, or `yarn`, so the lockfile stays the single source of truth.
 - **Never hand-edit generated assets.** `just assets` regenerates the logo SVGs
   (`logo/renders/molecule/`), the web app's copies of the mark
   (`web/assets/logo-mark.svg`), the favicons (`web/static/favicon.svg` and
-  `favicon.ico`) and the landing hero (`book/src/rhizome_landing.png`). Change
+  `favicon.ico`) and the landing hero (`logo/renders/landing/rhizome_landing.png`). Change
   the generators in `logo/src/` or `nix/tasks.nix`, run `just assets` and commit
-  the result. CI's `assets-check` fails if any of them is stale. Details in
-  `logo/README.md`.
+  the result. CI's `assets-check` fails if any of them is stale. Generated graphics live under
+  `logo/renders/`; see "Where generated assets live" in `logo/README.md`.
 - **VRT screenshots and logo videos are Git LFS files** (`.gitattributes`). If
   the checkout has no LFS content they are small text pointers, and anything
   that reads them (`just assets`, `assets-check`, VRT) fails with errors like
