@@ -97,7 +97,7 @@
 
   const PORT_TITLE: Record<PortRowState, string> = {
     unplaced: "Place the component to show its ports",
-    connected: "Shown: a connection in this view uses this port",
+    connected: "Cannot hide a port which is used by a connection in this view",
     shown: "Shown in this view",
     hidden: "Hidden in this view",
   };
@@ -145,30 +145,39 @@
   {@const icon = resolveIcon(on ? "eye" : "eye-slash")}
   <!-- An eye toggle, not a checkbox: sets port rows apart from subcomponent
        rows, whose checkbox places them on the canvas. -->
-  <button
-    type="button"
-    class="btn btn-ghost btn-xs btn-square h-4 min-h-0 w-4 shrink-0 {on
-      ? 'text-base-content/80'
-      : 'text-base-content/30'}"
-    data-testid="port-visibility"
-    aria-label={`Show port ${label}`}
-    aria-pressed={on}
+  <!-- A disabled button swallows pointer events (no cursor, no title), so the
+       wrapper carries the blocked cursor and the tooltip. -->
+  <span
+    class="inline-flex shrink-0 {state === 'connected'
+      ? 'cursor-not-allowed'
+      : ''}"
+    data-testid="port-visibility-wrapper"
     title={PORT_TITLE[state]}
-    disabled={onTogglePort === undefined ||
-      state === "unplaced" ||
-      state === "connected"}
-    onclick={() => onTogglePort?.(index, label)}
   >
-    {#if icon}
-      <svg
-        viewBox={`0 0 ${icon.width} ${icon.height}`}
-        class="w-3 h-3 fill-current"
-        aria-hidden="true"
-      >
-        <path d={icon.svgPath} />
-      </svg>
-    {/if}
-  </button>
+    <button
+      type="button"
+      class="btn btn-ghost btn-xs btn-square h-4 min-h-0 w-4 {on
+        ? 'text-base-content/80'
+        : 'text-base-content/30'}"
+      data-testid="port-visibility"
+      aria-label={`Show port ${label}`}
+      aria-pressed={on}
+      disabled={onTogglePort === undefined ||
+        state === "unplaced" ||
+        state === "connected"}
+      onclick={() => onTogglePort?.(index, label)}
+    >
+      {#if icon}
+        <svg
+          viewBox={`0 0 ${icon.width} ${icon.height}`}
+          class="w-3 h-3 fill-current"
+          aria-hidden="true"
+        >
+          <path d={icon.svgPath} />
+        </svg>
+      {/if}
+    </button>
+  </span>
   <span
     class="status shrink-0 {PORT_STATUS[port?.role ?? 'peer']}"
     title={`Port ${label} (${port?.role ?? "peer"}, ${port?.protocol || "untyped"})`}
