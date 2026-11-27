@@ -562,12 +562,15 @@ system connectivity. A stale entry whose projected port no longer resolves
 (renamed or removed descendant or port) is ignored, like a stale `node` path
 (W016). See §6.5 for the full rules.
 
-Optional `filter` sub-block (selection predicate) — **not implemented yet**:
-parsed and round-tripped, but no renderer applies it. See §9.
+Optional `filter` sub-block — a **coverage contract**, not a selection.
+Layout stays hand-placed (`node` blocks); the filter states which components
+the view must show, and the compiler warns when the diagram drifts from the
+model. Only `include_tags` is implemented; the other attributes are parsed and
+round-tripped but not applied yet (see §9).
 
 | Attribute       | Type         | Required | Default          | Description                                                               |
 | --------------- | ------------ | -------- | ---------------- | ------------------------------------------------------------------------- |
-| `include_tags`  | list(string) | no       | `[]` (match all) | Only include entities having ≥1 of these tags                             |
+| `include_tags`  | list(string) | no       | `[]` (none)      | Every component of the view's system having ≥1 of these tags must be placed as a `node` (W023) |
 | `exclude_tags`  | list(string) | no       | `[]`             | Exclude entities having any of these tags                                 |
 | `max_level`     | integer      | no       | `∞`              | Maximum abstraction level to display                                      |
 | `components`    | list(string) | no       | `[]` (all)       | Whitelist of component labels to include                                  |
@@ -1334,8 +1337,8 @@ system "home-monitor" {
 - Per-message direction on bidirectional ports
 - Type-checked fields with a schema language
 - Diffing / changelog between model versions
-- View `filter` predicates (`include_tags`, `exclude_tags`, `max_level`,
-  `components`, `show_messages`) — parsed but not applied by any renderer yet
+- View `filter` predicates beyond `include_tags` (`exclude_tags`,
+  `max_level`, `components`, `show_messages`) — parsed but not applied yet
 
 ---
 
