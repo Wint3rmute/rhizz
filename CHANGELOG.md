@@ -8,6 +8,7 @@
 
 ### Fix
 
+- **web**: stretch the expanded diagnostics panel across the full window width
 - **book**: make `just bs` work in a clean environment
 
 ## 0.15.0 (2026-11-27)
