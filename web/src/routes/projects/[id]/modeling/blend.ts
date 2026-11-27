@@ -250,7 +250,33 @@ export function blendScenes(
     })),
   ];
 
-  return { nodes, edges, notes, overlays: [] };
+  return { nodes: parentsFirst(nodes), edges, notes, overlays: [] };
+}
+
+// Nodes paint in array order and their bodies are opaque, so a container
+// that only exists in the target scene (appended last above) would cover
+// its own children while it fades in, then snap behind them at t = 1.
+// Re-sort parents-first like `computeRenderOrder`; the sort is stable, so
+// siblings keep their order. Depth only follows parents present in the
+// blend, and the hop limit guards against a cycle when outgoing nodes
+// carry indexes from the previous model.
+function parentsFirst(nodes: DiagramNode[]): DiagramNode[] {
+  const parentOf = new Map(nodes.map((node) => [node.index, node.parentIndex]));
+  const depth = (node: DiagramNode): number => {
+    let hops = 0;
+    let current = node.parentIndex;
+    while (
+      current !== undefined &&
+      parentOf.has(current) &&
+      hops < nodes.length
+    ) {
+      hops += 1;
+      current = parentOf.get(current);
+    }
+    return hops;
+  };
+  const depths = new Map(nodes.map((node) => [node, depth(node)]));
+  return [...nodes].sort((a, b) => (depths.get(a) ?? 0) - (depths.get(b) ?? 0));
 }
 
 export function frameAt(
