@@ -221,6 +221,26 @@ describe("blendScenes", () => {
     ]);
   });
 
+  it("hands a changed text alignment to the renderer to slide", () => {
+    const from = scene({ nodes: [node("fc", 0, 0)] });
+    const to = scene({
+      nodes: [
+        node("fc", 0, 0, {
+          box: { x: 0, y: 0, width: 100, height: 40, textAlign: "top-left" },
+        }),
+      ],
+    });
+    const mid = blendScenes(from, to, 0.25);
+    expect(mid.nodes[0]?.box.textAlign).toBe("top-left");
+    expect(mid.nodes[0]?.labelTween).toEqual({ from: "center", t: 0.25 });
+  });
+
+  it("leaves the label alone when the alignment does not change", () => {
+    const from = scene({ nodes: [node("fc", 0, 0)] });
+    const to = scene({ nodes: [node("fc", 50, 0)] });
+    expect(blendScenes(from, to, 0.5).nodes[0]?.labelTween).toBeUndefined();
+  });
+
   it("returns the destination scene unchanged at t = 1", () => {
     const to = scene({
       nodes: [node("a", 1, 2, { selected: true, handles: "both" })],

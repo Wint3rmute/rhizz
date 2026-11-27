@@ -21,6 +21,7 @@ import {
   findReparentTarget,
   MIN_ANNOTATION_SCALE,
   nearestPortSpot,
+  blendLabelLayout,
   nodeLabelLayout,
   normalizeAnnotationScale,
   type PortAnchor,
@@ -1188,5 +1189,55 @@ describe("annotationBounds", () => {
     const bounds = annotationBounds({ text: "a\nb", x: 0, y: 0 });
     expect(bounds.width).toBe(40); // single-char lines hit the minimum
     expect(bounds.height).toBe(40); // 2 lines * 16 + 8
+  });
+});
+
+describe("blendLabelLayout", () => {
+  const size = { width: 60, height: 16 };
+
+  it("lands exactly on the target layout at t = 1", () => {
+    const from = nodeLabelLayout("center", "fc", 500, 360, false);
+    const to = nodeLabelLayout("top-center", "fc", 500, 360, false);
+    expect(blendLabelLayout(from, to, size, 1)).toEqual(to);
+  });
+
+  it("starts where the source label sat, in the target's anchor and baseline", () => {
+    // center: middle/middle at (250, 180) -> label top-left (220, 172).
+    // top-left: start/hanging, so the t = 0 point is that top-left corner.
+    const from = nodeLabelLayout("center", "fc", 500, 360, false);
+    const to = nodeLabelLayout("top-left", "fc", 500, 360, false);
+    expect(blendLabelLayout(from, to, size, 0).text).toEqual({
+      x: 220,
+      y: 172,
+      anchor: "start",
+      baseline: "hanging",
+    });
+  });
+
+  it("slides the label halfway between the two placements", () => {
+    const from = nodeLabelLayout("top-left", "fc", 500, 360, false);
+    const to = nodeLabelLayout("center", "fc", 500, 360, false);
+    // top-left corner (8, 8) expressed as middle/middle is (38, 16);
+    // target is (250, 180).
+    expect(blendLabelLayout(from, to, size, 0.5).text).toEqual({
+      x: 144,
+      y: 98,
+      anchor: "middle",
+      baseline: "middle",
+    });
+  });
+
+  it("slides and resizes the icon when both layouts have one", () => {
+    const from = nodeLabelLayout("center", "fc", 200, 100, true, 60);
+    const to = nodeLabelLayout("top-left", "fc", 200, 100, true, 60);
+    const mid = blendLabelLayout(from, to, size, 0.5);
+    // center icon: (91, 30) size 18; top-left icon: (8, 8) size 14.
+    expect(mid.icon).toEqual({ x: 49.5, y: 19, size: 16 });
+  });
+
+  it("uses the target icon when only one layout has an icon", () => {
+    const from = nodeLabelLayout("center", "fc", 200, 100, false);
+    const to = nodeLabelLayout("top-left", "fc", 200, 100, true, 60);
+    expect(blendLabelLayout(from, to, size, 0.5).icon).toEqual(to.icon);
   });
 });
