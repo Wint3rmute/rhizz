@@ -186,8 +186,9 @@ manually replayed steps — makes the bug reproducible and quickly fixable.
 ## Testing Approach
 
 - Rust unit tests live in `#[cfg(test)]` modules inside each source file.
-- Integration tests exercise the three worked examples under `examples/` (drone,
-  social-media, software-house).
+- Integration tests build every example project under `examples/` (the list
+  comes from `rhizome_core::example_projects()`, so a new example is covered
+  automatically).
 - Use `just test` to run all tests.
 - Assert exact diagnostic codes (not just counts) for error/warning tests.
 - Don't do multiple consequent lint/test passes "just to be sure". CICD is for that
