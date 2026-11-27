@@ -116,7 +116,20 @@ def solid_from_fill(name, verts2d, faces, depth):
     return obj
 
 
-def import_mark(svg_path, width):
+# Filled by import_mark: how SVG user units map into the solid's local frame
+# (see svg_to_local), so other scripts can draw guides on the real geometry.
+FIT = {}
+
+
+def svg_to_local(x, y):
+    """Map an SVG user-space point onto the logo solid's local XY plane."""
+    u = FIT["u"]
+    bx = FIT["anchor_blender"].x + (x - FIT["anchor_svg"][0]) * u
+    by = FIT["anchor_blender"].y - (y - FIT["anchor_svg"][1]) * u
+    return (Vector((bx, by)) - FIT["centre"]) * FIT["scale"]
+
+
+def import_mark(svg_path, width, depth=0.12, bevel=0.018, first_point_svg=None):
     before = set(bpy.data.objects)
     bpy.ops.import_curve.svg(filepath=svg_path)
     curves = [o for o in bpy.data.objects if o not in before and o.type == "CURVE"]
@@ -126,6 +139,11 @@ def import_mark(svg_path, width):
     # Use the importer only as an SVG path parser: collect every subpath as a
     # sampled polygon in world space, then drop the curve objects.
     bpy.context.view_layer.update()
+    if first_point_svg is not None:
+        sp0 = curves[0].data.splines[0].bezier_points[0].co
+        FIT["anchor_blender"] = (curves[0].matrix_world @ sp0).to_2d()
+        FIT["anchor_svg"] = first_point_svg
+        FIT["u"] = curves[0].matrix_world.to_scale().x * 0.0254 / 90
     polys = []
     for o in curves:
         m = o.matrix_world
@@ -141,20 +159,22 @@ def import_mark(svg_path, width):
     centre = Vector(((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2))
     s = width / (max(xs) - min(xs))
     polys = [[(p - centre) * s for p in poly] for poly in polys]
+    FIT.update(centre=centre, scale=s, depth=depth)
 
     verts, faces = nonzero_fill(polys)
-    mark = solid_from_fill("RhizomeMark", verts, faces, depth=0.12)
+    mark = solid_from_fill("RhizomeMark", verts, faces, depth=depth)
 
     bpy.ops.object.select_all(action="DESELECT")
     mark.select_set(True)
     bpy.context.view_layer.objects.active = mark
-    bev = mark.modifiers.new("Bevel", "BEVEL")
-    bev.width = 0.018
-    bev.segments = 5
-    bev.limit_method = "ANGLE"
-    bev.angle_limit = math.radians(60)
-    bev.harden_normals = True
-    bpy.ops.object.modifier_apply(modifier=bev.name)
+    if bevel > 0:
+        bev = mark.modifiers.new("Bevel", "BEVEL")
+        bev.width = bevel
+        bev.segments = 5
+        bev.limit_method = "ANGLE"
+        bev.angle_limit = math.radians(60)
+        bev.harden_normals = True
+        bpy.ops.object.modifier_apply(modifier=bev.name)
     bpy.ops.object.shade_smooth()
     # Keep flat faces crisp, bevels round.
     try:
@@ -333,4 +353,5 @@ def main():
     bpy.ops.render.render(write_still=True)
 
 
-main()
+if __name__ == "__main__":
+    main()
