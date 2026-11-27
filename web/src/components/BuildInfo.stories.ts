@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
 import { expect, within } from "storybook/test";
 import BuildInfo from "./BuildInfo.svelte";
+import { REPO_URL } from "../links";
 
 // The commit the running server was built from, rendered as a footer. The
 // `buildInfo` prop is injected so the stories never touch the network.
@@ -26,10 +27,7 @@ export const Commit: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const link = canvas.getByRole("link", { name: /rhizome build 07265fb/ });
-    await expect(link).toHaveAttribute(
-      "href",
-      "https://github.com/Wint3rmute/Rhizome/commit/07265fb",
-    );
+    await expect(link).toHaveAttribute("href", `${REPO_URL}/commit/07265fb`);
   },
 };
 
@@ -43,7 +41,7 @@ export const Tagged: Story = {
     });
     await expect(link).toHaveAttribute(
       "href",
-      "https://github.com/Wint3rmute/Rhizome/releases/tag/0.10.0",
+      `${REPO_URL}/releases/tag/0.10.0`,
     );
   },
 };

@@ -3,6 +3,7 @@ import { expect, within } from "storybook/test";
 import type { Project } from "../vfs/types";
 import AppContentShell from "./AppContentShell.svelte";
 import ProjectsPage from "./ProjectsPage.svelte";
+import { REPO_URL } from "../links";
 
 const sampleProject = (
   id: string,
@@ -110,10 +111,7 @@ export const WithProjects: Story = {
 
     // The build footer sits at the bottom of the list and links to its commit.
     const build = canvas.getByRole("link", { name: /rhizome build 07265fb/ });
-    await expect(build).toHaveAttribute(
-      "href",
-      "https://github.com/Wint3rmute/Rhizome/commit/07265fb",
-    );
+    await expect(build).toHaveAttribute("href", `${REPO_URL}/commit/07265fb`);
   },
 };
 

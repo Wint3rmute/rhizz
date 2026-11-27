@@ -17,7 +17,5 @@ additional-js = ["js/rhizome-embed.js"]
 command = "cargo run --release --quiet --bin rhizome-book"
 renderer = ["html"]
 # Host serving the /book-example route that rhizome-project embeds iframe into.
-book-example-base-url = "https://rhizome.fly.dev"
-
-# If you want to test locally:
-# book-example-base-url  = "http://localhost:5173"
+# Defaults to the public deployment (`rhizome_core::PUBLIC_URL`). To test locally:
+# book-example-base-url = "http://localhost:5173"
