@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ProjectsPage from "../components/ProjectsPage.svelte";
+  import LandingPage from "../components/LandingPage.svelte";
 </script>
 
-<!-- The landing page is the unified Projects page: same view as /projects. -->
-<ProjectsPage />
+<!-- Always the landing page; the projects list is at /projects. -->
+<LandingPage />

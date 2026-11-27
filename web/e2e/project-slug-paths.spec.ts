@@ -36,8 +36,10 @@ test("creating a second project with the same slug is refused", async ({
   await page.getByRole("button", { name: "New project" }).first().click();
   await expect(page.getByRole("alert")).toContainText("drone-system");
 
-  // …and nothing was created: still the landing page, with one project.
-  await expect(page).toHaveURL(/\/(projects)?$/);
+  // …and nothing was created: still on the landing page, and the projects
+  // list holds just the one project.
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/projects");
   await expect(page.getByRole("button", { name: "Rename" })).toHaveCount(1);
   // The card still offers the original project (the toast quotes the refused
   // name too, so target the card's own button).
@@ -56,7 +58,7 @@ test("renaming a project re-addresses it", async ({ page }) => {
   await expect(page).toHaveURL(/\/projects\/old-name\//);
   await skipTour(page);
 
-  await page.goto("/");
+  await page.goto("/projects");
   name = "Drone System";
   await page.getByRole("button", { name: "Rename" }).click();
   await expect(

@@ -156,7 +156,7 @@ vrt-accept *args:
 # SVGs (logo/renders/molecule/). Pass a custom screenshot to preview the hero
 # with your own capture, e.g.:
 #   just assets my-apollo-shot.png
-assets input="web/vrt/__screenshots__/pages-projects--empty-landing--light.png":
+assets input="web/vrt/__screenshots__/pages-landing--no-projects--light.png":
     nix run .#assets -- {{input}}
 
 # Fails if the committed landing hero or logo SVGs differ from what `assets`

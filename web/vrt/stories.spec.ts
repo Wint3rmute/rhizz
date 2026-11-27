@@ -48,7 +48,7 @@ const VIEWPORTS: Record<string, { width: number; height: number }> = {
 // story's own Storybook viewport, which only affects the manager UI).
 // Used for screenshots that double as high-res sources, e.g. the README hero.
 const SIZE_OVERRIDES: Record<string, { width: number; height: number }> = {
-  "pages-projects--empty-landing": { width: 1920, height: 1080 },
+  "pages-landing--no-projects": { width: 1920, height: 1080 },
 };
 
 // `Pages/*` stories render whole app views: capture them at FullHD, the most

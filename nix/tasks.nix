@@ -403,7 +403,7 @@ let
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-2--light.png web/src/screenshots/background_2.png
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-3--light.png web/src/screenshots/background_3.png
         ${pkgs.coreutils}/bin/cp web/vrt/__screenshots__/backgrounds-background-4--light.png web/src/screenshots/background_4.png
-        INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
+        INPUT="web/vrt/__screenshots__/pages-landing--no-projects--light.png"
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="book/src/rhizome_landing.png"
       '' + landingLib;
@@ -425,7 +425,7 @@ let
         set -euo pipefail
 
         echo "== landing hero"
-        INPUT="''${1:-web/vrt/__screenshots__/pages-projects--empty-landing--light.png}"
+        INPUT="''${1:-web/vrt/__screenshots__/pages-landing--no-projects--light.png}"
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="book/src/rhizome_landing.png"
       '' + landingLib + ''
@@ -459,7 +459,7 @@ let
 
         echo "== landing hero"
         OUTDIR=$(mktemp -d)
-        INPUT="web/vrt/__screenshots__/pages-projects--empty-landing--light.png"
+        INPUT="web/vrt/__screenshots__/pages-landing--no-projects--light.png"
         BG="web/assets/landing-gradient.jpg"
         OUTPUT="$OUTDIR/rhizome_landing.png"
       '' + landingLib + faviconIcoLib + ''
