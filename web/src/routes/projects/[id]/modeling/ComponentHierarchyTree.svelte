@@ -171,7 +171,8 @@
   </button>
   <span
     class="status shrink-0 {PORT_STATUS[port?.role ?? 'peer']}"
-    title={`${port?.role ?? "peer"}, ${port?.protocol || "untyped"}`}
+    title={`Port ${label} (${port?.role ?? "peer"}, ${port?.protocol || "untyped"})`}
+    data-testid="port-role-dot"
     aria-hidden="true"
   ></span>
 {/snippet}
