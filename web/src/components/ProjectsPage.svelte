@@ -126,7 +126,7 @@
                    says so, and starts a project right here. -->
               <div
                 data-testid="projects-empty"
-                class="flex flex-col items-center text-center gap-3 rounded-box border border-dashed border-base-content/20 px-6 py-12"
+                class="flex flex-col items-center text-center gap-3 px-6 py-12"
               >
                 <div class="text-3xl">🗂️</div>
                 <div class="font-semibold text-base-content">
