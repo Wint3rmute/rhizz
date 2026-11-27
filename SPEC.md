@@ -729,7 +729,7 @@ codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
 ### Warning Levels
 
 > **Impl:** see [warning levels](SPEC/warning-levels.md) — the `WarningLevel`
-> ordering, the per-code mapping, and the gating rule.
+> ordering and the gating rule; each code declares its level in `SPEC/diagnostics/W*.md`.
 
 Every warning declares the least-detailed spec level it belongs to —
 `business`, `architectural`, or `component`. The selected warning level gates

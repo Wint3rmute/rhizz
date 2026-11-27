@@ -7,10 +7,11 @@ Completed tasks are listed here, most recent first.
 ## Task <N> — View filter `include_tags` as a coverage contract (W023)
 
 - **Semantics:** `filter { include_tags = [...] }` no longer does nothing: every component of the view's system carrying ≥1 of the tags must be placed as a `node`, else **W023** (architectural) per missing component, sorted by key. Not a selection — layout stays hand-placed. Placed ancestors don't count; other systems and bare definitions never match. Other filter attributes are still parsed-only.
-- **Core:** `validate_view_filter` in `crates/rhizome-core/src/validate.rs` (runs from `validate_view`, so CLI/web/server all report it); `SPEC/diagnostics/W023.md`; SPEC.md §2.10/§9, `warning-levels.md`, `architecture.md`, `models.md`, `frontend.md` updated.
+- **Core:** `validate_view_filter` in `crates/rhizome-core/src/validate.rs` (runs from `validate_view`, so CLI/web/server all report it); `SPEC/diagnostics/W023.md`; SPEC.md §2.10/§9, `architecture.md`, `models.md`, `frontend.md` updated.
 - **Web:** `ViewFilterPanel.svelte` — "Filters" section below the Diagrams tree on the Modeling left sidebar, shown only with nothing selected. DaisyUI badge chips; Space/Enter/blur confirms, ✕ or Backspace-on-empty removes; model tags as datalist completions; lists matching components not shown (mirror of W023 on unsaved canvas state, `viewFilter.ts`). Edits go through `carriedMeta.filter`, are saved with the view and are one undo step (`DiagramSnapshot.filter`).
 - **Tests:** 6 Rust unit tests (W023); `viewFilter.test.ts`; `ViewFilterPanel.stories.ts` (VRT `MissingComponents` + no-vrt play stories); e2e `view-filter.spec.ts` (chips persist to HCL, missing list, undo, hidden while selected).
 - **Examples:** `social-media/views/video-pipeline.hcl` (no nodes, filters on `video`) now reports five W023s — left as-is as a live demo of the check.
+- **Docs:** dropped the hand-kept code→level table from `SPEC/warning-levels.md`; each `SPEC/diagnostics/W*.md` is the single source of truth (it had already drifted on W004/W009/W013 titles).
 
 ---
 

@@ -58,40 +58,14 @@ The rule of thumb, which also drives the mapping below:
   messages, an unconnected port) is exactly what a
   high-level spec legitimately has not written yet. → `component`
 
-## Warning code mapping
+## Per-warning levels
 
-Each warning's level is declared in its own file under
-[`SPEC/diagnostics/`](diagnostics/), which is the source of truth; this table is
-a generated-by-hand summary. Change the level in the diagnostic file.
-
-| Code | Warning | Level |
-| ---- | ------- | ----- |
-| W000 | General frontend warning | `business` |
-| W001 | Non-leaf component has no children | `architectural` |
-| W002 | Message has no fields | `component` |
-| W003 | Orphan component | `architectural` |
-| W004 | Missing full_name | `component` |
-| W005 | Self-connection | `business` |
-| W006 | Level decreases relative to parent | `business` |
-| W008 | Protocol mismatch | `business` |
-| W009 | Incompatible port roles (not yet implemented) | `business` |
-| W010 | Unused port | `component` |
-| W011 | Protocol has no messages | `component` |
-| W012 | Orphan top-level component or protocol | `architectural` |
-| W013 | Port role not permitted by protocol (not yet implemented) | `business` |
-| W014 | Undefined protocol reference | `business` |
-| W015 | Unexpected block type ignored | `business` |
-| W016 | View node references unknown component | `architectural` |
-| W017 | View node outside the view's system | `architectural` |
-| W018 | Component missing documentation | `component` |
-| W019 | Incomplete connection | `architectural` |
-| W020 | Realization outside the component hierarchy | `architectural` |
-| W021 | Protocol cannot carry the realized protocol | `architectural` |
-| W022 | Undefined protocol in `encapsulates` | `business` |
-| W023 | View filter requires a component the view does not show | `architectural` |
-
-`W000` is emitted by frontends rather than the compiler; its declared level is
-therefore inert and exists only to satisfy the format.
+Each warning declares its level on the second line of its own file under
+[`SPEC/diagnostics/`](diagnostics/) (`**Warning level:** Architectural.`).
+That line is the single source of truth: `build.rs` compiles it into
+`DiagnosticCode::min_warning_level`, so there is no separate table to keep in
+sync. `W000` is emitted by frontends rather than the compiler; its declared
+level is therefore inert and exists only to satisfy the format.
 
 ## Frontends
 
