@@ -58,7 +58,7 @@ def parse_args():
     p.add_argument("--res", default="1920x1080")
     p.add_argument("--percent", type=int, default=100)
     p.add_argument("--style", choices=sorted(STYLES), default="blueprint")
-    p.add_argument("--seed", type=int, default=7, help="seed for the worn-paper pass")
+    p.add_argument("--seed", type=int, default=7, help="seed for the wreckage and worn-paper pass")
     return p.parse_args(argv)
 
 
@@ -212,6 +212,108 @@ def construction(mark, coll):
     guides_object("Circles", circles, mark, depth + 0.002, 0.003, emission("Guide2", GUIDE), coll)
 
 
+def wreckage(mark, coll, seed):
+    """Broken-down generative wireframe around the logo (dark style).
+
+    Four seeded layers in the logo's local frame (x along the lockup, y up,
+    +z toward the viewer): a ribbed curved shell rising from behind the mark,
+    bundles of long splinters, a branching rhizome tangle, and loose shards.
+    Every layer drops and jitters segments so the structure reads as worn,
+    half-collapsed scaffolding rather than clean CAD.
+    """
+    import random
+
+    rng = random.Random(seed)
+    bright = [emission(f"Wire{i}", (v, v, v * 0.98, 1)) for i, v in enumerate((0.95, 0.6, 0.32))]
+    layers = {0: [], 1: [], 2: []}
+
+    def jit(p, a):
+        return Vector((p[0] + rng.gauss(0, a), p[1] + rng.gauss(0, a), p[2] + rng.gauss(0, a)))
+
+    def broken(pts, keep=0.8, a=0.01):
+        """Split a polyline into pieces, dropping some segments."""
+        out, cur = [], []
+        for p in pts:
+            if rng.random() < keep:
+                cur.append(jit(p, a))
+            elif len(cur) > 1:
+                out.append(cur)
+                cur = []
+            else:
+                cur = []
+        if len(cur) > 1:
+            out.append(cur)
+        return out
+
+    # 1. Sail: a shell swept along a rising spine, ribs as arches.
+    def spine(u):
+        return Vector((-3.6 + 2.6 * u, 0.4 + 4.8 * u ** 1.15, -1.0 - 1.2 * u))
+
+    def sail(u, v):
+        width = 0.3 + 1.5 * math.sin(math.pi * min(u * 0.9, 1.0))
+        ang = (v - 0.5) * math.pi * 0.9
+        side = Vector((0.75, -0.45, 0.5)).normalized()
+        lift = Vector((0, 0.3, 1)).normalized()
+        return spine(u) + side * math.sin(ang) * width + lift * (math.cos(ang) - 0.6) * width * 0.7
+
+    for i in range(16):  # ribs
+        u = 0.08 + i / 17
+        layers[0 if i % 3 == 0 else 1] += broken([sail(u, v / 24) for v in range(25)], 0.88)
+    for j in range(11):  # stringers
+        v = j / 10
+        layers[1] += broken([sail(u / 40, v) for u in range(41)], 0.8, 0.008)
+
+    # 2. Splinter bundles: near-parallel long lines fanning out.
+    for _ in range(5):
+        o = Vector((rng.uniform(-3.5, 3.5), rng.uniform(-2.2, -0.6), rng.uniform(-2.5, 0.8)))
+        d = Vector((rng.uniform(-1, 1), rng.uniform(-0.2, 0.7), rng.uniform(-0.6, 0.4))).normalized()
+        for _ in range(rng.randint(10, 26)):
+            dd = (d + Vector((rng.gauss(0, 0.05), rng.gauss(0, 0.05), rng.gauss(0, 0.05)))).normalized()
+            start = o + dd * rng.uniform(-0.5, 0.8) + jit((0, 0, 0), 0.08)
+            length = rng.uniform(1.0, 4.5)
+            layers[rng.choice((0, 1, 1, 2))].append([start, start + dd * length])
+
+    # 3. Rhizome tangle: branching random walk under and behind the logo.
+    tips = [(Vector((rng.uniform(-3, 3), rng.uniform(-1.4, -0.6), rng.uniform(-1.5, 0.3))),
+             Vector((rng.uniform(-1, 1), rng.uniform(-0.3, 0.3), rng.uniform(-0.5, 0.5))).normalized())
+            for _ in range(7)]
+    for _ in range(260):
+        if not tips:
+            break
+        k = rng.randrange(len(tips))
+        p, d = tips[k]
+        d = (d + Vector((rng.gauss(0, 0.5), rng.gauss(0, 0.25), rng.gauss(0, 0.4)))).normalized()
+        q = p + d * rng.uniform(0.08, 0.35)
+        layers[rng.choice((1, 2, 2))].append([p, q])
+        tips[k] = (q, d)
+        if rng.random() < 0.12:
+            tips.append((q, Vector((-d.y, d.x, d.z)).normalized()))
+        if rng.random() < 0.03 and len(tips) > 3:
+            tips.pop(k)
+
+    # 4. Shards: loose triangles and quads, partly drawn.
+    for _ in range(26):
+        c = Vector((rng.uniform(-3.8, 3.8), rng.uniform(-2.0, 1.6), rng.uniform(-2.5, 0.5)))
+        size = rng.uniform(0.15, 0.9)
+        n = rng.choice((3, 3, 4))
+        pts = [c + Vector((rng.gauss(0, 1), rng.gauss(0, 0.6), rng.gauss(0, 1))) * size for _ in range(n)]
+        layers[rng.choice((0, 1, 2))] += broken(pts + [pts[0]], 0.85, 0.0)
+
+    def clear_of_logo(seg):
+        """Keep the space in front of the lockup readable."""
+        for a, b in zip(seg, seg[1:]):
+            for t in (0, 0.25, 0.5, 0.75, 1):
+                q = a.lerp(b, t)
+                if abs(q.x) < 3.4 and -0.8 < q.y < 0.8 and q.z > -0.4:
+                    return False
+        return True
+
+    for lvl, lines in layers.items():
+        lines = [seg for seg in lines if clear_of_logo(seg)]
+        if lines:
+            guides_3d(f"Wreck{lvl}", lines, mark, (0.0045, 0.0032, 0.0025)[lvl], bright[lvl], coll)
+
+
 def freestyle(scene, exclude, sketchy=False):
     scene.render.use_freestyle = True
     scene.render.line_thickness_mode = "ABSOLUTE"
@@ -270,6 +372,8 @@ def main():
     scene.collection.children.link(coll)
     bpy.context.view_layer.update()
     construction(mark, coll)
+    if args.style == "dark":
+        wreckage(mark, coll, args.seed)
 
     cam_data = bpy.data.cameras.new("Cam")
     cam_data.lens = 35
