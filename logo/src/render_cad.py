@@ -44,7 +44,7 @@ STYLES = {
     "blueprint": dict(ink=(0.07, 0.11, 0.2, 1), guide=(0.42, 0.55, 0.75, 1),
                       paper=(0.93, 0.955, 0.985, 1), face=(1, 1, 1, 1), sun=2.0),
     "dark": dict(ink=(0.95, 0.95, 0.93, 1), guide=(0.55, 0.55, 0.53, 1),
-                 paper=(0.012, 0.012, 0.012, 1), face=(0.02, 0.02, 0.02, 1), sun=0.4),
+                 paper=(0.012, 0.012, 0.012, 1), face=(0.22, 0.22, 0.22, 1), sun=0.0),
 }
 INK = GUIDE = PAPER = None  # set from --style in main()
 
@@ -58,6 +58,10 @@ def parse_args():
     p.add_argument("--res", default="1920x1080")
     p.add_argument("--percent", type=int, default=100)
     p.add_argument("--style", choices=sorted(STYLES), default="blueprint")
+    p.add_argument("--fog", type=float, default=None,
+                   help="fog density (default: 0.014 for dark, 0 for blueprint)")
+    p.add_argument("--glitch", type=float, default=1.0,
+                   help="strength of the digital glitch pass (dark style), 0 disables")
     p.add_argument("--seed", type=int, default=7, help="seed for the wreckage and worn-paper pass")
     return p.parse_args(argv)
 
@@ -210,6 +214,34 @@ def construction(mark, coll):
         circles.append([c + Vector((math.cos(t), math.sin(t))) * rr
                         for t in (k * math.tau / 72 for k in range(73))])
     guides_object("Circles", circles, mark, depth + 0.002, 0.003, emission("Guide2", GUIDE), coll)
+
+
+def three_point(scene):
+    """Dramatic key / fill / rim rig around the lockup (world origin)."""
+
+    def light(name, kind, energy, loc, target, size=None, spot=None, blend=0.4):
+        data = bpy.data.lights.new(name, kind)
+        data.energy = energy
+        if kind == "AREA":
+            data.size = size
+        if kind == "SPOT":
+            data.spot_size = math.radians(spot)
+            data.spot_blend = blend
+            data.shadow_soft_size = 0.05
+        ob = bpy.data.objects.new(name, data)
+        scene.collection.objects.link(ob)
+        ob.location = loc
+        ob.rotation_euler = (Vector(target) - Vector(loc)).to_track_quat("-Z", "Y").to_euler()
+        return ob
+
+    # Key: hard uplight from below-left, on the camera side.
+    light("Key", "SPOT", 1800, (-5.5, -4.5, -3.5), (-0.8, 0, 0), spot=22, blend=0.35)
+    # Fill: weak and soft from the right, keeps the far letters from dying.
+    fill = light("Fill", "AREA", 250, (6, -4, -0.5), (1.5, 0, 0), size=5)
+    fill.visible_volume_scatter = False
+    # Rim: strong backlight from behind and below, grazing the undersides and
+    # throwing beams through the fog toward the camera.
+    light("Rim", "SPOT", 7000, (2.5, 6.5, -2.5), (0.3, 0, 0.2), spot=26, blend=0.3)
 
 
 def wreckage(mark, coll, seed):
@@ -388,6 +420,15 @@ def main():
     so = bpy.data.objects.new("Sun", sun)
     scene.collection.objects.link(so)
     so.rotation_euler = (math.radians(40), math.radians(-30), 0)
+    if args.style == "dark":
+        three_point(scene)
+    fog = args.fog if args.fog is not None else (0.014 if args.style == "dark" else 0.0)
+    if fog > 0:
+        vol = render3d.fog_volume(density=fog)
+        vol.location = (0, 0, 0)
+        vol.scale = (24, 24, 16)
+        coll.objects.link(vol)  # keep Freestyle off the fog box
+        scene.collection.objects.unlink(vol)
 
     world = bpy.data.worlds.new("W")
     scene.world = world
@@ -408,6 +449,8 @@ def main():
     bpy.ops.render.render(write_still=True)
     if args.style == "dark":
         worn(args.out, args.seed)
+        if args.glitch > 0:
+            glitch(args.out, args.seed, args.glitch)
 
 
 def _upsample(a, h, w):
@@ -488,6 +531,65 @@ def worn(path, seed):
     lum = np.clip(lum, 0, 1)
     px[..., 0] = px[..., 1] = px[..., 2] = lum
     px[..., 3] = 1
+    img.pixels[:] = px.ravel()
+    img.filepath_raw = path
+    img.file_format = "PNG"
+    img.save()
+
+
+BAYER4 = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]]
+
+
+def glitch(path, seed, strength=1.0):
+    """Digital damage on top of the worn print: ordered (Bayer) dithering,
+    displaced scanline bands, misplaced blocks and an RGB channel split."""
+    import numpy as np
+
+    img = bpy.data.images.load(path, check_existing=False)
+    w, h = img.size
+    px = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    rng = np.random.default_rng(seed + 1)
+    rgb = px[..., :3].copy()
+
+    # Ordered dithering down to a few grey levels: the fog and stains turn
+    # into a visible Bayer pattern, the ink stays solid.
+    levels = 5
+    thresh = (np.array(BAYER4, dtype=np.float32) + 0.5) / 16
+    t = np.tile(thresh, (h // 4 + 1, w // 4 + 1))[:h, :w, None]
+    rgb = np.floor(rgb * (levels - 1) + t) / (levels - 1)
+
+    # Displaced bands: horizontal slices shoved sideways, some per channel.
+    for _ in range(int(rng.integers(8, 16) * strength)):
+        y0 = int(rng.integers(0, h))
+        bh = int(rng.choice([1, 2, 3, 6, 12, 24, 40]) * (w / 1920 + 0.5))
+        shift = int(rng.normal(0, 0.03) * w * strength)
+        sl = slice(y0, min(h, y0 + bh))
+        if rng.random() < 0.4:
+            c = int(rng.integers(0, 3))
+            rgb[sl, :, c] = np.roll(rgb[sl, :, c], shift, axis=1)
+        else:
+            rgb[sl] = np.roll(rgb[sl], shift, axis=1)
+
+    # Misplaced blocks: rectangles copied from elsewhere, sometimes inverted.
+    for _ in range(int(rng.integers(3, 7) * strength)):
+        bw, bh = int(rng.integers(w // 40, w // 8)), int(rng.integers(h // 80, h // 20))
+        x0, y0 = int(rng.integers(0, w - bw)), int(rng.integers(0, h - bh))
+        x1, y1 = int(rng.integers(0, w - bw)), int(rng.integers(0, h - bh))
+        block = rgb[y1:y1 + bh, x1:x1 + bw].copy()
+        if rng.random() < 0.3:
+            block = 1 - block
+        rgb[y0:y0 + bh, x0:x0 + bw] = block
+
+    # RGB split: red and blue pulled apart horizontally, more toward the edges.
+    k = max(1, int(round(0.004 * w * strength)))
+    rgb[..., 0] = np.roll(rgb[..., 0], -k, axis=1)
+    rgb[..., 2] = np.roll(rgb[..., 2], k, axis=1)
+    rgb[..., 1] = np.roll(rgb[..., 1], k // 3, axis=0)
+
+    # Faint scanlines.
+    rgb[::3] *= 0.9
+
+    px[..., :3] = np.clip(rgb, 0, 1)
     img.pixels[:] = px.ravel()
     img.filepath_raw = path
     img.file_format = "PNG"
