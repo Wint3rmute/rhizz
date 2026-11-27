@@ -26,13 +26,10 @@
   // the strip expands the full diagnostics list above the bar.
   //
   // The strip is a transparent full-bleed button with the content laid over it.
-  // The content row is capped (`max-w-7xl`) to sit on the panel's content edges,
-  // and on a screen wider than that cap the bar's gutters used to be dead
-  // margin — a button inside the capped row can never cover them, and a button
-  // around the row cannot exclude the strictness select (a `<select>` inside a
-  // `<button>` is neither valid markup nor a usable control). So the button is
-  // an `absolute inset-0` layer under everything: it spans the bar's full width,
-  // gutters included; the content row above it is `pointer-events-none` so
+  // A button around the row cannot exclude the strictness select (a `<select>`
+  // inside a `<button>` is neither valid markup nor a usable control). So the
+  // button is an `absolute inset-0` layer under everything: it spans the bar's
+  // full width; the content row above it is `pointer-events-none` so
   // clicks and hover fall through to it; and the select's wrapper is the one
   // `pointer-events-auto` hole. The row needs `relative` for that — a static
   // box paints below a positioned one, and the button must end up under the
@@ -149,27 +146,29 @@
            panels. The chevron points down — the direction this panel
            collapses — mirroring how side-pane chevrons point at their
            rail. The strip toggle below stays the primary control. -->
-      <div class="max-w-7xl mx-auto w-full">
-        <header
-          class="flex items-center gap-2 px-3 py-2 border-b border-base-300"
+      <!-- Header, rule and list all span the full width of the window,
+           like the strip below, rather than a centred content column: on a
+           wide screen a capped column left the rule and the hide button
+           short of the edge. -->
+      <header
+        class="flex items-center gap-2 px-3 py-2 border-b border-base-300"
+      >
+        <h2 class="font-semibold text-lg flex-1 min-w-0 truncate">
+          Diagnostics
+        </h2>
+        <button
+          type="button"
+          class="btn btn-ghost btn-xs"
+          onclick={() => (barLayout = collapseDiagnosticsPanel(barLayout))}
+          aria-label="Hide Diagnostics"
+          title="Hide Diagnostics"
+          aria-expanded="true"
+          aria-controls="diagnostics-panel"
         >
-          <h2 class="font-semibold text-lg flex-1 min-w-0 truncate">
-            Diagnostics
-          </h2>
-          <button
-            type="button"
-            class="btn btn-ghost btn-xs"
-            onclick={() => (barLayout = collapseDiagnosticsPanel(barLayout))}
-            aria-label="Hide Diagnostics"
-            title="Hide Diagnostics"
-            aria-expanded="true"
-            aria-controls="diagnostics-panel"
-          >
-            <span aria-hidden="true">▾</span>
-          </button>
-        </header>
-      </div>
-      <ul class="max-w-7xl mx-auto text-sm pt-2">
+          <span aria-hidden="true">▾</span>
+        </button>
+      </header>
+      <ul class="text-sm pt-2">
         {#if diagnostics.length === 0}
           <li class="px-2 py-1.5 text-base-content/60">
             No problems detected in this project — Well Done!
@@ -187,8 +186,8 @@
        control's wrapper the one `pointer-events-auto` hole (the header comment
        says why the button cannot simply contain the row).
 
-       The row keeps the cap and padding it always had — `max-w-7xl mx-auto` is
-       what keeps the score, the counts and the strictness control on the
+       The row spans the full width with the same gutters as the panel above,
+       so the score, the counts and the strictness control line up with the
        panel's content edges — and it still sets the strip's height: the select
        is the tallest thing in it (24px + `py-2`), and the button is sized by
        `inset-0` over the row, not the other way round.
@@ -212,9 +211,7 @@
       aria-label={toggleLabel}
       title={toggleLabel}
     ></button>
-    <div
-      class="relative w-full max-w-7xl mx-auto flex items-stretch pointer-events-none"
-    >
+    <div class="relative w-full flex items-stretch pointer-events-none">
       <div
         class="min-w-0 flex-1 flex items-center gap-1.5 sm:gap-3 text-left px-4 sm:px-6 lg:px-8 py-2 overflow-hidden"
       >

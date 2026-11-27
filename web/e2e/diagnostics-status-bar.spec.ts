@@ -238,3 +238,33 @@ test("the score badge and strictness control live in the bar, not the navbar", a
     .count();
   expect(selectInsideToggle).toBe(0);
 });
+
+test("expanded diagnostics panel spans the full width of a wide window", async ({
+  page,
+}) => {
+  // Wider than the old `max-w-7xl` (1280px) content column, which left the
+  // header rule and its Hide button stopping short of the window edge.
+  await page.setViewportSize({ width: 1920, height: 900 });
+  const id = await openProject(page, "E2E bar width");
+  await page.goto(`/projects/${id}/overview`);
+  const bar = page.getByTestId("diagnostics-status-bar");
+  const panel = page.getByTestId("diagnostics-panel");
+
+  await bar.getByRole("button", { name: "Expand diagnostics" }).click();
+  await expect(panel).toBeVisible();
+
+  const panelBox = await panel.boundingBox();
+  const headerBox = await panel.locator("header").boundingBox();
+  const hideBox = await panel
+    .getByRole("button", { name: "Hide Diagnostics" })
+    .boundingBox();
+  if (!panelBox || !headerBox || !hideBox)
+    throw new Error("the panel should be laid out");
+
+  // Only the panel's own side padding (at most 32px each) may separate the
+  // header from the panel edges.
+  expect(headerBox.width).toBeGreaterThan(panelBox.width - 2 * 32 - 2);
+  expect(
+    panelBox.x + panelBox.width - (hideBox.x + hideBox.width),
+  ).toBeLessThan(48);
+});
