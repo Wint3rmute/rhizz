@@ -26,9 +26,12 @@ fn parse_args(args: &[&str]) -> Cli {
 
 #[test]
 fn build_examples_exit_0() {
-    // Table-driven consolidation of the former build_{drone, social_media,
-    // software_house}_exits_0 tests: same build + exit 0, only example differs.
-    for example in ["drone", "social-media", "software-house"] {
+    // Every example under `examples/`: the list is generated from that
+    // directory by rhizome-core's build script, so a new example is covered
+    // without touching this test.
+    let examples = rhizome_core::example_projects();
+    assert!(!examples.is_empty(), "no embedded example projects");
+    for example in examples.iter().map(|project| project.id) {
         let cli = parse_args(&[
             "build",
             example_dir(example).to_str().unwrap(),

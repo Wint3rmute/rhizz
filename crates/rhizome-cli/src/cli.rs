@@ -818,22 +818,6 @@ mod tests {
     // ── pipeline (unit-level) ─────────────────────────────────────────────
 
     #[test]
-    fn run_build_examples_exit_0() {
-        // Table-driven consolidation of the former run_build_{drone,
-        // social_media, software_house}_exit_0 tests: same build + exit 0
-        // assertion, only the example name differs.
-        for example in ["drone", "social-media", "software-house"] {
-            let cli = parse_args(&[
-                "build",
-                example_dir(example).to_str().unwrap(),
-                "--no-color",
-            ]);
-            let code = run(&cli);
-            assert_eq!(code, 0, "{example} build should exit 0");
-        }
-    }
-
-    #[test]
     fn run_check_drone_exit_0() {
         let cli = parse_args(&[
             "check",
