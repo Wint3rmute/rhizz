@@ -15,6 +15,7 @@
 
 ### Fix
 
+- **web**: shorten the leaf checkbox label to "Atomic (no sub-components)"
 - **web**: keep shown port labels on screen during view transitions
 - **web**: switch diagrams in Explore on the first click
 - **web**: stop a parent block from covering its children during diagram transitions
