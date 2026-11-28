@@ -1,7 +1,9 @@
 project {
-  name    = "acme-software"
-  version = "0.3.0"
-  authors = ["rhizome-examples"]
+  name        = "acme-software"
+  full_name   = "Software House"
+  description = "Organizational model of software engineering departments and processes"
+  version     = "0.3.0"
+  authors     = ["rhizome-examples"]
 }
 
 protocol "agile" {

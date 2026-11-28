@@ -4,14 +4,21 @@ Example projects demonstrating rhizome's core capabilities. Each is a
 self-contained directory of `.hcl` files that can be passed to `rhizome build`.
 The same projects are offered in the web app's example picker.
 
-| Example                            | Domain                                 | Shows                                                                                                           |
-| ---------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| [apollo-11/](apollo-11/) | Spaceflight — Apollo 11 mission stack | Large multi-protocol model, several focused views over one system |
-| [drone/](drone/)                   | Hardware — quadcopter + ground station | Component decomposition, hardware interfaces with message payloads, multi-system projects, in-progress modeling |
-| [social-media/](social-media/)     | Software — short-video platform        | Service-oriented architecture, API + data flow modeling, mixed leaf/non-leaf depth                              |
-| [software-house/](software-house/) | Organization — software company        | Departments as components, business processes as interfaces, demonstrating rhizome beyond tech systems            |
-| [weather-service/](weather-service/) | Software — encapsulated backend        | Proxy ports and delegation: one boundary port forwarding inward over an N-hop chain                            |
-| [web-app/](web-app/) | Software — full-stack web application | Frontend/backend/database split, protocol encapsulation (`https` carrying `jwt`), per-layer views |
+Each example declares its picker title and description in its own `project`
+block (`full_name`, `description`); the table below is generated from them.
+
+<!-- BEGIN GENERATED: examples table — edit each example's `project` block, then run `just examples-readme` -->
+
+| Example                              | Name                    | Description                                                              |
+| ------------------------------------ | ----------------------- | ------------------------------------------------------------------------ |
+| [apollo-11/](apollo-11/)             | Apollo 11 Mission Stack | Trans-lunar, lunar landing, and Deep Space Network architecture          |
+| [drone/](drone/)                     | Quadcopter Drone        | Quadcopter drone with ground station and flight controller decomposition |
+| [social-media/](social-media/)       | Social Media Platform   | Short-video platform backend services and event streaming pipelines      |
+| [software-house/](software-house/)   | Software House          | Organizational model of software engineering departments and processes   |
+| [weather-service/](weather-service/) | Weather Service         | Encapsulated backend with proxy ports and delegation                     |
+| [web-app/](web-app/)                 | Web Application         | Full-stack web application with frontend, backend API, and database      |
+
+<!-- END GENERATED -->
 
 Every example intentionally includes incomplete parts (missing full names,
 empty non-leaf components) that compile without errors but produce warnings —

@@ -135,6 +135,10 @@ pub struct RawFile {
 pub struct RawProject {
     /// Optional project name.
     pub name: Option<String>,
+    /// Optional display title.
+    pub full_name: Option<String>,
+    /// Optional one-sentence summary.
+    pub description: Option<String>,
     /// Optional semantic version.
     pub version: Option<String>,
     /// List of authors.
@@ -282,6 +286,10 @@ pub struct RawField {
 struct ProjectAttrs {
     /// Optional project name.
     name: Option<String>,
+    /// Optional display title.
+    full_name: Option<String>,
+    /// Optional one-sentence summary.
+    description: Option<String>,
     /// Optional version string.
     version: Option<String>,
     /// Optional author list.
@@ -522,6 +530,8 @@ fn parse_project(body: &Body, location: Option<SourceLocation>) -> ParseResult<R
     let a: ProjectAttrs = attrs(body)?;
     Ok(RawProject {
         name: a.name,
+        full_name: a.full_name,
+        description: a.description,
         version: a.version,
         authors: a.authors.unwrap_or_default(),
         location,

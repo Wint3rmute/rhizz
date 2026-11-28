@@ -99,12 +99,20 @@ fn should_serialize_project(project: &Project) -> bool {
     !project.name.is_empty()
         || (!project.version.is_empty() && project.version != "0.0.0")
         || !project.authors.is_empty()
+        || project.full_name.is_some()
+        || project.description.is_some()
 }
 
 fn serialize_project(out: &mut String, project: &Project) {
     out.push_str("project {\n");
     if !project.name.is_empty() {
         let _ = writeln!(out, "  name    = {}", escape_string(&project.name));
+    }
+    if let Some(full_name) = &project.full_name {
+        let _ = writeln!(out, "  full_name   = {}", escape_string(full_name));
+    }
+    if let Some(description) = &project.description {
+        let _ = writeln!(out, "  description = {}", escape_string(description));
     }
     if !project.version.is_empty() && project.version != "0.0.0" {
         let _ = writeln!(out, "  version = {}", escape_string(&project.version));
@@ -1138,6 +1146,43 @@ system "demo" {
         let serialized2 = serialize_model(&model2);
 
         assert_eq!(serialized1, serialized2, "serialization must be idempotent");
+    }
+
+    #[test]
+    fn project_full_name_and_description_roundtrip() {
+        let hcl = r#"project {
+  name        = "demo"
+  full_name   = "Demo \"Project\""
+  description = "Shows how a project describes itself"
+}
+
+system "main" {}
+"#;
+        let res = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: hcl.to_string(),
+        }]);
+        assert!(
+            res.diagnostics.iter().all(|d| !d.is_error()),
+            "{:?}",
+            res.diagnostics
+        );
+        let model = res.model.expect("model should resolve");
+        assert_eq!(model.project.full_name.as_deref(), Some("Demo \"Project\""));
+        assert_eq!(
+            model.project.description.as_deref(),
+            Some("Shows how a project describes itself")
+        );
+
+        let serialized = serialize_model(&model);
+        let again = compile(&[Source {
+            filename: "system.hcl".to_string(),
+            content: serialized,
+        }])
+        .model
+        .expect("serialized model should resolve");
+        assert_eq!(again.project.full_name, model.project.full_name);
+        assert_eq!(again.project.description, model.project.description);
     }
 
     #[test]

@@ -41,17 +41,25 @@ cross-file resolution ambiguity.
 
 ```hcl
 project {
-  name    = "military-drone"
-  version = "0.1.0"
-  authors = ["Alice", "Bob"]
+  name        = "military-drone"
+  full_name   = "Military Reconnaissance Drone"
+  description = "Airframe, avionics and ground station of a recon drone"
+  version     = "0.1.0"
+  authors     = ["Alice", "Bob"]
 }
 ```
 
-| Attribute | Type         | Required | Default        | Description                 |
-| --------- | ------------ | -------- | -------------- | --------------------------- |
-| `name`    | string       | no       | directory name | Human-readable project name |
-| `version` | string       | no       | `"0.0.0"`      | Semantic version            |
-| `authors` | list(string) | no       | `[]`           | List of authors             |
+| Attribute     | Type         | Required | Default        | Description                                  |
+| ------------- | ------------ | -------- | -------------- | -------------------------------------------- |
+| `name`        | string       | no       | directory name | Short project name                           |
+| `full_name`   | string       | no       | —              | Display title of the project                 |
+| `description` | string       | no       | —              | One-sentence summary of what the model shows |
+| `version`     | string       | no       | `"0.0.0"`      | Semantic version                             |
+| `authors`     | list(string) | no       | `[]`           | List of authors                              |
+
+The bundled examples under `examples/` must set `full_name` and
+`description`: the build reads them for the web app's example picker and
+`examples/README.md`, and fails if either is missing.
 
 ---
 

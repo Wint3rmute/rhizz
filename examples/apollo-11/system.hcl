@@ -1,7 +1,9 @@
 project {
-  name    = "apollo-11"
-  version = "1.0.0"
-  authors = ["NASA / rhizome-showcase"]
+  name        = "apollo-11"
+  full_name   = "Apollo 11 Mission Stack"
+  description = "Trans-lunar, lunar landing, and Deep Space Network architecture"
+  version     = "1.0.0"
+  authors     = ["NASA / rhizome-showcase"]
 }
 
 protocol "cryo-reactant-supply" {

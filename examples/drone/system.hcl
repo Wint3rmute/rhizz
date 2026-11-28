@@ -1,7 +1,9 @@
 project {
-  name    = "drone-system"
-  version = "0.3.0"
-  authors = ["rhizome-examples"]
+  name        = "drone-system"
+  full_name   = "Quadcopter Drone"
+  description = "Quadcopter drone with ground station and flight controller decomposition"
+  version     = "0.3.0"
+  authors     = ["rhizome-examples"]
 }
 
 protocol "analog-video" {

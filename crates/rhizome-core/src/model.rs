@@ -139,6 +139,8 @@ impl Default for Model {
         Self {
             project: Project {
                 name: String::new(),
+                full_name: None,
+                description: None,
                 version: String::new(),
                 authors: vec![],
             },
@@ -296,11 +298,17 @@ impl Model {
     }
 }
 
-/// Optional project-level metadata (name, version, authors).
+/// Optional project-level metadata (name, full name, description, version, authors).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
-    /// Human-readable project name.
+    /// Project name (short identifier, defaults to the directory name).
     pub name: String,
+    /// Optional display title, e.g. `"Apollo 11 Mission Stack"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub full_name: Option<String>,
+    /// Optional one-sentence summary of what the project models.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     /// Semantic version string.
     pub version: String,
     /// List of authors.

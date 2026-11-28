@@ -1,7 +1,9 @@
 project {
-  name    = "web-app"
-  version = "0.3.0"
-  authors = ["rhizome-examples"]
+  name        = "web-app"
+  full_name   = "Web Application"
+  description = "Full-stack web application with frontend, backend API, and database"
+  version     = "0.3.0"
+  authors     = ["rhizome-examples"]
 }
 
 protocol "https" {
