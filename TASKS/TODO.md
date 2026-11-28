@@ -146,3 +146,25 @@ quietly loses state:
 over MCP). After the rename, the model compiles with no new diagnostics, every
 `realized_by` and view that referred to the old name uses the new one, and the
 whole rename is one undo step.
+
+---
+
+## Task — Line numbers for view-file diagnostics
+
+Model diagnostics report the `file` and `line` of the block they are about (see
+"Location" in `SPEC/diagnostics.md`). View diagnostics (`E004`/`E006`/`E016`
+from `validate_view`, `W016`, `W017`, `W023`) still report the file only,
+because view files go through a separate parser, `serialize::parse_views`, which
+reads `hcl::Body` and so has no spans.
+
+1. Move `parse_views` onto the same approach as `parse.rs`: walk the
+   `hcl::edit` tree (spans) and convert each block body to `hcl::Body` for the
+   serde attribute structs (`view_attrs`).
+2. Record a `SourceLocation` on `ViewDefinition` and on each node, without
+   affecting `PartialEq`/serialization (views are round-tripped and compared).
+3. Point `E016`/`E004`/`E006` at the `view` block, `W016`/`W017` at the
+   offending `node` block, and `W023` at the `filter` block.
+4. Give `parse_views` errors (E000) a line, like `ParseError` does.
+
+**Done when:** every view diagnostic in `validate_view` carries a line, with a
+test per code asserting the exact line.
