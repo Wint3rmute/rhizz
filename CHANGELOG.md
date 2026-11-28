@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: jump from a diagnostic to its line in the Code page
 - **core**: report the file and line of the block each diagnostic is about
 - **web**: use matching underlined tabs in the inventory sidebars
 - **web**: keep connections and view layout when renaming a port
