@@ -29,23 +29,29 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             continue;
         }
         if !comp.leaf && comp.children.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W001,
-                format!(
-                    "component `{}` is non-leaf but has no child components",
-                    comp.label
-                ),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W001,
+                    format!(
+                        "component `{}` is non-leaf but has no child components",
+                        comp.label
+                    ),
+                )
+                .at(comp.location.as_ref()),
+            );
         }
     }
 
     // W002 -- message has no fields defined
     for msg in &model.messages {
         if msg.fields.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W002,
-                format!("message `{}` has no fields", msg.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W002,
+                    format!("message `{}` has no fields", msg.label),
+                )
+                .at(msg.location.as_ref()),
+            );
         }
     }
 
@@ -66,23 +72,29 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
                 .source
                 .as_deref()
                 .map_or_else(String::new, |source| format!(" (source `{source}`)"));
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W003,
-                format!(
-                    "component `{}`{} is not referenced by any connection",
-                    comp.label, source_suffix
-                ),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W003,
+                    format!(
+                        "component `{}`{} is not referenced by any connection",
+                        comp.label, source_suffix
+                    ),
+                )
+                .at(comp.location.as_ref()),
+            );
         }
     }
 
     // W004 -- entity is missing a full_name
     for sys in &model.systems {
         if sys.full_name.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W004,
-                format!("system `{}` is missing a full_name", sys.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W004,
+                    format!("system `{}` is missing a full_name", sys.label),
+                )
+                .at(sys.location.as_ref()),
+            );
         }
     }
     for comp in &model.components {
@@ -90,39 +102,51 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             continue;
         }
         if comp.full_name.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W004,
-                format!("component `{}` is missing a full_name", comp.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W004,
+                    format!("component `{}` is missing a full_name", comp.label),
+                )
+                .at(comp.location.as_ref()),
+            );
         }
     }
     for conn in &model.connections {
         if conn.full_name.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W004,
-                format!("connection `{}` is missing a full_name", conn.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W004,
+                    format!("connection `{}` is missing a full_name", conn.label),
+                )
+                .at(conn.location.as_ref()),
+            );
         }
     }
     for msg in &model.messages {
         if msg.full_name.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W004,
-                format!("message `{}` is missing a full_name", msg.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W004,
+                    format!("message `{}` is missing a full_name", msg.label),
+                )
+                .at(msg.location.as_ref()),
+            );
         }
     }
 
     // W005 -- connection `from` and `to` point to the same component
     for conn in &model.connections {
         if conn.from.component == conn.to.component {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W005,
-                format!(
-                    "connection `{}` has 'from' and 'to' pointing to the same component",
-                    conn.label
-                ),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W005,
+                    format!(
+                        "connection `{}` has 'from' and 'to' pointing to the same component",
+                        conn.label
+                    ),
+                )
+                .at(conn.location.as_ref()),
+            );
         }
     }
 
@@ -136,13 +160,16 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
             None => continue,
         };
         if comp.level < parent_level {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W006,
-                format!(
-                    "component `{}` has level {} which is less than parent level {}",
-                    comp.label, comp.level, parent_level
-                ),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W006,
+                    format!(
+                        "component `{}` has level {} which is less than parent level {}",
+                        comp.label, comp.level, parent_level
+                    ),
+                )
+                .at(comp.location.as_ref()),
+            );
         }
     }
     // For connections: determine parent scope level by scanning system/component
@@ -162,13 +189,16 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if let Some(&parent_level) = conn_parent_level.get(&idx)
             && conn.level < parent_level
         {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W006,
-                format!(
-                    "connection `{}` has level {} which is less than parent level {}",
-                    conn.label, conn.level, parent_level
-                ),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W006,
+                    format!(
+                        "connection `{}` has level {} which is less than parent level {}",
+                        conn.label, conn.level, parent_level
+                    ),
+                )
+                .at(conn.location.as_ref()),
+            );
         }
     }
 
@@ -188,13 +218,16 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
                 .map(|p| p.protocol.as_str())
                 .unwrap_or_default();
             if !from_proto.is_empty() && !to_proto.is_empty() && from_proto != to_proto {
-                warnings.push(Diagnostic::warning(
-                    DiagnosticCode::W008,
-                    format!(
-                        "connection `{}`: protocol mismatch (`{}` vs `{}`)",
-                        conn.label, from_proto, to_proto
-                    ),
-                ));
+                warnings.push(
+                    Diagnostic::warning(
+                        DiagnosticCode::W008,
+                        format!(
+                            "connection `{}`: protocol mismatch (`{}` vs `{}`)",
+                            conn.label, from_proto, to_proto
+                        ),
+                    )
+                    .at(conn.location.as_ref()),
+                );
             }
         }
     }
@@ -227,10 +260,13 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
         if !used_ports.contains(&idx) {
             // Unconnected ports emit W010 unless marked as an optional external port (external = true, required = false)
             if !port.external || port.required {
-                warnings.push(Diagnostic::warning(
-                    DiagnosticCode::W010,
-                    format!("port `{}` is not referenced by any connection", port.label),
-                ));
+                warnings.push(
+                    Diagnostic::warning(
+                        DiagnosticCode::W010,
+                        format!("port `{}` is not referenced by any connection", port.label),
+                    )
+                    .at(port.location.as_ref()),
+                );
             }
         }
     }
@@ -238,10 +274,13 @@ pub fn validate(model: &Model) -> Vec<Diagnostic> {
     // W011 -- protocol has no messages defined
     for proto in &model.protocols {
         if proto.messages.is_empty() {
-            warnings.push(Diagnostic::warning(
-                DiagnosticCode::W011,
-                format!("protocol `{}` has no messages defined", proto.label),
-            ));
+            warnings.push(
+                Diagnostic::warning(
+                    DiagnosticCode::W011,
+                    format!("protocol `{}` has no messages defined", proto.label),
+                )
+                .at(proto.location.as_ref()),
+            );
         }
     }
 
@@ -358,10 +397,13 @@ fn completeness_warnings(model: &Model) -> Vec<Diagnostic> {
                     .map_or("?", |proto| proto.label.as_str())
             ),
         };
-        warnings.push(Diagnostic::warning(
-            DiagnosticCode::W019,
-            format!("connection `{}` is incomplete: {reason}", conn.label),
-        ));
+        warnings.push(
+            Diagnostic::warning(
+                DiagnosticCode::W019,
+                format!("connection `{}` is incomplete: {reason}", conn.label),
+            )
+            .at(conn.location.as_ref()),
+        );
     }
     warnings
 }
@@ -400,7 +442,9 @@ fn realization_warnings(model: &Model) -> Vec<Diagnostic> {
                         outside.join(" and "),
                         parent.label
                     ),
-                ));
+                )
+                .at(child.location.as_ref()),
+                );
             }
 
             // W021 -- the realizing protocol must list the realized one in
@@ -428,7 +472,9 @@ fn realization_warnings(model: &Model) -> Vec<Diagnostic> {
                             name(q),
                             name(p)
                         ),
-                    ));
+                    )
+                    .at(parent.location.as_ref()),
+                    );
                 }
             }
         }
@@ -486,13 +532,16 @@ pub fn validate_docs(
         if has_doc(&comp.label, doc_keys) {
             continue;
         }
-        warnings.push(Diagnostic::warning(
-            DiagnosticCode::W018,
-            format!(
-                "component `{}` is missing documentation (`docs/{}.md`)",
-                comp.label, comp.label
-            ),
-        ));
+        warnings.push(
+            Diagnostic::warning(
+                DiagnosticCode::W018,
+                format!(
+                    "component `{}` is missing documentation (`docs/{}.md`)",
+                    comp.label, comp.label
+                ),
+            )
+            .at(comp.location.as_ref()),
+        );
     }
     warnings
 }

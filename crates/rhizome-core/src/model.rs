@@ -4,6 +4,7 @@
 //! system model after parsing and name resolution.  All cross-references
 //! use arena-indexed newtype IDs instead of raw strings.
 
+use crate::diagnostics::SourceLocation;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -324,6 +325,10 @@ pub struct System {
     pub components: Vec<ComponentId>,
     /// Direct child connections.
     pub connections: Vec<ConnectionId>,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// A resolved component (physical or logical building block).
@@ -363,6 +368,10 @@ pub struct Component {
     pub ports: Vec<PortId>,
     /// Connections defined inside this component's scope.
     pub connections: Vec<ConnectionId>,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// A resolved top-level protocol schema.
@@ -389,6 +398,10 @@ pub struct Protocol {
     /// (`E020`) are dropped.
     #[serde(default)]
     pub encapsulates_ids: Vec<ProtocolId>,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// A resolved port on a component.
@@ -420,6 +433,10 @@ pub struct Port {
     /// (`None` unless `inferred`). Display-only provenance for inspectors.
     #[serde(default)]
     pub inferred_from: Option<PortId>,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// One endpoint of a connection — a component and an optional port on that component.
@@ -471,6 +488,10 @@ pub struct Connection {
     /// declares `realized_by`.
     #[serde(default)]
     pub is_delegation: bool,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// A resolved message carried by a port.
@@ -486,6 +507,10 @@ pub struct Message {
     pub level: i32,
     /// Data fields carried by this message.
     pub fields: Vec<FieldId>,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// A resolved data field inside a message.
@@ -501,6 +526,10 @@ pub struct Field {
     pub unit: String,
     /// Whether this field is mandatory.
     pub required: bool,
+    /// Where the entity's block was declared, for diagnostics. Never
+    /// serialized: it describes the source text, not the model.
+    #[serde(skip)]
+    pub location: Option<SourceLocation>,
 }
 
 /// Address of one connection: the scope it is visible in, plus its label.

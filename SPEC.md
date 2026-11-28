@@ -744,6 +744,8 @@ ambiguity as in endpoint paths.
 Each diagnostic code is documented in its own file under
 [`SPEC/diagnostics/`](SPEC/diagnostics/) (e.g. `E001.md`, `W003.md`). Error
 codes (`Exxx`) halt compilation; warning codes (`Wxxx`) are non-blocking.
+Every diagnostic about a block reports the `file` and `line` of that block
+(see [Location](SPEC/diagnostics.md#location)).
 
 ### Warning Levels
 

@@ -24,7 +24,9 @@ pub const PUBLIC_HOST: &str = "rhizome.fly.dev";
 /// Origin of the public deployment (`https://` + [`PUBLIC_HOST`]).
 pub const PUBLIC_URL: &str = "https://rhizome.fly.dev";
 
-pub use diagnostics::{Diagnostic, DiagnosticCode, Level, ParseWarningLevelError, WarningLevel};
+pub use diagnostics::{
+    Diagnostic, DiagnosticCode, Level, ParseWarningLevelError, SourceLocation, WarningLevel,
+};
 pub use examples::{ExampleFile, ExampleProject, example_projects};
 pub use model::{
     Annotation, Component, ComponentId, ComponentKind, ComponentParent, Connection,
@@ -214,7 +216,7 @@ fn compile_model_sources(
             Err(e) => {
                 return CompileResult {
                     model: None,
-                    diagnostics: vec![Diagnostic::error(e.code, e.message)],
+                    diagnostics: vec![e.into()],
                 };
             }
         };
@@ -228,7 +230,7 @@ fn compile_model_sources(
         if let Err(e) = parse::merge_into(&mut merged, file, path) {
             return CompileResult {
                 model: None,
-                diagnostics: vec![Diagnostic::error(e.code, e.message)],
+                diagnostics: vec![e.into()],
             };
         }
     }

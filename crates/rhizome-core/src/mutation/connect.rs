@@ -117,6 +117,7 @@ pub fn connect_components(
             to: Some(endpoint(&to_eff)),
             ..Default::default()
         },
+        location: None,
     });
 
     Ok(ApplyOutcome {
@@ -310,6 +311,7 @@ fn attach_port(raw: &mut RawFile, definition: usize, spec: &PortSpec) -> Result<
                     required: new.required,
                     tags: Vec::new(),
                 },
+                location: None,
             });
             Ok(())
         }

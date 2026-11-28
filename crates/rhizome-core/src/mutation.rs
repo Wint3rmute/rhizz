@@ -540,8 +540,7 @@ pub fn mutate_to_hcl(
     op: &ModelOp,
 ) -> Result<MutationResult, Vec<Diagnostic>> {
     let path = Path::new(filename);
-    let mut raw =
-        parse_file(content, path).map_err(|e| vec![Diagnostic::error(e.code, e.message)])?;
+    let mut raw = parse_file(content, path).map_err(|e| vec![e.into()])?;
 
     let outcome = apply_to_raw(&mut raw, op).map_err(|e| vec![e.into_diagnostic()])?;
     if !outcome.applied {
@@ -576,7 +575,15 @@ pub fn mutate_to_hcl(
             hcl: Some(serialize::serialize_model(&model)),
             path: outcome.path,
             actions: outcome.actions,
-            warnings,
+            // Lines point into `content`, but the warnings describe the
+            // re-serialized `hcl`, whose layout differs: drop them.
+            warnings: warnings
+                .into_iter()
+                .map(|warning| Diagnostic {
+                    line: None,
+                    ..warning
+                })
+                .collect(),
             port_renames: outcome.port_renames,
         }),
         Err(diagnostics) => Err(diagnostics),
@@ -739,6 +746,7 @@ fn port_from_json(port: &PortJson) -> Result<Labeled<RawPort>, MutationError> {
             required: port.required,
             tags: port.tags.clone().unwrap_or_default(),
         },
+        location: None,
     })
 }
 
@@ -930,6 +938,7 @@ fn add_system(
             full_name: non_empty(full_name),
             ..Default::default()
         },
+        location: None,
     });
     Ok(Some(LoggedAction::AddSystem {
         label: label.to_owned(),
@@ -973,6 +982,7 @@ fn add_definition(
             ports,
             ..Default::default()
         },
+        location: None,
     });
     Ok(Some(LoggedAction::AddDefinition {
         label: label.to_owned(),
@@ -1013,6 +1023,7 @@ fn add_instance(
         inner: RawInstance {
             source: Some(source.to_owned()),
         },
+        location: None,
     });
     let parent_path = match scope {
         Scope::System(i) => raw
@@ -2012,6 +2023,7 @@ fn add_protocol(
             encapsulates: options.encapsulates.clone().unwrap_or_default(),
             messages: Vec::new(),
         },
+        location: None,
     });
     Ok(applied(vec![LoggedAction::AddProtocol {
         label: label.to_owned(),
@@ -2152,6 +2164,20 @@ mod tests {
         let hcl = result.hcl.expect("hcl");
         assert!(hcl.contains(r#"instance "a" { source = "cpu" }"#));
         assert_eq!(result.actions.len(), 1);
+    }
+
+    #[test]
+    fn mutation_warnings_carry_no_lines_into_the_rewritten_hcl() {
+        // `box` (W001) sits on line 3 of the input, but the returned `hcl` is
+        // re-serialized with a different layout, so no line is reported.
+        let content = "\n\ncomponent \"box\" {\n  full_name = \"Box\"\n}\n";
+        let result = mutate(content, r#"{"kind":"add_system","label":"demo"}"#).expect("ok");
+        let w001 = result
+            .warnings
+            .iter()
+            .find(|w| w.code == DiagnosticCode::W001)
+            .expect("W001 for `box`");
+        assert_eq!(w001.line, None, "{w001:?}");
     }
 
     #[test]
