@@ -172,6 +172,23 @@ system "computer-setup" {
     expect(result.model()).toBeDefined();
   });
 
+  it("exposes the file and line each diagnostic points at", () => {
+    const result = compile_system([
+      {
+        filename: "system.hcl",
+        content: 'component "a" { leaf = true }\n\ncomponent "b" {}\n',
+      },
+      // A view diagnostic names its file but has no line yet.
+      { filename: "views/empty.hcl", content: 'project { name = "x" }' },
+    ]);
+    const w001 = result.diagnostics().find((d) => d.code === "W001");
+    expect(w001?.file).toBe("system.hcl");
+    expect(w001?.line).toBe(3);
+    const e016 = result.diagnostics().find((d) => d.code === "E016");
+    expect(e016?.file).toBe("views/empty.hcl");
+    expect(e016?.line).toBeUndefined();
+  });
+
   it("extracts connections from compiled model for diagram rendering", () => {
     const sources = [
       {

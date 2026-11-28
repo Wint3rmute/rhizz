@@ -1,6 +1,11 @@
 <script lang="ts">
   import type { DiagnosticJS } from "rhizome";
   import DiagnosticRow from "./DiagnosticRow.svelte";
+  import {
+    codeLocationQuery,
+    diagnosticLocation,
+    type Locatable,
+  } from "./diagnosticLocation";
   import NetActivityIndicator from "./NetActivityIndicator.svelte";
   import ScoreBadge from "./ScoreBadge.svelte";
   import WarningLevelSelect from "./WarningLevelSelect.svelte";
@@ -54,12 +59,34 @@
   let {
     diagnostics,
     score = null,
+    codeHref = null,
   }: {
-    /** Only `code` and `message` are read, so plain objects (stories, tests) fit. */
-    diagnostics: Pick<DiagnosticJS, "code" | "message">[];
+    /**
+     * Only `code`, `message` and the optional `file`/`line` are read, so plain
+     * objects (stories, tests) fit.
+     */
+    diagnostics: (Pick<DiagnosticJS, "code" | "message"> & Locatable)[];
     /** The compiled model's overall score; null hides the badge. */
     score?: { overall_percentage: number } | null;
+    /**
+     * The project's Code page. Each row's `file:line` links there with
+     * `?file=…&line=…`, which opens the file at that line; null leaves the
+     * locations as plain text.
+     */
+    codeHref?: string | null;
   } = $props();
+
+  /** A row's location label, linked to the Code page when there is one. */
+  function rowLocation(
+    diagnostic: Locatable,
+  ): { label: string; href: string | null } | null {
+    const location = diagnosticLocation(diagnostic);
+    if (location === null) return null;
+    return {
+      label: location.label,
+      href: codeHref === null ? null : codeHref + codeLocationQuery(location),
+    };
+  }
 
   // ── Expandable, resizable panel ─────────────────────────────────────────────
   // Open flag + panel height in one serializable store, persisted across
@@ -174,7 +201,7 @@
           </li>
         {/if}
         {#each rows as diagnostic, i (i)}
-          <DiagnosticRow {diagnostic} />
+          <DiagnosticRow {diagnostic} location={rowLocation(diagnostic)} />
         {/each}
       </ul>
     </div>

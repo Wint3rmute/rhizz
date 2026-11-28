@@ -4,6 +4,16 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Jump from a diagnostic to its line in the Code page
+
+- **Why:** diagnostics carry `file`/`line` since the previous task, but the web app never saw them — `DiagnosticJS` exposed only code, message and level.
+- **WASM:** `DiagnosticJS` gains optional `file` and `line` getters (`string | undefined`, `number | undefined` in TS).
+- **Web:** `diagnosticLocation.ts` (pure: `file:line` label, `?file=…&line=…` query, `?line=` parsing). `DiagnosticRow` takes an optional `location` (link, or plain text without an href; the book embed passes none). `DiagnosticsStatusBar` builds it from a new `codeHref` prop, which `ProjectStatusBar` fills with the project's Code page. `CodePage` reads `?line=`: once the URL's file is loaded it sets the cursor on the line's first non-blank column, `revealLineNearTop` (clear of the floating panel), focuses, then drops `line` from the URL with `replaceState` so the same link jumps again. The Code page editor now shows line numbers.
+- **Tests:** `diagnosticLocation.test.ts`; wrapper test for `file`/`line` on `DiagnosticJS`; `DiagnosticsStatusBar.stories.ts` fixtures carry locations (`Expanded` VRT + href assertion, new `no-vrt` `PlainLocations`); e2e `diagnostic-location.spec.ts` (link from Modeling opens Code at the line via Monaco's active line number, and the same link jumps again after moving the cursor).
+- **Docs:** "Diagnostic locations" in `SPEC/frontend.md`.
+
+---
+
 ## Task <N> — Diagnostics point at the block they are about
 
 - **Why:** every diagnostic had `line: None` — `hcl::parse` builds `hcl::Body`, which keeps no source positions, so a warning could not say where the flagged component or connection is. `SPEC/cli.md` already promised `file:line`.

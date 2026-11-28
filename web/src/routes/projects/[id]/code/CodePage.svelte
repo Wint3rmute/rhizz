@@ -1,7 +1,10 @@
 <script lang="ts">
+  import { replaceState } from "$app/navigation";
   import { page } from "$app/state";
-  import { onDestroy, untrack } from "svelte";
+  import type * as monaco from "monaco-editor";
+  import { onDestroy, tick, untrack } from "svelte";
   import MonacoEditor from "../../../../components/MonacoEditor.svelte";
+  import { parseLineParam } from "../../../../components/diagnosticLocation";
   import {
     handleLockLost,
     projectLock,
@@ -241,6 +244,48 @@
       });
   });
 
+  // A `?line=` (a diagnostic's `file:line` link in the status bar) puts the
+  // cursor on that line once the URL's file is the one in the editor, and
+  // scrolls it near the top, clear of the diagnostics panel that floats over
+  // the bottom of the page. The param is then dropped from the URL, so
+  // following the same link again is a fresh navigation that jumps again.
+  let editor = $state<monaco.editor.IStandaloneCodeEditor | undefined>();
+  let pendingLine = $state<number | null>(null);
+
+  $effect(() => {
+    const line = parseLineParam(page.url.searchParams.get("line"));
+    if (line !== null) pendingLine = line;
+  });
+
+  $effect(() => {
+    const line = pendingLine;
+    const target = editor;
+    if (line === null || target === undefined || !fileLoaded) return;
+    const requested = page.url.searchParams.get("file") ?? selectedPath;
+    // Wait for the selection effect to switch to the URL's file and for the
+    // load effect to put that file's text in the editor.
+    if (selectedPath !== requested || loadedPath !== selectedPath) return;
+    pendingLine = null;
+    // `tick` lets the editor pick up the freshly loaded `content` first.
+    void tick().then(() => revealLine(target, line));
+  });
+
+  function revealLine(
+    target: monaco.editor.IStandaloneCodeEditor,
+    line: number,
+  ): void {
+    const model = target.getModel();
+    if (model === null) return;
+    const lineNumber = Math.min(line, model.getLineCount());
+    const column = model.getLineFirstNonWhitespaceColumn(lineNumber) || 1;
+    target.setPosition({ lineNumber, column });
+    target.revealLineNearTop(lineNumber);
+    target.focus();
+    const url = new URL(page.url.href);
+    url.searchParams.delete("line");
+    void replaceState(url, page.state);
+  }
+
   // Navigating away (or otherwise unmounting) is the other way a pending write
   // could be lost, and the last chance to flush it: the debounce timer is not
   // tied to the component's lifetime.
@@ -443,11 +488,14 @@
       </div>
     {:else}
       <div class="flex-1 min-h-0 w-full">
+        <!-- Line numbers on: diagnostics name a line (`system.hcl:14`). -->
         <MonacoEditor
           bind:value={content}
+          bind:editor
           language={selectedPath?.endsWith(".md") ? "markdown" : "hcl"}
           surface="base-100"
           readOnly={readonly}
+          options={{ lineNumbers: "on" }}
         />
       </div>
     {/if}

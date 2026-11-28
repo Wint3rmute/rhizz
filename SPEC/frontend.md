@@ -209,6 +209,24 @@ field loses focus. Escape puts the current name back.
 The MCP `rename_port` tool runs the same op and re-keys every view file on
 disk.
 
+## Diagnostic locations
+
+Each row of the diagnostics panel (the status bar's expanded list) shows where
+the diagnostic points, between its code and its message: `system.hcl:14`, or
+just the path for a view-file diagnostic, which has no line yet (see
+"Location" in `SPEC/diagnostics.md`). Project-wide diagnostics name no file
+and show nothing.
+
+- The label links to the Code page with `?file=…&line=…`. The page opens that
+  file, puts the cursor on the line (at its first non-blank column), scrolls it
+  near the top — clear of the panel, which floats over the bottom of the page —
+  and focuses the editor. It then drops `line` from the URL, so following the
+  same link again jumps again.
+- The Code page editor shows line numbers, so the line a diagnostic names can
+  be found by eye too.
+- `DiagnosticJS` carries the location as `file` and `line` (both optional).
+  The book embed's verdict panel shares the row but shows no location.
+
 ## View filters
 
 With nothing selected, the Modeling page's left sidebar shows a **Filters**
