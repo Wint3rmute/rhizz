@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **core**: report the file and line of the block each diagnostic is about
 - **web**: use matching underlined tabs in the inventory sidebars
 - **web**: keep connections and view layout when renaming a port
 - **web**: show the documentation button with the component's fields
