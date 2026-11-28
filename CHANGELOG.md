@@ -17,6 +17,7 @@
 
 ### Fix
 
+- **web**: fade connections in and out when switching diagrams in Explore and Inventory
 - **web**: shorten the leaf checkbox label to "Atomic (no sub-components)"
 - **web**: keep shown port labels on screen during view transitions
 - **web**: switch diagrams in Explore on the first click
