@@ -218,13 +218,55 @@ describe("blendScenes", () => {
       toPort: "q",
       selected: false,
     };
-    const nodes = [node("a", 0, 0), node("b", 200, 0)];
+    const nodes = [node("a", 0, 0), node("b", 200, 0, { index: 1 })];
     const mid = blendScenes(
       scene({ nodes, edges: [edge] }),
       scene({ nodes, edges: [edge] }),
       0.5,
     );
     expect(mid.edges[0]).toMatchObject({ fromPort: "p", toPort: "q" });
+  });
+
+  it("fades edges with their arriving or leaving endpoints even when both scenes list them", () => {
+    // Read-only scenes (explore, inventory, book embeds) list every logical
+    // edge and leave dropping unplaced endpoints to the canvas. Matching
+    // those lists by id kept a leaving edge solid while its node faded, then
+    // cut it at t = 1; an arriving edge was solid from the first frame.
+    const edge = (id: string, from: number, to: number) => ({
+      id,
+      label: id,
+      from,
+      to,
+      selected: false,
+    });
+    const edges = [
+      edge("stay", 0, 1),
+      edge("leave", 0, 2),
+      edge("arrive", 0, 3),
+    ];
+    const a = node("a", 0, 0, { index: 0 });
+    const b = node("b", 200, 0, { index: 1 });
+    const gone = node("gone", 0, 200, { index: 2 });
+    const fresh = node("fresh", 200, 200, { index: 3 });
+    const from = scene({ nodes: [a, b, gone], edges });
+    const to = scene({ nodes: [a, b, fresh], edges });
+    const mid = blendScenes(from, to, 0.25);
+    expect(mid.edges.map((e) => [e.id, e.opacity])).toEqual([
+      ["stay", 1],
+      ["leave", 0.75],
+      ["arrive", 0.25],
+    ]);
+  });
+
+  it("drops edges neither scene can draw", () => {
+    const orphan = { id: "x", label: "x", from: 7, to: 8, selected: false };
+    const nodes = [node("a", 0, 0)];
+    const mid = blendScenes(
+      scene({ nodes, edges: [orphan] }),
+      scene({ nodes, edges: [orphan] }),
+      0.5,
+    );
+    expect(mid.edges).toEqual([]);
   });
 
   it("paints an arriving container behind the children it already holds", () => {

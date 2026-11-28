@@ -187,6 +187,17 @@ function blendPorts(
   return out;
 }
 
+// Edges a resting scene actually puts on screen: both endpoints placed.
+// Read-only scenes list every logical edge and leave this filter to the
+// canvas, so matching their raw lists by id treated an edge whose node leaves
+// (or arrives) as staying: solid while the node faded, then cut at t = 1.
+function drawnEdges(scene: DiagramScene): DiagramEdge[] {
+  const placed = new Set(scene.nodes.map((node) => node.index));
+  return scene.edges.filter(
+    (edge) => placed.has(edge.from) && placed.has(edge.to),
+  );
+}
+
 export function blendScenes(
   from: DiagramScene,
   to: DiagramScene,
@@ -222,9 +233,9 @@ export function blendScenes(
     nodes.push(restingNode(node, node.box, t, node.ports));
   }
 
-  const incomingEdges = [...to.edges];
+  const incomingEdges = drawnEdges(to);
   const edges: DiagramEdge[] = [];
-  for (const edge of from.edges) {
+  for (const edge of drawnEdges(from)) {
     const match = takeMatch(incomingEdges, (item) => item.id, edge.id);
     if (match) edges.push({ ...match, selected: false, opacity: 1 });
     else edges.push({ ...edge, selected: false, opacity: 1 - t });
