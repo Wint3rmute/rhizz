@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Diagnostics point at the block they are about
+
+- **Why:** every diagnostic had `line: None` — `hcl::parse` builds `hcl::Body`, which keeps no source positions, so a warning could not say where the flagged component or connection is. `SPEC/cli.md` already promised `file:line`.
+- **Parser (`parse.rs`):** walks the `hcl::edit` tree (re-exported by hcl-rs, which already parses through it) instead of `hcl::Body`. Each block body is converted to `hcl::Body` for the unchanged serde `*Attrs` structs, so `deny_unknown_fields` and the custom deserializers stay as they were. `Labeled<T>` and `RawProject` gain `location: Option<SourceLocation>` (file + 1-based line of the block identifier); one `labeled()` helper replaces the per-block label/prefix boilerplate. `ParseError` carries the innermost failing block (`or_at`), syntax errors the line hcl-edit reports; `From<ParseError> for Diagnostic`.
+- **Model:** `System`, `Component`, `Port`, `Connection`, `Protocol`, `Message`, `Field` get `#[serde(skip)] location`, so WASM/JSON output is unchanged. An instance points at its `instance` block; ports/connections cloned from a definition point at the definition's block.
+- **Diagnostics:** `SourceLocation` + `Diagnostic::at(...)`. `Resolver::push_error`/`push_warning` take the location as a required argument, so every new diagnostic has to decide where it points. Every resolve/validate code is attached (rule: point at the subject of the message). Not covered: the multi-system-file check (no single block), view files (file only — follow-up task in `TODO.md`).
+- **Mutations:** `mutate_to_hcl` drops `line` from returned warnings — they describe re-serialized HCL whose layout differs from the input.
+- **Refactors for clippy's line limit:** `check_placement` (E015) out of `process_connections_in_scope`, `delegation_shape_error` (E022) out of `check_delegation_shapes`.
+- **Tests:** `crates/rhizome-core/tests/diagnostic_locations.rs` (33 tests, one per code, exact file + line); parse unit tests for every block type and for error locations; mutation test for dropped lines; book test now expects line 6. `book/book.lock` regenerated (`just book-accept`) — it records `line` and sorts by it.
+- **Docs:** "Location" section in `SPEC/diagnostics.md`, pointer in SPEC.md §4.
+
+---
+
 ## Task <N> — Rename a port without breaking its connections
 
 - **Bug:** renaming a port a connection ends on was refused (`connection ethernet: component router has no port link-thinkcentre`), because the Node Inspector's name field sent a full `ports` list through `update_component` and nothing rewrote the endpoints.
