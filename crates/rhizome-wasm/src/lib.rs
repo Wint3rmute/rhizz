@@ -14,6 +14,8 @@ pub struct DiagnosticJS {
     code: String,
     message: String,
     level: String,
+    file: Option<String>,
+    line: Option<u32>,
 }
 
 #[wasm_bindgen]
@@ -38,6 +40,21 @@ impl DiagnosticJS {
     pub fn level(&self) -> String {
         self.level.clone()
     }
+
+    /// Project-relative path of the file the diagnostic points at, if any.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn file(&self) -> Option<String> {
+        self.file.clone()
+    }
+
+    /// 1-based line of the block the diagnostic is about, if known.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    #[allow(clippy::missing_const_for_fn)] // wasm_bindgen forbids const fns
+    pub fn line(&self) -> Option<u32> {
+        self.line
+    }
 }
 
 impl From<&rhizome_core::Diagnostic> for DiagnosticJS {
@@ -46,6 +63,8 @@ impl From<&rhizome_core::Diagnostic> for DiagnosticJS {
             code: d.code.code.to_string(),
             message: d.message.clone(),
             level: format!("{:?}", d.code.level),
+            file: d.file.as_ref().map(|f| f.to_string_lossy().into_owned()),
+            line: d.line,
         }
     }
 }

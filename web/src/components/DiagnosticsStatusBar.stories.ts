@@ -4,22 +4,37 @@ import { expect, userEvent, waitFor, within } from "storybook/test";
 import DiagnosticsStatusBar from "./DiagnosticsStatusBar.svelte";
 import { forgetDiagnosticsLayout } from "./modular_ui/diagnosticsLayout";
 
-type StoryDiagnostic = Pick<DiagnosticJS, "code" | "message">;
+type StoryDiagnostic = Pick<DiagnosticJS, "code" | "message"> & {
+  file?: string;
+  line?: number;
+};
 
+// Two rows point at a line, one names no file (like a project-wide check), so
+// the panel shows both shapes.
 const sampleDiagnostics = [
   {
     code: "E002",
     message: "connection `uart-link` references undefined component `gps`",
+    file: "system.hcl",
+    line: 14,
   },
-  { code: "W004", message: "component `motor` is missing a full_name" },
+  {
+    code: "W004",
+    message: "component `motor` is missing a full_name",
+    file: "system.hcl",
+    line: 31,
+  },
   { code: "W004", message: "component `esc` is missing a full_name" },
 ] satisfies StoryDiagnostic[];
+
+const CODE_HREF = "/projects/demo/code";
 
 const meta = {
   title: "Overview/DiagnosticsStatusBar",
   component: DiagnosticsStatusBar,
   args: {
     diagnostics: sampleDiagnostics,
+    codeHref: CODE_HREF,
   },
 } satisfies Meta<typeof DiagnosticsStatusBar>;
 
@@ -94,6 +109,25 @@ export const DuplicateDiagnostics: Story = {
       // Two expanded list rows.
       await expect(bar.getAllByRole("listitem")).toHaveLength(2);
     });
+  },
+};
+
+// Without a Code page to open (no project), a location is plain text.
+export const PlainLocations: Story = {
+  tags: ["no-vrt"],
+  loaders: [resetDiagnosticsBar],
+  args: {
+    codeHref: null,
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const bar = within(canvas.getByTestId("diagnostics-status-bar"));
+    await userEvent.click(await bar.findByRole("button"));
+    const label = await bar.findByText("system.hcl:14");
+    await expect(label.tagName).toBe("SPAN");
+    await expect(
+      bar.queryByRole("link", { name: "system.hcl:14" }),
+    ).not.toBeInTheDocument();
   },
 };
 
@@ -241,22 +275,35 @@ export const Expanded: Story = {
     canvasElement.prepend(page);
 
     await userEvent.click(await bar.findByRole("button"));
-    // One row per diagnostic; each row reads icon, then code, then message —
-    // the code is the monospace underlined link to its spec page.
+    // One row per diagnostic; each row reads icon, then code, then (when it
+    // has one) its location, then message — the code is the monospace
+    // underlined link to its spec page.
     const rows = await bar.findAllByRole("listitem");
     await expect(rows).toHaveLength(3);
     for (const row of rows) {
-      const link = within(row).getByRole("link");
+      const [link] = within(row).getAllByRole("link");
+      if (!link) throw new Error("every row links its code");
       await expect(link).toHaveTextContent(/^[EW]\d+$/);
-      // Icon, then code, then message: the link is the row's second element
-      // child, between the glyph span and the message span.
+      // Icon, then code: the code link is the row's second element child.
       const children = Array.from(row.children);
       await expect(children.indexOf(link)).toBe(1);
-      await expect(children).toHaveLength(3);
       const style = getComputedStyle(link);
       await expect(style.textDecorationLine).toContain("underline");
       await expect(style.fontFamily.toLowerCase()).toContain("mono");
     }
+    // The location sits between the code and the message and opens the Code
+    // page at its line; a diagnostic without a file has none.
+    const [first, , last] = rows;
+    if (!first || !last) throw new Error("three rows expected");
+    const location = within(first).getByRole("link", {
+      name: "system.hcl:14",
+    });
+    await expect(Array.from(first.children).indexOf(location)).toBe(2);
+    await expect(location).toHaveAttribute(
+      "href",
+      `${CODE_HREF}?file=system.hcl&line=14`,
+    );
+    await expect(Array.from(last.children)).toHaveLength(3);
 
     const panel = surface(root, 0);
     const background = (el: Element) => getComputedStyle(el).backgroundColor;
