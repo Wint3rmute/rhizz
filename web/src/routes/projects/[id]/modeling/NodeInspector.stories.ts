@@ -158,7 +158,7 @@ export const Readonly: Story = {
     ).toBeDisabled();
     await expect(canvas.getByRole("button", { name: "Center" })).toBeDisabled();
     await expect(
-      canvas.getByRole("button", { name: "Open documentation" }),
+      canvas.getByRole("button", { name: "Open component documentation" }),
     ).toBeDisabled();
     await expect(
       canvas.getByRole("button", { name: "Remove from View" }),
