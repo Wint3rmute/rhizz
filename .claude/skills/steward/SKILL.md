@@ -9,6 +9,7 @@ Applies on top of `AGENTS.md`; that file's workflow still holds.
 
 ## Before every push
 
+- Bring the branch up to date with `main` (see "Keeping the branch current").
 - Make the clone full first: `git rev-parse --is-shallow-repository`, and if
   `true`, `git fetch --unshallow --tags origin`. A shallow clone makes
   `just changelog` silently drop entries.
@@ -17,6 +18,32 @@ Applies on top of `AGENTS.md`; that file's workflow still holds.
   a PR whose `CHANGELOG.md` differs from what `cz changelog` generates.
 - Run the fast check for what you changed (`just lint`, `just test`), not the
   whole suite repeatedly. CI is the full pass.
+
+## Keeping the branch current
+
+Applies to branches you opened. On someone else's branch, merge `main` in and
+never rewrite history. A rebase changes the head and restarts CI, so do not
+rebase on every CI notification; rebase at these moments only:
+
+- **Before every push:** `git fetch origin main`. If
+  `git rev-list --count HEAD..origin/main` is above 0, run
+  `git rebase origin/main` first, then push with `--force-with-lease`. CI
+  restarts on the push anyway.
+- **When CI turns green:** check again. A green PR that is behind `main` is not
+  done: rebase, push, and wait for the new run.
+- **On a merge conflict or stale-base failure:** rebase straight away.
+- **On red CI that is this PR's own bug:** fix it first and rebase in the same
+  push.
+
+After a rebase:
+
+- `CHANGELOG.md` conflicts: regenerate with `just changelog`, never merge by
+  hand.
+- VRT baseline conflicts (LFS PNGs): take `main`'s side, then regenerate with
+  `just vrt` and `just vrt-accept`.
+- Run `git lfs checkout`: a rebase can leave baselines as pointer text, which
+  makes VRT report every screenshot as an error.
+- Stop and tell the user when a source-file conflict is more than trivial.
 
 ## CI failures
 
