@@ -1308,6 +1308,7 @@ pub fn mutate_project(
                 }
                 SaveVfsError::Io(err) => MutateProjectError::Io(err),
             })?;
+            rename_ports_in_view_files(data_dir, project_id, &root, &result.port_renames)?;
             // The model changed: the idle timer restarts. (Always held here —
             // the acquire above succeeded.)
             let _ = locks.note_edit(project_id, user);
@@ -1316,6 +1317,51 @@ pub fn mutate_project(
         Ok(_) => Err(MutateProjectError::NotApplied),
         Err(diagnostics) => Err(MutateProjectError::Refused(diagnostics)),
     }
+}
+
+/// Re-keys the `port` blocks of every view file after a port rename, so a
+/// renamed port keeps its outline side and shown flag in every view, open or
+/// not. A view file that does not parse is left as it is: it is already
+/// broken, and the model write it follows has landed.
+fn rename_ports_in_view_files(
+    data_dir: &Path,
+    project_id: &str,
+    root: &Path,
+    renames: &[rhizome_core::PortRename],
+) -> Result<(), MutateProjectError> {
+    if renames.is_empty() {
+        return Ok(());
+    }
+    let Some(found) = collect_project_entries(data_dir, project_id)? else {
+        return Ok(());
+    };
+    for entry in &found {
+        let Found::File { id, content, .. } = entry else {
+            continue;
+        };
+        let relative = Path::new(relative_of(project_id, id));
+        if !is_view_path(relative) || !is_hcl_path(relative) {
+            continue;
+        }
+        let rewritten = match rhizome_core::rename_ports_in_views(content, renames) {
+            Ok(Some(rewritten)) => rewritten,
+            Ok(None) => continue,
+            Err(err) => {
+                tracing::warn!(?err, path = %relative.display(), "rename_port: view left as is");
+                continue;
+            }
+        };
+        let Ok(absolute) = resolve_confined_path(root, relative) else {
+            continue;
+        };
+        write_atomic(&absolute, &rewritten).map_err(|e| match e {
+            SaveVfsError::Malformed(message) => {
+                MutateProjectError::Io(std::io::Error::other(message))
+            }
+            SaveVfsError::Io(err) => MutateProjectError::Io(err),
+        })?;
+    }
+    Ok(())
 }
 
 /// One entry of a per-project write: `content` set means a file, absent

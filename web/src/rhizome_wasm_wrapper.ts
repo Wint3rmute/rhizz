@@ -5,6 +5,7 @@ import {
   get_example_projects as wasm_get_example_projects,
   type ModelJS,
   parse_views as wasm_parse_views,
+  rename_ports_in_views as wasm_rename_ports_in_views,
   serialize_model as wasm_serialize_model,
   serialize_views as wasm_serialize_views,
 } from "rhizome";
@@ -99,12 +100,22 @@ export interface MutationDiagnostic {
   line: number | null;
 }
 
+/** A port label that changed on one placed component (`rename_port`), keyed
+ * like view nodes (`Model::component_keys`). */
+export interface PortRename {
+  component: string;
+  from: string;
+  to: string;
+}
+
 export interface ApplyModelOpResult {
   applied: boolean;
   hcl?: string;
   path?: string;
   actions: ModelAction[];
   diagnostics: MutationDiagnostic[];
+  /** Port labels that changed on placed components (`rename_port` only). */
+  portRenames: PortRename[];
 }
 
 /** Applies one declarative model mutation via Rust; refusals come back as
@@ -123,6 +134,16 @@ export function serialize_views(views: ViewDefinition[]): string {
 
 export function parse_views(hcl: string): ViewDefinition[] {
   return wasm_parse_views(hcl) as ViewDefinition[];
+}
+
+/** Re-keys one view file's `port` blocks after a port rename. `undefined`
+ * when the file names none of the renamed ports (nothing to write). Throws
+ * when the view HCL does not parse. */
+export function rename_ports_in_views(
+  hcl: string,
+  renames: readonly PortRename[],
+): string | undefined {
+  return wasm_rename_ports_in_views(hcl, renames);
 }
 
 export interface ExampleFile {

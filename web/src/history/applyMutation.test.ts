@@ -124,6 +124,68 @@ describe("applyModelMutation", () => {
     }
   });
 
+  it("renames a connected port, rewriting its endpoint and reporting the views to re-key", async () => {
+    const homelab = `component "router" {
+  leaf = true
+  port "link-thinkcentre" {}
+}
+component "pc" {
+  leaf = true
+  port "eth" {}
+}
+system "homelab" {
+  instance "router" { source = "router" }
+  instance "pc" { source = "pc" }
+  connection "ethernet" {
+    from = "pc/eth"
+    to   = "router/link-thinkcentre"
+  }
+}
+`;
+    const fs = memoryFs({ "system.hcl": homelab });
+    const recorded: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action);
+    });
+    try {
+      const result = await applyModelMutation(fs, "system.hcl", homelab, {
+        kind: "rename_port",
+        component: "homelab/router",
+        label: "link-thinkcentre",
+        newLabel: "eth",
+      });
+      expect(result.applied).toBe(true);
+      expect(result.portRenames).toEqual([
+        { component: "homelab/router", from: "link-thinkcentre", to: "eth" },
+      ]);
+      const content = fs.store.get("system.hcl") ?? "";
+      expect(content).toContain('port "eth"');
+      expect(content).toContain('"/homelab/router/eth"');
+      expect(content).not.toContain("link-thinkcentre");
+      expect(recorded).toEqual([
+        {
+          op: "rename_port",
+          component: "router",
+          label: "link-thinkcentre",
+          newLabel: "eth",
+        },
+      ]);
+
+      // A name the component already uses is refused, writing nothing.
+      const after = fs.store.get("system.hcl") ?? "";
+      const taken = await applyModelMutation(fs, "system.hcl", after, {
+        kind: "rename_port",
+        component: "pc",
+        label: "eth",
+        newLabel: "eth",
+      });
+      expect(taken.applied).toBe(false);
+      expect(fs.store.get("system.hcl")).toBe(after);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("reports instance updates against their definition", async () => {
     const fs = memoryFs();
     await seedDemo(fs);

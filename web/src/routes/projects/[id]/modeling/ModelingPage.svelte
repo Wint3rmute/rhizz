@@ -39,6 +39,11 @@
   import { componentInSystem, systemIndexOfComponent } from "./componentTree";
   import { portRowState, togglePortVisibility } from "./portVisibility";
   import {
+    renamePortSpots,
+    renamePortsInViewFiles,
+    renameVisiblePorts,
+  } from "./portRenames";
+  import {
     type DetailViewTarget,
     detailViewTarget,
   } from "../explore/navigation";
@@ -1792,6 +1797,9 @@
     }
     const diagramBefore = snapshotDiagram();
     const { path: targetPath, content: systemBefore } = await readMainContent();
+    // Other views a port rename rewrote, with their content before it, so the
+    // undo puts them back too. Refilled by every do (redo included).
+    let otherViewsBefore = new Map<string, string>();
     const tx = {
       label,
       do: async (): Promise<boolean> => {
@@ -1806,6 +1814,22 @@
           return false;
         }
         await projectModel.reload();
+        if (result.portRenames !== undefined) {
+          // The open view's ports are re-keyed in memory (its save effect
+          // writes them); every other view file is rewritten here.
+          portPositions = renamePortSpots(portPositions, result.portRenames);
+          visiblePorts = renameVisiblePorts(visiblePorts, result.portRenames);
+          try {
+            otherViewsBefore = await renamePortsInViewFiles(
+              fs,
+              result.portRenames,
+              fullDiagramPath,
+            );
+          } catch (error) {
+            if (!isLockRefusal(error)) throw error;
+            await handleModelingLockLost();
+          }
+        }
         layoutApply?.(result.path);
         noteDiagramEdited();
         return true;
@@ -1813,6 +1837,9 @@
       undo: async (): Promise<void> => {
         try {
           await fs.writeFile(targetPath, systemBefore);
+          for (const [path, content] of otherViewsBefore) {
+            await fs.writeFile(path, content);
+          }
         } catch (error) {
           if (!isLockRefusal(error)) throw error;
           await handleModelingLockLost();
@@ -2602,6 +2629,22 @@
             }
           },
     );
+  }
+
+  // Renames a port on the selected component's definition. The core op
+  // rewrites every connection endpoint naming it; the transaction re-keys the
+  // views' `port` blocks. One undo step.
+  async function handleRenameSelectedPort(
+    label: string,
+    newLabel: string,
+  ): Promise<void> {
+    if (!selectedKey) return;
+    await runModelLayoutTransaction(`rename port ${selectedKey}/${label}`, {
+      kind: "rename_port",
+      component: selectedKey,
+      label,
+      newLabel,
+    });
   }
 
   async function handleRenameSelectedComponent(
@@ -4597,6 +4640,10 @@
             void handleUpdateSelectedComponent(patch).catch(reportDiagramError)}
           onrename={(newLabel) =>
             void handleRenameSelectedComponent(newLabel).catch(
+              reportDiagramError,
+            )}
+          onrenameport={(label, newLabel) =>
+            void handleRenameSelectedPort(label, newLabel).catch(
               reportDiagramError,
             )}
           onsettextalign={(align) => setSelectedTextAlign(align)}

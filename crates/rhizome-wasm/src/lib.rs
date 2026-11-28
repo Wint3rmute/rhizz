@@ -925,6 +925,9 @@ struct ApplyOpResultJS {
     path: Option<String>,
     actions: Vec<rhizome_core::LoggedAction>,
     diagnostics: Vec<rhizome_core::Diagnostic>,
+    /// Port labels that changed on placed components (`rename_port` only).
+    #[serde(rename = "portRenames")]
+    port_renames: Vec<rhizome_core::PortRename>,
 }
 
 /// Applies one declarative model mutation to a primary file and returns
@@ -944,6 +947,7 @@ pub fn apply_model_op(filename: &str, content: &str, op: JsValue) -> Result<JsVa
             path: result.path,
             actions: result.actions,
             diagnostics: result.warnings,
+            port_renames: result.port_renames,
         },
         Err(diagnostics) => ApplyOpResultJS {
             applied: false,
@@ -951,9 +955,26 @@ pub fn apply_model_op(filename: &str, content: &str, op: JsValue) -> Result<JsVa
             path: None,
             actions: Vec::new(),
             diagnostics,
+            port_renames: Vec::new(),
         },
     };
     serde_wasm_bindgen::to_value(&outcome).map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Re-keys the `port` blocks of one view file after a port rename
+/// (`portRenames` from [`apply_model_op`]). Returns the rewritten canonical
+/// HCL, or `undefined` when the file names none of the renamed ports.
+///
+/// # Errors
+///
+/// Returns a `JsError` when the renames do not deserialize or the view HCL
+/// does not parse.
+#[wasm_bindgen]
+pub fn rename_ports_in_views(hcl: &str, renames: JsValue) -> Result<Option<String>, JsError> {
+    let renames: Vec<rhizome_core::PortRename> =
+        serde_wasm_bindgen::from_value(renames).map_err(|e| JsError::new(&e.to_string()))?;
+    rhizome_core::rename_ports_in_views(hcl, &renames)
+        .map_err(|e| JsError::new(&format!("failed to parse views HCL: {e}")))
 }
 
 /// Serializes an array of [`rhizome_core::ViewDefinition`] JS objects into canonical HCL for `views.hcl`.
