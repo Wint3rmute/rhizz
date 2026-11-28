@@ -968,32 +968,32 @@
     >
       <div class="flex-1 min-h-0 flex flex-col gap-3 overflow-hidden p-3">
         <!-- Filter tabs -->
-        <div
-          class="flex items-center gap-1"
-          role="tablist"
-          aria-label="Inventory filters"
-          data-tour={TOUR_TARGETS.inventory}
-        >
-          {#each INVENTORY_TABS as tab (tab)}
-            <button
-              type="button"
-              role="tab"
-              aria-selected={activeTab === tab}
-              class="btn btn-xs {activeTab === tab
-                ? 'btn-primary'
-                : 'btn-ghost'}"
-              onclick={() => selectTab(tab)}
-            >
-              {tab === InventoryTab.Components
-                ? "Components"
-                : tab === InventoryTab.Systems
-                  ? "Systems"
-                  : "Protocols"}
-            </button>
-          {/each}
+        <div class="flex flex-col gap-2">
+          <div
+            class="tabs tabs-border tabs-sm [--tab-height:1.25rem] flex-nowrap"
+            role="tablist"
+            aria-label="Inventory filters"
+            data-tour={TOUR_TARGETS.inventory}
+          >
+            {#each INVENTORY_TABS as tab (tab)}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab}
+                class="tab {activeTab === tab ? 'tab-active' : ''}"
+                onclick={() => selectTab(tab)}
+              >
+                {tab === InventoryTab.Components
+                  ? "Components"
+                  : tab === InventoryTab.Systems
+                    ? "Systems"
+                    : "Protocols"}
+              </button>
+            {/each}
+          </div>
           <button
             type="button"
-            class="btn btn-primary btn-xs ml-auto"
+            class="btn btn-primary btn-xs self-end"
             disabled={creatingEntity || readonly}
             onclick={() => void handleAddEntity()}
             data-testid="inventory-add-entity"
