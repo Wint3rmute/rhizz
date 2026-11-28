@@ -15,6 +15,7 @@
 
 ### Fix
 
+- **web**: switch diagrams in Explore on the first click
 - **web**: stop a parent block from covering its children during diagram transitions
 - **web**: stretch the expanded diagnostics panel across the full window width
 - **book**: make `just bs` work in a clean environment
