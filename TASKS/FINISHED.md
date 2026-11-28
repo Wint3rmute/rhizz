@@ -4,6 +4,16 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Examples declare their own name and description
+
+- **Language:** the `project` block takes optional `full_name` (display title) and `description` (one-sentence summary). Parsed (`RawProject`), resolved into `Project.full_name`/`description` (`Option<String>`, skipped in JSON when absent) and round-tripped by the serializer. SPEC.md §2.1 updated.
+- **Examples:** each `examples/*/system.hcl` `project` block declares them, with the exact picker texts from before (e2e tests match on the names, so they are unchanged).
+- **Build (`crates/rhizome-core/build.rs`):** the hard-coded `match` is gone; `example_metadata` parses each example's `.hcl` files with `hcl-rs` (new build-dependency) and reads `full_name`/`description` from its single `project` block. A missing block or attribute, a non-literal/empty value or a second `project` block fails the build with a message naming the file. Generated string literals are now `{:?}`-escaped.
+- **README:** the table in `examples/README.md` (Example / Name / Description) sits between `BEGIN/END GENERATED` markers and is rendered from `example_projects()`. The unit test `examples::tests::readme_table_matches_examples` fails in `just test` (CI) on drift; `just examples-readme` (new `nix/tasks.nix` script) runs it with `RHIZOME_UPDATE_EXAMPLES_README=1` to rewrite it. The old hand-kept Domain/Shows columns were dropped.
+- **Tests:** `project_full_name_and_description_roundtrip` (serialize.rs), `example_metadata_comes_from_its_project_block` and the README drift test (examples.rs). Checked by hand that an example without `description` fails the build.
+
+---
+
 ## Task <N> — Jump from a diagnostic to its line in the Code page
 
 - **Why:** diagnostics carry `file`/`line` since the previous task, but the web app never saw them — `DiagnosticJS` exposed only code, message and level.

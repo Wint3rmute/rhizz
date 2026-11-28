@@ -132,6 +132,8 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     let p = raw.project.unwrap_or_default();
     r.model.project = Project {
         name: p.name.unwrap_or_default(),
+        full_name: p.full_name,
+        description: p.description,
         version: p.version.unwrap_or_else(|| "0.0.0".to_owned()),
         authors: p.authors,
     };

@@ -176,6 +176,11 @@ logo-video *args:
 logo-intro *args:
     nix run .#logo-intro -- {{args}}
 
+# Regenerates the examples table in examples/README.md from each example's
+# `project` block (`full_name`, `description`). `just test` fails when stale.
+examples-readme:
+    nix run .#examples-readme
+
 # Re-captures those screenshots from the running app (drone example).
 # Run `just wasm` first. Then `just assets` to recompose.
 logo-social-shots *args:

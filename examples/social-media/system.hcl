@@ -1,7 +1,9 @@
 project {
-  name    = "buzzvid"
-  version = "0.3.0"
-  authors = ["rhizome-examples"]
+  name        = "buzzvid"
+  full_name   = "Social Media Platform"
+  description = "Short-video platform backend services and event streaming pipelines"
+  version     = "0.3.0"
+  authors     = ["rhizome-examples"]
 }
 
 protocol "grpc" {

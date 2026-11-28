@@ -128,6 +128,7 @@ let
     audit = [ cargo cargo-audit coreutils bash ];
     "install-web" = [ nodejs coreutils bash ];
     "test-rust" = [ cargo rustc lld coreutils bash ];
+    "examples-readme" = [ cargo rustc lld coreutils bash ];
     "test-web" = [ nodejs playwright-driver.browsers coreutils bash ];
     "test-e2e" = [ nodejs playwright-driver.browsers python3 coreutils bash ];
     coverage = [ rustc cargo cargo-llvm-cov llvmPackages_23.llvm coreutils bash ];
@@ -259,6 +260,18 @@ let
       runtimeInputs = taskInputs."test-rust";
       text = ''
         exec ${pkgs.cargo}/bin/cargo test --quiet --all
+      '';
+    };
+
+    # Rewrites the generated table in examples/README.md from each example's
+    # `project` block. `just test` (the same unit test, without the env var)
+    # fails in CI when the table is stale.
+    examples-readme = write {
+      name = "examples-readme";
+      runtimeInputs = taskInputs."examples-readme";
+      text = ''
+        export RHIZOME_UPDATE_EXAMPLES_README=1
+        exec ${pkgs.cargo}/bin/cargo test --quiet -p rhizome-core --lib -- examples::tests::readme_table_matches_examples
       '';
     };
 

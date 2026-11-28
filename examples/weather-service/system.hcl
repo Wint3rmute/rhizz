@@ -1,7 +1,9 @@
 project {
-  name    = "weather-service"
-  version = "0.1.0"
-  authors = ["rhizome-examples"]
+  name        = "weather-service"
+  full_name   = "Weather Service"
+  description = "Encapsulated backend with proxy ports and delegation"
+  version     = "0.1.0"
+  authors     = ["rhizome-examples"]
 }
 
 protocol "rest" {

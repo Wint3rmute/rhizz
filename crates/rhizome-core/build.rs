@@ -236,6 +236,58 @@ fn collect_example_files(dir: &Path, base_dir: &Path, acc: &mut ExampleFileList)
     }
 }
 
+/// Reads an example's picker title and description from its `project` block
+/// (`full_name` and `description`). Every example must declare both, so a new
+/// example cannot silently show up with placeholder text.
+fn example_metadata(id: &str, files: &ExampleFileList) -> Result<(String, String)> {
+    let mut found: Option<(PathBuf, hcl::Body)> = None;
+    for (_, full_path) in files {
+        if full_path.extension().and_then(|e| e.to_str()) != Some("hcl") {
+            continue;
+        }
+        let body: hcl::Body = hcl::from_str(&fs::read_to_string(full_path)?)
+            .map_err(|e| doc_error(full_path, &format!("cannot parse HCL: {e}")))?;
+        for block in body.blocks().filter(|b| b.identifier() == "project") {
+            if let Some((first, _)) = &found {
+                return Err(doc_error(
+                    full_path,
+                    &format!(
+                        "example '{id}' declares a second `project` block (first in {})",
+                        first.display()
+                    ),
+                ));
+            }
+            found = Some((full_path.clone(), block.body().clone()));
+        }
+    }
+
+    let Some((path, body)) = found else {
+        return Err(format!(
+            "example '{id}' has no `project` block; add one with `full_name` and `description` \
+             (they are shown in the web app's example picker and in examples/README.md)"
+        )
+        .into());
+    };
+    let attr = |key: &str| -> Result<String> {
+        match body
+            .attributes()
+            .find(|a| a.key() == key)
+            .map(hcl::Attribute::expr)
+        {
+            Some(hcl::Expression::String(value)) if !value.trim().is_empty() => Ok(value.clone()),
+            Some(_) => Err(doc_error(
+                &path,
+                &format!("example '{id}': `project.{key}` must be a non-empty string literal"),
+            )),
+            None => Err(doc_error(
+                &path,
+                &format!("example '{id}': `project` block is missing `{key}`"),
+            )),
+        }
+    };
+    Ok((attr("full_name")?, attr("description")?))
+}
+
 /// Generates static embedded representations of all projects in `examples/`.
 fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
     let examples_dir = Path::new(manifest_dir).join("../../examples");
@@ -263,35 +315,7 @@ fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
             println!("cargo:rerun-if-changed={}", file_path.display());
         }
 
-        let (name, desc) = match id.as_str() {
-            "apollo-11" => (
-                "Apollo 11 Mission Stack".to_string(),
-                "Trans-lunar, lunar landing, and Deep Space Network architecture".to_string(),
-            ),
-            "drone" => (
-                "Quadcopter Drone".to_string(),
-                "Quadcopter drone with ground station and flight controller decomposition"
-                    .to_string(),
-            ),
-            "social-media" => (
-                "Social Media Platform".to_string(),
-                "Short-video platform backend services and event streaming pipelines".to_string(),
-            ),
-            "software-house" => (
-                "Software House".to_string(),
-                "Organizational model of software engineering departments and processes"
-                    .to_string(),
-            ),
-            "web-app" => (
-                "Web Application".to_string(),
-                "Full-stack web application with frontend, backend API, and database".to_string(),
-            ),
-            "weather-service" => (
-                "Weather Service".to_string(),
-                "Encapsulated backend with proxy ports and delegation".to_string(),
-            ),
-            _ => (id.clone(), "Example architecture project".to_string()),
-        };
+        let (name, desc) = example_metadata(&id, &files)?;
 
         projects.push((id, name, desc, files));
     }
@@ -317,7 +341,7 @@ fn generate_example_projects(manifest_dir: &str, out_dir: &str) -> Result<()> {
         let ident = format!("FILES_{i}");
         let _ = writeln!(
             out_code,
-            "    ExampleProject {{\n        id: \"{id}\",\n        name: \"{name}\",\n        description: \"{desc}\",\n        files: {ident},\n    }},"
+            "    ExampleProject {{\n        id: {id:?},\n        name: {name:?},\n        description: {desc:?},\n        files: {ident},\n    }},"
         );
     }
     out_code.push_str("];\n\n");
