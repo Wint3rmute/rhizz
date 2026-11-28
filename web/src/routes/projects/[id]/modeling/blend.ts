@@ -5,7 +5,6 @@ import {
   type Box,
   computePortPositions,
   nearestPortSpot,
-  type PortSpot,
   unionBox,
 } from "./geometry";
 import type {
@@ -14,7 +13,6 @@ import type {
   DiagramNote,
   DiagramScene,
 } from "./scene";
-import type { DiagramStaticPort } from "./types";
 
 export const TRANSITION_MS = 320;
 // Fraction of the viewport a fitted diagram fills. The single source of truth
@@ -167,23 +165,19 @@ function blendPorts(
   const box = lerpBox(fromBox, toBox, t);
   const toOriginal = new Map(to.map((port) => [port.label, port]));
   const out: DiagramNode["ports"] = [];
-  const toDiagramPort = (
-    port: DiagramStaticPort,
-    spot: PortSpot,
-  ): DiagramStaticPort => ({
-    label: port.label,
-    role: port.role,
-    ...(port.protocol !== undefined ? { protocol: port.protocol } : {}),
-    spot,
-  });
   for (const [label, fromPort] of fromAt) {
     const toPort = toAt.get(label);
-    if (toPort === undefined) continue;
+    const original = toOriginal.get(label);
+    if (toPort === undefined || original === undefined) continue;
     const x = lerp(fromPort.x, toPort.x, t);
     const y = lerp(fromPort.y, toPort.y, t);
-    out.push(
-      toDiagramPort(toPort, nearestPortSpot(box.width, box.height, x, y)),
-    );
+    // Everything but the spot comes from the target port. Keeping `visible`
+    // matters: a shown port rides only its node's fade, so dropping it made
+    // labels fade out with the leaving edges and pop back in at t = 1.
+    out.push({
+      ...original,
+      spot: nearestPortSpot(box.width, box.height, x, y),
+    });
   }
   for (const [label] of toAt) {
     if (fromAt.has(label)) continue;

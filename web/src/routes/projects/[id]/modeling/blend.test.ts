@@ -119,6 +119,35 @@ describe("blendScenes", () => {
     ]);
   });
 
+  it("keeps shown ports shown mid-tween on matched nodes", () => {
+    // homelab → laptop: the laptop node stays, its `visible` ports slide,
+    // and the edges naming them leave. Dropping `visible` mid-tween made the
+    // labels fade with the leaving edges and pop back in at t = 1.
+    const port = (offset: number) => ({
+      label: "wifi",
+      role: "peer" as const,
+      roleRaw: "peer",
+      protocol: "data",
+      spot: { side: "right" as const, offset },
+      visible: true,
+    });
+    const from = scene({
+      nodes: [node("laptop", 0, 0, { ports: [port(0.9)] })],
+    });
+    const to = scene({ nodes: [node("laptop", 0, 0, { ports: [port(0.8)] })] });
+    const mid = blendScenes(from, to, 0.5);
+    expect(mid.nodes[0]?.ports).toEqual([port(0.85)]);
+  });
+
+  it("drops the shown flag mid-tween when the target view hides the port", () => {
+    const shown = { label: "p", role: "peer" as const, visible: true };
+    const hidden = { label: "p", role: "peer" as const };
+    const from = scene({ nodes: [node("a", 0, 0, { ports: [shown] })] });
+    const to = scene({ nodes: [node("a", 0, 0, { ports: [hidden] })] });
+    const mid = blendScenes(from, to, 0.5);
+    expect(mid.nodes[0]?.ports[0]?.visible).toBeUndefined();
+  });
+
   it("slides a port back to its role default on undo", () => {
     // Dragged right/0.8, undone to no-spot: the midpoint rides the outline
     // between the dragged dot and the provider default (right middle).
