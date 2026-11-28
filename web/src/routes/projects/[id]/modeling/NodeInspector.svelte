@@ -212,6 +212,20 @@
         </div>
       {/if}
 
+      <!--
+        Documentation is per component (docs/<label>.md), not per port, so the
+        button sits with the component's identity rather than under the ports.
+      -->
+      {#if onopendocumentation}
+        <button
+          onclick={() => onopendocumentation?.()}
+          class="btn btn-xs btn-outline btn-primary w-full"
+          title="Open docs/{component.label}.md in the Editor (created if missing)"
+        >
+          Open component documentation
+        </button>
+      {/if}
+
       <ComponentStyleFields style={component} onchange={onupdate} />
 
       <div class="form-control">
@@ -441,18 +455,6 @@
       </div>
     {/if}
   </div>
-
-  {#if onopendocumentation}
-    <div class="pt-1">
-      <button
-        onclick={() => onopendocumentation?.()}
-        class="btn btn-xs btn-outline btn-primary w-full"
-        title="Open docs/{component.label}.md in the Editor (created if missing)"
-      >
-        Open documentation
-      </button>
-    </div>
-  {/if}
 
   {#if ondelete}
     <div class="divider my-2"></div>
