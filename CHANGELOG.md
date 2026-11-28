@@ -15,6 +15,7 @@
 
 ### Fix
 
+- **web**: keep shown port labels on screen during view transitions
 - **web**: switch diagrams in Explore on the first click
 - **web**: stop a parent block from covering its children during diagram transitions
 - **web**: stretch the expanded diagnostics panel across the full window width
