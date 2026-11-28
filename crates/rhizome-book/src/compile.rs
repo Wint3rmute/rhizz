@@ -173,7 +173,8 @@ mod tests {
         let output = compile_body(&broken_block());
         assert_eq!(output.sorted.errors[0].code, "E011");
         assert!(output.score.is_none());
-        assert!(output.sorted.errors[0].line.is_none());
+        // The `connection "greet"` block is on line 6 of the snippet.
+        assert_eq!(output.sorted.errors[0].line, Some(6));
     }
 
     #[test]

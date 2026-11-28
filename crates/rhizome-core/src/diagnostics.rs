@@ -222,6 +222,21 @@ mod tests {
     }
 }
 
+// ── SourceLocation ────────────────────────────────────────────────────────────
+
+/// Where an entity was declared: the file and 1-based line of its block's
+/// identifier (e.g. the line holding `component "motor" {`).
+///
+/// Captured by the parser and carried on raw blocks and resolved entities so
+/// diagnostics can point at the declaration they are about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceLocation {
+    /// Source file the block was parsed from.
+    pub file: std::path::PathBuf,
+    /// 1-based line number.
+    pub line: u32,
+}
+
 // ── Diagnostic ────────────────────────────────────────────────────────────────
 
 /// A diagnostic message emitted during parsing, resolution, or validation.
@@ -256,6 +271,18 @@ impl Diagnostic {
             line: None,
             message: message.into(),
         }
+    }
+
+    /// Point this diagnostic at `location` (its `file` and `line`). `None`
+    /// leaves the diagnostic unchanged, so entities created without a source
+    /// block (e.g. by an editor mutation) simply report no location.
+    #[must_use]
+    pub fn at(mut self, location: Option<&SourceLocation>) -> Self {
+        if let Some(location) = location {
+            self.file = Some(location.file.clone());
+            self.line = Some(location.line);
+        }
+        self
     }
 
     /// Returns `true` if this is an error diagnostic.

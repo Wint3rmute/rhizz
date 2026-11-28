@@ -1,10 +1,11 @@
+use crate::diagnostics::SourceLocation;
 use crate::model::{
     Component, ComponentId, ComponentKind, ComponentParent, Connection, ConnectionEndpoint,
     ConnectionId, Diagnostic, DiagnosticCode, Field, FieldId, Message, MessageId, Model, Port,
     PortId, Project, ProtocolId, Scope, ScopeIndex, System, SystemId,
 };
 use crate::parse::{Labeled, RawComponent, RawConnection, RawFile, RawMessage};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use tracing::instrument;
 
 /// A system whose connections are processed after every instance is registered.
@@ -38,14 +39,24 @@ struct Resolver {
 }
 
 impl Resolver {
-    /// Record an error diagnostic.
-    fn push_error(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
-        self.diagnostics.push(Diagnostic::error(code, msg));
+    /// Record an error diagnostic pointing at `at` (the block it is about).
+    fn push_error(
+        &mut self,
+        code: DiagnosticCode,
+        at: Option<&SourceLocation>,
+        msg: impl Into<String>,
+    ) {
+        self.diagnostics.push(Diagnostic::error(code, msg).at(at));
     }
 
-    /// Record a warning diagnostic.
-    fn push_warning(&mut self, code: DiagnosticCode, msg: impl Into<String>) {
-        self.diagnostics.push(Diagnostic::warning(code, msg));
+    /// Record a warning diagnostic pointing at `at` (the block it is about).
+    fn push_warning(
+        &mut self,
+        code: DiagnosticCode,
+        at: Option<&SourceLocation>,
+        msg: impl Into<String>,
+    ) {
+        self.diagnostics.push(Diagnostic::warning(code, msg).at(at));
     }
 
     /// Reject block labels that are empty or contain `/` (E004): `/` is the
@@ -55,10 +66,13 @@ impl Resolver {
     /// caller must skip the block. Mirrors the editor-side
     /// `mutation/connect.ts:check_label` guard, which refuses the same labels
     /// before they reach the compiler.
-    fn check_block_label(&mut self, label: &str, what: &str) -> bool {
+    fn check_block_label<T>(&mut self, block: &Labeled<T>, what: &str) -> bool {
+        let label = block.label.as_str();
+        let at = block.location.as_ref();
         if label.is_empty() {
             self.push_error(
                 DiagnosticCode::E004,
+                at,
                 format!("{what} label must not be empty"),
             );
             return false;
@@ -66,6 +80,7 @@ impl Resolver {
         if label.contains('/') {
             self.push_error(
                 DiagnosticCode::E004,
+                at,
                 format!("{what} label `{label}` must not contain `/`"),
             );
             return false;
@@ -124,12 +139,13 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // ── Protocols ─────────────────────────────────────────────────────────────
     let mut proto_seen: HashSet<String> = HashSet::new();
     for lp in raw.protocols {
-        if !r.check_block_label(&lp.label, "protocol") {
+        if !r.check_block_label(&lp, "protocol") {
             continue;
         }
         if !proto_seen.insert(lp.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                lp.location.as_ref(),
                 format!("duplicate protocol label `{}`", lp.label),
             );
             continue;
@@ -151,6 +167,7 @@ fn resolve_pass(raw: RawFile) -> Resolver {
             leaf: lp.inner.leaf,
             encapsulates: lp.inner.encapsulates,
             encapsulates_ids: vec![],
+            location: lp.location,
         });
     }
 
@@ -168,22 +185,23 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // each top-level `component` block as a first-class definition in the model
     // (kind: Definition, no placement parent). A definition survives even with
     // zero current instances, so it can be defined ahead of use.
-    let mut definitions: HashMap<String, RawComponent> = HashMap::new();
+    let mut definitions: HashMap<String, Labeled<RawComponent>> = HashMap::new();
     let mut def_labels: Vec<String> = Vec::new();
     {
         let mut def_seen: HashSet<String> = HashSet::new();
         for lc in &raw.components {
-            if !r.check_block_label(&lc.label, "component") {
+            if !r.check_block_label(lc, "component") {
                 continue;
             }
             if !def_seen.insert(lc.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
+                    lc.location.as_ref(),
                     format!("duplicate top-level component label `{}`", lc.label),
                 );
                 continue;
             }
-            definitions.insert(lc.label.clone(), lc.inner.clone());
+            definitions.insert(lc.label.clone(), lc.clone());
             def_labels.push(lc.label.clone());
         }
     }
@@ -193,13 +211,14 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // later in the file). Cycle detection (E013) still uses the ancestors stack.
     let mut ancestors: Vec<String> = Vec::new();
     for label in &def_labels {
-        let Some(body) = definitions.get(label) else {
+        let Some(definition) = definitions.get(label) else {
             continue;
         };
         let cid = register_component_inner(
             &mut r,
             label,
-            body,
+            &definition.inner,
+            definition.location.clone(),
             None,
             ComponentKind::Definition,
             None,
@@ -216,12 +235,13 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     let mut pending_systems: Vec<SystemWork> = Vec::new();
 
     for ls in raw.systems {
-        if !r.check_block_label(&ls.label, "system") {
+        if !r.check_block_label(&ls, "system") {
             continue;
         }
         if !system_labels_seen.insert(ls.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                ls.location.as_ref(),
                 format!("duplicate system label `{}`", ls.label),
             );
             continue;
@@ -237,6 +257,7 @@ fn resolve_pass(raw: RawFile) -> Resolver {
             tags: ls.inner.tags.clone(),
             components: vec![],
             connections: vec![],
+            location: ls.location.clone(),
         });
 
         // Phase A: register all direct-child instances (each one recursively
@@ -247,12 +268,13 @@ fn resolve_pass(raw: RawFile) -> Resolver {
         let mut ancestors: Vec<String> = Vec::new();
 
         for li in &ls.inner.instances {
-            if !r.check_block_label(&li.label, "instance") {
+            if !r.check_block_label(li, "instance") {
                 continue;
             }
             if !instance_labels_seen.insert(li.label.clone()) {
                 r.push_error(
                     DiagnosticCode::E001,
+                    li.location.as_ref(),
                     format!(
                         "duplicate instance label `{}` in system `{}`",
                         li.label, ls.label
@@ -309,78 +331,82 @@ fn resolve_pass(raw: RawFile) -> Resolver {
     // one declaration within a system. Copies of one declaration (each
     // instance clones its definition's connections) share `decl` and are one
     // connection for hiding and the sidebar; two different declarations
-    // sharing a name in one system are rejected.
+    // sharing a name in one system are rejected. The error points at the
+    // declaration listed last.
     {
-        let mut errors: Vec<String> = Vec::new();
-        // Snapshot per-system connection (label, decl) pairs first so the
-        // error push below does not fight the model borrow.
-        let mut per_system: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        let mut errors: Vec<Diagnostic> = Vec::new();
         for system in &r.model.systems {
-            let mut pairs: Vec<(String, String)> = Vec::new();
-            for cid in &system.connections {
-                if let Some(conn) = r.model.connections.get(cid.0) {
-                    pairs.push((conn.label.clone(), conn.decl.clone()));
-                }
-            }
+            let mut connections: Vec<&Connection> = system
+                .connections
+                .iter()
+                .filter_map(|cid| r.model.connections.get(cid.0))
+                .collect();
             let mut stack: Vec<ComponentId> = system.components.clone();
             while let Some(cid) = stack.pop() {
                 let Some(comp) = r.model.components.get(cid.0) else {
                     continue;
                 };
-                for ccid in &comp.connections.clone() {
-                    if let Some(conn) = r.model.connections.get(ccid.0) {
-                        pairs.push((conn.label.clone(), conn.decl.clone()));
-                    }
-                }
+                connections.extend(
+                    comp.connections
+                        .iter()
+                        .filter_map(|ccid| r.model.connections.get(ccid.0)),
+                );
                 stack.extend(comp.children.clone());
             }
-            per_system.push((system.label.clone(), pairs));
-        }
-        for (system_label, pairs) in &per_system {
-            let mut by_label: HashMap<&str, HashSet<&str>> = HashMap::new();
+            // label -> decl -> location of the first copy of that declaration.
+            let mut by_label: HashMap<&str, BTreeMap<&str, Option<&SourceLocation>>> =
+                HashMap::new();
             let mut order: Vec<&str> = Vec::new();
-            for (label, decl) in pairs {
-                let entry = by_label.entry(label.as_str()).or_default();
+            for conn in connections {
+                let entry = by_label.entry(conn.label.as_str()).or_default();
                 if entry.is_empty() {
-                    order.push(label.as_str());
+                    order.push(conn.label.as_str());
                 }
-                entry.insert(decl.as_str());
+                entry
+                    .entry(conn.decl.as_str())
+                    .or_insert(conn.location.as_ref());
             }
             for label in order {
                 if let Some(decls) = by_label.get(label)
                     && decls.len() > 1
                 {
-                    let mut sorted: Vec<&&str> = decls.iter().collect();
-                    sorted.sort();
-                    let locations = sorted
-                        .iter()
+                    let declared_in = decls
+                        .keys()
                         .map(|d| format!("`{d}`"))
                         .collect::<Vec<_>>()
                         .join(" and ");
-                    errors.push(format!(
-                        "duplicate connection label `{label}` in system `{system_label}` (declared in {locations})"
-                    ));
+                    let at = decls.values().last().copied().flatten();
+                    errors.push(
+                        Diagnostic::error(
+                            DiagnosticCode::E001,
+                            format!(
+                                "duplicate connection label `{label}` in system `{}` (declared in {declared_in})",
+                                system.label
+                            ),
+                        )
+                        .at(at),
+                    );
                 }
             }
         }
-        for msg in errors {
-            r.push_error(DiagnosticCode::E001, msg);
-        }
+        r.diagnostics.extend(errors);
     }
 
     // ── W012: orphan protocols (reusable definitions are intentionally allowed
     // ── to exist with zero instances, so they are not flagged) ──────────────
     {
-        let mut orphan_proto_labels: Vec<String> = r
-            .protocol_label_index
-            .keys()
-            .filter(|label| !r.used_protocol_labels.contains(*label))
-            .cloned()
+        let mut orphans: Vec<(String, Option<SourceLocation>)> = r
+            .model
+            .protocols
+            .iter()
+            .filter(|proto| !r.used_protocol_labels.contains(&proto.label))
+            .map(|proto| (proto.label.clone(), proto.location.clone()))
             .collect();
-        orphan_proto_labels.sort();
-        for label in orphan_proto_labels {
+        orphans.sort_by(|a, b| a.0.cmp(&b.0));
+        for (label, location) in orphans {
             r.push_warning(
                 DiagnosticCode::W012,
+                location.as_ref(),
                 format!("top-level protocol `{label}` is not referenced by any port"),
             );
         }
@@ -422,12 +448,13 @@ fn register_component_inner(
     r: &mut Resolver,
     label: &str,
     body: &RawComponent,
+    location: Option<SourceLocation>,
     source: Option<String>,
     kind: ComponentKind,
     parent_scope: Option<Scope>,
     parent: Option<ComponentParent>,
     parent_level: i32,
-    definitions: &HashMap<String, RawComponent>,
+    definitions: &HashMap<String, Labeled<RawComponent>>,
     ancestors: &mut Vec<String>,
 ) -> ComponentId {
     let initial_depth = ancestors.len();
@@ -440,6 +467,7 @@ fn register_component_inner(
     if leaf && (!body.instances.is_empty() || !body.connections.is_empty()) {
         r.push_error(
             DiagnosticCode::E005,
+            location.as_ref(),
             format!("leaf component `{label}` contains children or connections"),
         );
     }
@@ -477,6 +505,7 @@ fn register_component_inner(
         children: vec![],
         ports: vec![],
         connections: vec![],
+        location,
     });
 
     let child_scope = Scope::Component(cid);
@@ -485,12 +514,13 @@ fn register_component_inner(
     let mut child_label_seen: HashSet<String> = HashSet::new();
     let mut child_ids: Vec<ComponentId> = Vec::new();
     for child_li in &body.instances {
-        if !r.check_block_label(&child_li.label, "instance") {
+        if !r.check_block_label(child_li, "instance") {
             continue;
         }
         if !child_label_seen.insert(child_li.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                child_li.location.as_ref(),
                 format!(
                     "duplicate instance label `{}` in component `{}`",
                     child_li.label, label
@@ -543,13 +573,14 @@ fn register_instance(
     parent_scope: Option<Scope>,
     parent: Option<ComponentParent>,
     parent_level: i32,
-    definitions: &HashMap<String, RawComponent>,
+    definitions: &HashMap<String, Labeled<RawComponent>>,
     ancestors: &mut Vec<String>,
 ) -> ComponentId {
     let Some(ref src_label) = li.inner.source else {
         // parse_instance guarantees a source, but guard defensively.
         r.push_error(
             DiagnosticCode::E014,
+            li.location.as_ref(),
             format!("instance `{}` is missing a 'source' attribute", li.label),
         );
         let body = RawComponent::default();
@@ -557,6 +588,7 @@ fn register_instance(
             r,
             &li.label,
             &body,
+            li.location.clone(),
             None,
             ComponentKind::Instance,
             parent_scope,
@@ -571,6 +603,7 @@ fn register_instance(
         // E014: undefined source label.
         r.push_error(
             DiagnosticCode::E014,
+            li.location.as_ref(),
             format!(
                 "instance `{}` sources undefined definition `{}`",
                 li.label, src_label
@@ -581,6 +614,7 @@ fn register_instance(
             r,
             &li.label,
             &body,
+            li.location.clone(),
             Some(src_label.clone()),
             ComponentKind::Instance,
             parent_scope,
@@ -596,7 +630,8 @@ fn register_instance(
     register_component_inner(
         r,
         &li.label,
-        definition,
+        &definition.inner,
+        li.location.clone(),
         Some(src_label.clone()),
         ComponentKind::Instance,
         parent_scope,
@@ -621,12 +656,13 @@ fn process_ports(
     let mut port_ids: Vec<PortId> = Vec::new();
 
     for lp in ports {
-        if !r.check_block_label(&lp.label, "port") {
+        if !r.check_block_label(lp, "port") {
             continue;
         }
         if !label_seen.insert(lp.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                lp.location.as_ref(),
                 format!(
                     "duplicate port label `{}` in component `{}`",
                     lp.label, comp_label
@@ -653,6 +689,7 @@ fn process_ports(
                             Some(invalid_role) => {
                                 r.push_error(
                                     DiagnosticCode::E009,
+                                    lp.location.as_ref(),
                                     format!(
                                         "port `{}` in component `{}` has role `{}` which is not permitted by protocol `{}` (permitted: {:?})",
                                         lp.label, comp_label, invalid_role, proto_name, proto.roles
@@ -662,6 +699,7 @@ fn process_ports(
                             None => {
                                 r.push_error(
                                     DiagnosticCode::E009,
+                                    lp.location.as_ref(),
                                     format!(
                                         "port `{}` in component `{}` must specify a role for protocol `{}` (permitted: {:?})",
                                         lp.label, comp_label, proto_name, proto.roles
@@ -674,6 +712,7 @@ fn process_ports(
                 } else {
                     r.push_warning(
                         DiagnosticCode::W014,
+                        lp.location.as_ref(),
                         format!(
                             "port `{}` in component `{}` references undefined protocol `{}`",
                             lp.label, comp_label, proto_name
@@ -704,6 +743,7 @@ fn process_ports(
             // `resolve_delegation`, once every connection is registered.
             inferred: false,
             inferred_from: None,
+            location: lp.location.clone(),
         });
         port_ids.push(pid);
     }
@@ -731,12 +771,14 @@ fn process_connections_in_scope(
     let mut conn_ids: Vec<ConnectionId> = Vec::new();
 
     for lc in connections {
-        if !r.check_block_label(&lc.label, "connection") {
+        let at = lc.location.as_ref();
+        if !r.check_block_label(lc, "connection") {
             continue;
         }
         if !label_seen.insert(lc.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                at,
                 format!(
                     "duplicate connection label `{}` in `{}`",
                     lc.label, scope_name
@@ -751,10 +793,10 @@ fn process_connections_in_scope(
             .unwrap_or_else(|| parent_level.saturating_add(1));
 
         // Resolve `from` endpoint
-        let from = resolve_endpoint(r, lc.inner.from.as_deref(), scope, &lc.label, "from");
+        let from = resolve_endpoint(r, lc.inner.from.as_deref(), scope, lc, "from");
 
         // Resolve `to` endpoint
-        let to = resolve_endpoint(r, lc.inner.to.as_deref(), scope, &lc.label, "to");
+        let to = resolve_endpoint(r, lc.inner.to.as_deref(), scope, lc, "to");
 
         // Allocate ConnectionId and register in scope so realized_by can find it.
         let conn_id = ConnectionId(r.model.connections.len());
@@ -773,43 +815,13 @@ fn process_connections_in_scope(
         let from_ep = from.unwrap_or_else(|| sentinel.clone());
         let to_ep = to.unwrap_or(sentinel);
 
-        // Validate Lowest Common Ancestor (LCA) placement
-        if from_ep.component.0 != usize::MAX && to_ep.component.0 != usize::MAX {
-            let from_ok = is_ancestor_or_self(&r.model, scope, from_ep.component);
-            let to_ok = is_ancestor_or_self(&r.model, scope, to_ep.component);
-            if !from_ok || !to_ok {
-                r.push_error(
-                    DiagnosticCode::E015,
-                    format!(
-                        "connection `{}` is declared in `{}` which is not an ancestor of both endpoints (declared outside Lowest Common Ancestor)",
-                        lc.label, scope_name
-                    ),
-                );
-            }
-            // Delegation lives in its owner by definition: the self end's
-            // component must be the declaring scope itself.
-            if from_ep.is_self ^ to_ep.is_self {
-                let self_cid = if from_ep.is_self {
-                    from_ep.component
-                } else {
-                    to_ep.component
-                };
-                if Scope::Component(self_cid) != scope {
-                    r.push_error(
-                        DiagnosticCode::E015,
-                        format!(
-                            "connection `{}` is a delegation edge and must be declared inside its owning component",
-                            lc.label
-                        ),
-                    );
-                }
-            }
-        }
+        check_placement(r, lc, scope, scope_name, &from_ep, &to_ep);
 
         let is_delegation = from_ep.is_self ^ to_ep.is_self;
         if from_ep.is_self && to_ep.is_self {
             r.push_error(
                 DiagnosticCode::E022,
+                at,
                 format!(
                     "connection `{}` has two self (`./port`) endpoints; a delegation edge must have exactly one",
                     lc.label
@@ -819,6 +831,7 @@ fn process_connections_in_scope(
         if is_delegation && !lc.inner.realized_by.is_empty() {
             r.push_error(
                 DiagnosticCode::E019,
+                at,
                 format!(
                     "connection `{}` is a delegation edge and must not declare `realized_by`",
                     lc.label
@@ -837,12 +850,61 @@ fn process_connections_in_scope(
             realized_by: lc.inner.realized_by.clone(),
             realized_by_ids: vec![], // filled by resolve_realized_by
             is_delegation,
+            location: lc.location.clone(),
         });
 
         conn_ids.push(conn_id);
     }
 
     conn_ids
+}
+
+/// E015 placement checks for a connection whose endpoints both resolved: it
+/// must be declared in a common ancestor of its endpoints, and a delegation
+/// edge inside the component that owns its self end.
+fn check_placement(
+    r: &mut Resolver,
+    lc: &Labeled<RawConnection>,
+    scope: Scope,
+    scope_name: &str,
+    from_ep: &ConnectionEndpoint,
+    to_ep: &ConnectionEndpoint,
+) {
+    let at = lc.location.as_ref();
+    // Validate Lowest Common Ancestor (LCA) placement
+    if from_ep.component.0 != usize::MAX && to_ep.component.0 != usize::MAX {
+        let from_ok = is_ancestor_or_self(&r.model, scope, from_ep.component);
+        let to_ok = is_ancestor_or_self(&r.model, scope, to_ep.component);
+        if !from_ok || !to_ok {
+            r.push_error(
+                DiagnosticCode::E015,
+                at,
+                format!(
+                    "connection `{}` is declared in `{}` which is not an ancestor of both endpoints (declared outside Lowest Common Ancestor)",
+                    lc.label, scope_name
+                ),
+            );
+        }
+        // Delegation lives in its owner by definition: the self end's
+        // component must be the declaring scope itself.
+        if from_ep.is_self ^ to_ep.is_self {
+            let self_cid = if from_ep.is_self {
+                from_ep.component
+            } else {
+                to_ep.component
+            };
+            if Scope::Component(self_cid) != scope {
+                r.push_error(
+                    DiagnosticCode::E015,
+                    at,
+                    format!(
+                        "connection `{}` is a delegation edge and must be declared inside its owning component",
+                        lc.label
+                    ),
+                );
+            }
+        }
+    }
 }
 
 /// Checks whether `ancestor_scope` is an ancestor of `cid` or is `Scope::Component(cid)`.
@@ -914,15 +976,18 @@ fn system_scope(r: &Resolver, label: &str) -> Option<Scope> {
 fn report_endpoint_walk_error(
     r: &mut Resolver,
     err: WalkError,
-    conn_label: &str,
+    conn: &Labeled<RawConnection>,
     raw: &str,
     field: &str,
     segment_count: usize,
 ) {
+    let conn_label = conn.label.as_str();
+    let at = conn.location.as_ref();
     match err {
         WalkError::AboveDefinition => {}
         WalkError::AboveSystem => r.push_error(
             DiagnosticCode::E002,
+            at,
             format!(
                 "connection `{conn_label}` cannot navigate above root system with '..' in path `{raw}`"
             ),
@@ -935,6 +1000,7 @@ fn report_endpoint_walk_error(
             };
             r.push_error(
                 err_code,
+                at,
                 format!(
                     "connection `{conn_label}` references undefined component `{seg}` in '{field}'"
                 ),
@@ -948,13 +1014,16 @@ fn report_endpoint_walk_error(
 fn endpoint_segments<'a>(
     r: &mut Resolver,
     ref_str: Option<&'a str>,
-    conn_label: &str,
+    conn: &Labeled<RawConnection>,
     field: &str,
 ) -> Option<(&'a str, Vec<&'a str>)> {
+    let conn_label = conn.label.as_str();
+    let at = conn.location.as_ref();
     let raw = match ref_str {
         None => {
             r.push_error(
                 DiagnosticCode::E002,
+                at,
                 format!("connection `{conn_label}` is missing required '{field}' attribute"),
             );
             return None;
@@ -965,6 +1034,7 @@ fn endpoint_segments<'a>(
     if raw.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
+            at,
             format!("connection `{conn_label}` has empty '{field}' attribute"),
         );
         return None;
@@ -973,6 +1043,7 @@ fn endpoint_segments<'a>(
     if raw.contains(':') {
         r.push_error(
             DiagnosticCode::E002,
+            at,
             format!(
                 "connection `{conn_label}` has invalid non-UNIX path `{raw}` in '{field}' (colon notation is not supported; use '/' path notation)"
             ),
@@ -984,6 +1055,7 @@ fn endpoint_segments<'a>(
     if raw_segments.is_empty() {
         r.push_error(
             DiagnosticCode::E002,
+            at,
             format!("connection `{conn_label}` references empty path in '{field}'"),
         );
         return None;
@@ -999,9 +1071,11 @@ fn reject_bare_segment(
     r: &mut Resolver,
     scope: Scope,
     segments: &[&str],
-    conn_label: &str,
+    conn: &Labeled<RawConnection>,
     field: &str,
 ) -> bool {
+    let conn_label = conn.label.as_str();
+    let at = conn.location.as_ref();
     if segments.len() != 1 {
         return false;
     }
@@ -1021,6 +1095,7 @@ fn reject_bare_segment(
     }
     r.push_error(
         DiagnosticCode::E003,
+        at,
         format!(
             "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port` or `./port` for the declaring scope's own port)"
         ),
@@ -1042,10 +1117,12 @@ fn resolve_endpoint(
     r: &mut Resolver,
     ref_str: Option<&str>,
     scope: Scope,
-    conn_label: &str,
+    conn: &Labeled<RawConnection>,
     field: &str,
 ) -> Option<ConnectionEndpoint> {
-    let (raw, raw_segments) = endpoint_segments(r, ref_str, conn_label, field)?;
+    let conn_label = conn.label.as_str();
+    let at = conn.location.as_ref();
+    let (raw, raw_segments) = endpoint_segments(r, ref_str, conn, field)?;
     let is_absolute = raw.starts_with('/');
 
     // Absolute paths start after the leading system segment; relative paths
@@ -1055,6 +1132,7 @@ fn resolve_endpoint(
         let Some(scope) = system_scope(r, system_label) else {
             r.push_error(
                 DiagnosticCode::E002,
+                at,
                 format!(
                     "connection `{conn_label}` references undefined system `{system_label}` in path `{raw}`"
                 ),
@@ -1070,6 +1148,7 @@ fn resolve_endpoint(
         // Absolute path pointed to just the system itself
         r.push_error(
             DiagnosticCode::E002,
+            at,
             format!(
                 "connection `{conn_label}` references system instead of component in path `{raw}`"
             ),
@@ -1077,7 +1156,7 @@ fn resolve_endpoint(
         return None;
     };
 
-    if !is_absolute && reject_bare_segment(r, scope, path, conn_label, field) {
+    if !is_absolute && reject_bare_segment(r, scope, path, conn, field) {
         return None;
     }
 
@@ -1085,7 +1164,7 @@ fn resolve_endpoint(
         // A trailing `.` or `..` names neither a component nor a port: walk
         // the path for its errors, then give no endpoint (as before).
         if let Err(err) = walk_scope(r, start, path) {
-            report_endpoint_walk_error(r, err, conn_label, raw, field, raw_segments.len());
+            report_endpoint_walk_error(r, err, conn, raw, field, raw_segments.len());
         }
         return None;
     }
@@ -1093,7 +1172,7 @@ fn resolve_endpoint(
     let owner_scope = match walk_scope(r, start, prefix) {
         Ok(owner_scope) => owner_scope,
         Err(err) => {
-            report_endpoint_walk_error(r, err, conn_label, raw, field, raw_segments.len());
+            report_endpoint_walk_error(r, err, conn, raw, field, raw_segments.len());
             return None;
         }
     };
@@ -1106,6 +1185,7 @@ fn resolve_endpoint(
     {
         r.push_error(
             DiagnosticCode::E003,
+            at,
             format!(
                 "connection `{conn_label}` requires a port path in '{field}' (e.g. `comp/port`)"
             ),
@@ -1129,6 +1209,7 @@ fn resolve_endpoint(
             .unwrap_or_default();
         r.push_error(
             DiagnosticCode::E010,
+            at,
             format!(
                 "connection `{conn_label}`: component `{comp_label}` has no port `{last}` (in '{field}')"
             ),
@@ -1139,7 +1220,7 @@ fn resolve_endpoint(
     report_endpoint_walk_error(
         r,
         WalkError::NotFound(last.to_owned()),
-        conn_label,
+        conn,
         raw,
         field,
         raw_segments.len(),
@@ -1153,24 +1234,28 @@ fn resolve_protocol_encapsulates(r: &mut Resolver) {
     let labels: Vec<String> = r.model.protocols.iter().map(|p| p.label.clone()).collect();
 
     let mut graph: Vec<Vec<ProtocolId>> = Vec::with_capacity(labels.len());
-    let mut warnings: Vec<String> = Vec::new();
+    let mut warnings: Vec<Diagnostic> = Vec::new();
     for proto in &r.model.protocols {
         let mut ids: Vec<ProtocolId> = Vec::new();
         for target in &proto.encapsulates {
             match r.protocol_label_index.get(target).copied() {
                 Some(pid) if !ids.contains(&pid) => ids.push(pid),
                 Some(_) => {}
-                None => warnings.push(format!(
-                    "protocol `{}` encapsulates undefined protocol `{target}`",
-                    proto.label
-                )),
+                None => warnings.push(
+                    Diagnostic::warning(
+                        DiagnosticCode::W022,
+                        format!(
+                            "protocol `{}` encapsulates undefined protocol `{target}`",
+                            proto.label
+                        ),
+                    )
+                    .at(proto.location.as_ref()),
+                ),
             }
         }
         graph.push(ids);
     }
-    for msg in warnings {
-        r.push_warning(DiagnosticCode::W022, msg);
-    }
+    r.diagnostics.extend(warnings);
 
     // Visit roots in label order so that the reported cycles are deterministic.
     let mut roots: Vec<usize> = (0..labels.len()).collect();
@@ -1178,7 +1263,7 @@ fn resolve_protocol_encapsulates(r: &mut Resolver) {
 
     let mut state = vec![VisitState::Unvisited; labels.len()];
     let mut path: Vec<usize> = Vec::new();
-    let mut chains: Vec<String> = Vec::new();
+    let mut chains: Vec<(usize, String)> = Vec::new();
     for root in roots {
         if state.get(root) == Some(&VisitState::Unvisited) {
             visit_protocol_encapsulates(
@@ -1191,9 +1276,11 @@ fn resolve_protocol_encapsulates(r: &mut Resolver) {
             );
         }
     }
-    for chain in chains {
+    for (node, chain) in chains {
+        let at = r.model.protocols.get(node).and_then(|p| p.location.clone());
         r.push_error(
             DiagnosticCode::E020,
+            at.as_ref(),
             format!("circular protocol encapsulation: {chain}"),
         );
     }
@@ -1211,15 +1298,15 @@ enum VisitState {
 }
 
 /// DFS step of the `encapsulates` cycle check. Each back edge closes one cycle,
-/// which is recorded in `chains` and removed from `graph`, so the remaining
-/// graph is acyclic.
+/// which is recorded in `chains` (with the protocol whose edge closes it) and
+/// removed from `graph`, so the remaining graph is acyclic.
 fn visit_protocol_encapsulates(
     node: usize,
     graph: &mut [Vec<ProtocolId>],
     labels: &[String],
     state: &mut [VisitState],
     path: &mut Vec<usize>,
-    chains: &mut Vec<String>,
+    chains: &mut Vec<(usize, String)>,
 ) {
     if let Some(slot) = state.get_mut(node) {
         *slot = VisitState::OnPath;
@@ -1247,7 +1334,7 @@ fn visit_protocol_encapsulates(
                     .map(|l| format!("`{l}`"))
                     .collect::<Vec<_>>()
                     .join(" -> ");
-                chains.push(shown);
+                chains.push((node, shown));
                 // The back edge is dropped, so this cycle cannot recur.
             }
             VisitState::Unvisited => {
@@ -1280,12 +1367,13 @@ fn process_messages(
     let mut msg_ids: Vec<MessageId> = Vec::new();
 
     for lm in messages {
-        if !r.check_block_label(&lm.label, "message") {
+        if !r.check_block_label(lm, "message") {
             continue;
         }
         if !label_seen.insert(lm.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                lm.location.as_ref(),
                 format!(
                     "duplicate message label `{}` in protocol `{}`",
                     lm.label, proto_label
@@ -1304,6 +1392,7 @@ fn process_messages(
             tags: lm.inner.tags.clone(),
             level,
             fields: field_ids,
+            location: lm.location.clone(),
         });
         msg_ids.push(mid);
     }
@@ -1321,12 +1410,13 @@ fn process_fields(
     let mut field_ids: Vec<FieldId> = Vec::new();
 
     for lf in fields {
-        if !r.check_block_label(&lf.label, "field") {
+        if !r.check_block_label(lf, "field") {
             continue;
         }
         if !label_seen.insert(lf.label.clone()) {
             r.push_error(
                 DiagnosticCode::E001,
+                lf.location.as_ref(),
                 format!(
                     "duplicate field label `{}` in message `{}`",
                     lf.label, msg_label
@@ -1340,6 +1430,7 @@ fn process_fields(
             || {
                 r.push_error(
                     DiagnosticCode::E007,
+                    lf.location.as_ref(),
                     format!(
                         "field `{}` in message `{}` is missing required 'type'",
                         lf.label, msg_label
@@ -1357,6 +1448,7 @@ fn process_fields(
             full_name: lf.inner.full_name.clone().unwrap_or_default(),
             unit: lf.inner.unit.clone().unwrap_or_default(),
             required: lf.inner.required.unwrap_or(false),
+            location: lf.location.clone(),
         });
         field_ids.push(fid);
     }
@@ -1631,7 +1723,8 @@ fn infer_proxy_types(
             .and_then(|p| r.model.component(p.owner))
             .is_some_and(|c| c.kind == ComponentKind::Definition);
         if is_def {
-            r.push_error(DiagnosticCode::E021, msg);
+            let at = r.model.port(pid).and_then(|p| p.location.clone());
+            r.push_error(DiagnosticCode::E021, at.as_ref(), msg);
         }
     }
 }
@@ -1645,7 +1738,10 @@ fn check_delegation_shapes(
     explicit_self: &HashSet<PortId>,
     candidates: &HashSet<PortId>,
 ) {
-    let mut e022: Vec<String> = Vec::new();
+    let mut e022: Vec<Diagnostic> = Vec::new();
+    let mut push = |at: Option<&SourceLocation>, msg: String| {
+        e022.push(Diagnostic::error(DiagnosticCode::E022, msg).at(at));
+    };
     for comp in &r.model.components {
         if comp.kind != ComponentKind::Definition {
             continue;
@@ -1663,23 +1759,11 @@ fn check_delegation_shapes(
             if !participates {
                 continue;
             }
-            if candidates.contains(pid) {
-                if comp.leaf {
-                    e022.push(format!(
-                        "proxy port `{}` in leaf component `{}` cannot delegate (a leaf has no children)",
-                        port.label, comp.label
-                    ));
-                } else if !port.external {
-                    e022.push(format!(
-                        "proxy port `{}` in component `{}` must set `external = true`",
-                        port.label, comp.label
-                    ));
-                }
-            } else if explicit_self.contains(pid) {
-                e022.push(format!(
-                    "port `{}` in component `{}` declares `protocol`/`role` and must not be a delegation endpoint (omit both to declare a proxy port)",
-                    port.label, comp.label
-                ));
+            let proxy = candidates.contains(pid);
+            if let Some(msg) =
+                delegation_shape_error(comp, port, proxy, explicit_self.contains(pid))
+            {
+                push(port.location.as_ref(), msg);
             }
         }
         // D1: an inferred outer appears as the self endpoint in exactly one
@@ -1701,14 +1785,15 @@ fn check_delegation_shapes(
                 })
                 .count();
             if in_scope_uses > 1 {
-                let port_label = r
-                    .model
-                    .port(*pid)
-                    .map_or_else(String::new, |p| p.label.clone());
-                e022.push(format!(
-                    "proxy port `{port_label}` in component `{}` fans out to {in_scope_uses} delegation edges (a proxy port must delegate to exactly one child port)",
-                    comp.label
-                ));
+                let port = r.model.port(*pid);
+                let port_label = port.map_or_else(String::new, |p| p.label.clone());
+                push(
+                    port.and_then(|p| p.location.as_ref()),
+                    format!(
+                        "proxy port `{port_label}` in component `{}` fans out to {in_scope_uses} delegation edges (a proxy port must delegate to exactly one child port)",
+                        comp.label
+                    ),
+                );
             }
         }
         // D2: a delegation target appears in no other in-scope connection.
@@ -1738,15 +1823,45 @@ fn check_delegation_shapes(
                 .filter_map(|other| r.model.connection(*other))
                 .any(|other| other.from.port == Some(target) || other.to.port == Some(target));
             if others {
-                e022.push(format!(
-                    "delegation target `{target_label}` in component `{}` is double-driven (it must appear in no other connection in the same scope)",
-                    comp.label
-                ));
+                push(
+                    conn.location.as_ref(),
+                    format!(
+                        "delegation target `{target_label}` in component `{}` is double-driven (it must appear in no other connection in the same scope)",
+                        comp.label
+                    ),
+                );
             }
         }
     }
-    for msg in e022 {
-        r.push_error(DiagnosticCode::E022, msg);
+    r.diagnostics.extend(e022);
+}
+
+/// E022 shape message for a port that takes part in delegation: a proxy
+/// (`proxy`: no `protocol`/`role`) must be `external` on a non-leaf owner,
+/// and an explicitly typed port must not be a self endpoint at all.
+fn delegation_shape_error(
+    comp: &Component,
+    port: &Port,
+    proxy: bool,
+    explicit_self: bool,
+) -> Option<String> {
+    if proxy && comp.leaf {
+        Some(format!(
+            "proxy port `{}` in leaf component `{}` cannot delegate (a leaf has no children)",
+            port.label, comp.label
+        ))
+    } else if proxy && !port.external {
+        Some(format!(
+            "proxy port `{}` in component `{}` must set `external = true`",
+            port.label, comp.label
+        ))
+    } else if !proxy && explicit_self {
+        Some(format!(
+            "port `{}` in component `{}` declares `protocol`/`role` and must not be a delegation endpoint (omit both to declare a proxy port)",
+            port.label, comp.label
+        ))
+    } else {
+        None
     }
 }
 
@@ -1880,13 +1995,14 @@ fn resolve_realized_by(r: &mut Resolver) {
     let connection_count = r.model.connections.len();
     let mut names: Vec<String> = (0..connection_count).map(|i| format!("#{i}")).collect();
     let mut graph: Vec<Vec<usize>> = vec![Vec::new(); connection_count];
-    let mut messages: Vec<String> = Vec::new();
+    let mut e017: Vec<Diagnostic> = Vec::new();
 
     for (cid, scope) in &declared {
         let Some(conn) = r.model.connection(*cid) else {
             continue;
         };
         let label = conn.label.clone();
+        let at = conn.location.clone();
         let mut entries = conn.realized_by.clone();
         let mut seen: HashSet<String> = HashSet::new();
         entries.retain(|e| seen.insert(e.clone()));
@@ -1903,18 +2019,18 @@ fn resolve_realized_by(r: &mut Resolver) {
                     // Delegation edges relate port to port within one
                     // component; they can neither realize nor be realized.
                     if r.model.connection(target).is_some_and(|c| c.is_delegation) {
-                        messages.push(format!(
+                        e017.push(Diagnostic::error(DiagnosticCode::E017, format!(
                             "connection `{label}` in `{here}` has unresolved realized_by entry `{entry}`: delegation edges must not appear in `realized_by`"
-                        ));
+                        )).at(at.as_ref()));
                         r.unresolved_realized_by.push((*cid, entry.clone()));
                     } else if !targets.contains(&target) {
                         targets.push(target);
                     }
                 }
                 Err(reason) => {
-                    messages.push(format!(
+                    e017.push(Diagnostic::error(DiagnosticCode::E017, format!(
                         "connection `{label}` in `{here}` has unresolved realized_by entry `{entry}`: {reason}"
-                    ));
+                    )).at(at.as_ref()));
                     r.unresolved_realized_by.push((*cid, entry.clone()));
                 }
             }
@@ -1923,20 +2039,23 @@ fn resolve_realized_by(r: &mut Resolver) {
             *slot = targets.iter().map(|t| t.0).collect();
         }
     }
-    for msg in messages {
-        r.push_error(DiagnosticCode::E017, msg);
-    }
+    r.diagnostics.extend(e017);
 
     let mut state = vec![VisitState::Unvisited; connection_count];
     let mut path: Vec<usize> = Vec::new();
-    let mut cycles: Vec<String> = Vec::new();
+    let mut cycles: Vec<(usize, String)> = Vec::new();
     for node in 0..connection_count {
         if state.get(node) == Some(&VisitState::Unvisited) {
             visit_realization(node, &mut graph, &names, &mut state, &mut path, &mut cycles);
         }
     }
-    for cycle in cycles {
-        r.push_error(DiagnosticCode::E018, cycle);
+    for (node, cycle) in cycles {
+        let at = r
+            .model
+            .connections
+            .get(node)
+            .and_then(|c| c.location.clone());
+        r.push_error(DiagnosticCode::E018, at.as_ref(), cycle);
     }
 
     for (idx, targets) in graph.into_iter().enumerate() {
@@ -1945,7 +2064,7 @@ fn resolve_realized_by(r: &mut Resolver) {
         }
     }
 
-    let mut leaf_messages: Vec<String> = Vec::new();
+    let mut e019: Vec<Diagnostic> = Vec::new();
     for (idx, conn) in r.model.connections.iter().enumerate() {
         if conn.realized_by.is_empty() {
             continue;
@@ -1958,28 +2077,33 @@ fn resolve_realized_by(r: &mut Resolver) {
             continue;
         };
         if let Some(proto) = r.model.protocol(pid).filter(|p| p.leaf) {
-            leaf_messages.push(format!(
-                "connection `{}` declares realized_by but its protocol `{}` is a leaf",
-                names.get(idx).map_or("", String::as_str),
-                proto.label
-            ));
+            e019.push(
+                Diagnostic::error(
+                    DiagnosticCode::E019,
+                    format!(
+                        "connection `{}` declares realized_by but its protocol `{}` is a leaf",
+                        names.get(idx).map_or("", String::as_str),
+                        proto.label
+                    ),
+                )
+                .at(conn.location.as_ref()),
+            );
         }
     }
-    for msg in leaf_messages {
-        r.push_error(DiagnosticCode::E019, msg);
-    }
+    r.diagnostics.extend(e019);
 }
 
 /// DFS step of the `realized_by` cycle check. Each back edge closes one cycle,
-/// which is reported and removed from `graph`, so the remaining graph is
-/// acyclic. A connection realized by itself is a one-entry cycle.
+/// which is reported (with the connection whose entry closes it) and removed
+/// from `graph`, so the remaining graph is acyclic. A connection realized by
+/// itself is a one-entry cycle.
 fn visit_realization(
     node: usize,
     graph: &mut [Vec<usize>],
     names: &[String],
     state: &mut [VisitState],
     path: &mut Vec<usize>,
-    cycles: &mut Vec<String>,
+    cycles: &mut Vec<(usize, String)>,
 ) {
     if let Some(slot) = state.get_mut(node) {
         *slot = VisitState::OnPath;
@@ -2001,7 +2125,10 @@ fn visit_realization(
                 if let Some(name) = names.get(next) {
                     chain.push(format!("`{name}`"));
                 }
-                cycles.push(format!("circular realization: {}", chain.join(" -> ")));
+                cycles.push((
+                    node,
+                    format!("circular realization: {}", chain.join(" -> ")),
+                ));
             }
             VisitState::Unvisited => {
                 visit_realization(next, graph, names, state, path, cycles);

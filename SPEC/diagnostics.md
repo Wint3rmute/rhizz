@@ -135,6 +135,37 @@ and `--json` output.
 This is not duplication — the Markdown file explains the _class_ of error, while
 the call-site message describes the _specific instance_.
 
+### Location
+
+Each diagnostic also carries the `file` and `line` of the block it is about,
+so front-ends can jump to it (`system.hcl:14`). The line is the line of the
+block's identifier (`component "motor" {`). The call site attaches it with
+`.at(...)`:
+
+```rust
+Diagnostic::warning(DiagnosticCode::W001, format!("component `{}` …", comp.label))
+    .at(comp.location.as_ref())
+```
+
+The parser records a `SourceLocation` on every labeled block, and resolution
+copies it onto the resolved entity (`System`, `Component`, `Port`,
+`Connection`, `Protocol`, `Message`, `Field`). Rules:
+
+- **Point at the subject of the message.** `W020` names the realizing
+  connection, so it points there; `W021` names the realized one.
+- **A placed instance points at its `instance` block**, a definition at its
+  `component` block.
+- **Ports and connections an instance copies from its definition point at the
+  definition's block.** That is the one place to edit them, so every copy
+  reports the same line.
+- **Parse errors point at the innermost failing block**, and HCL syntax errors
+  at the line the HCL parser reports.
+
+Some diagnostics have no line: project-wide checks (several files define
+systems), view-file diagnostics (`file` only; views are parsed separately),
+and the warnings an editor mutation returns, which describe re-serialized HCL
+whose layout differs from the text the lines were read from.
+
 ## Adding a new diagnostic code
 
 1. Create `SPEC/diagnostics/Xxxx.md` following the format above (`Exxx.md` for errors, `Wxxx.md` for warnings).
