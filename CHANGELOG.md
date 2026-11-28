@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: keep connections and view layout when renaming a port
 - **web**: show the documentation button with the component's fields
 - **web**: add a reset to default button for diagram transition time
 - **web**: explain why a connected port cannot be hidden
