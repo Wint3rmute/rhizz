@@ -248,7 +248,7 @@
         the row now fits outright (383px of 383).
       -->
     <div
-      class="flex items-center border-b border-base-300 px-2 overflow-x-auto"
+      class="tabs tabs-border tabs-sm [--tab-height:1.25rem] overflow-x-auto flex-nowrap"
       role="tablist"
       aria-label="Entity details"
     >
@@ -257,14 +257,9 @@
           type="button"
           role="tab"
           aria-selected={activeTab === tab}
-          class="px-2 py-2 text-xs border-b-2 -mb-px transition-colors whitespace-nowrap shrink-0 {activeTab ===
-          tab
-            ? tab === 'Delete'
-              ? 'border-error text-error font-medium'
-              : 'border-primary text-primary font-medium'
-            : tab === 'Delete'
-              ? 'border-transparent text-error/60 hover:text-error'
-              : 'border-transparent text-base-content/60 hover:text-base-content'}"
+          class="tab shrink-0 whitespace-nowrap {activeTab === tab
+            ? 'tab-active'
+            : ''} {tab === 'Delete' ? 'text-error' : ''}"
           onclick={() => (activeTab = tab)}
         >
           {tab}{#if tab === "Ports"}
