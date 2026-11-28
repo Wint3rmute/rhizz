@@ -81,3 +81,34 @@ test("explore opens a layout-bearing view, not a filter-only one", async ({
   ).toBeVisible();
   await expect(page.getByText(/engineering-teams\.hcl/)).toHaveCount(0);
 });
+
+// The suite runs with reduced motion, where a diagram switch is a cut. With
+// motion, the switch tweens; the layout of the new diagram arrives while that
+// tween is still settling and must not be dropped (it used to be, leaving the
+// previous diagram on screen until the next switch showed it, one click late).
+test.describe("with motion", () => {
+  test.use({ reducedMotion: "no-preference" });
+
+  test("explore switches to the clicked diagram on the first click", async ({
+    page,
+  }) => {
+    const id = await createFromExample(
+      page,
+      /Quadcopter Drone/,
+      "E2E explore switch",
+    );
+    await page.goto(`/projects/${id}/explore`);
+    const battery = page.getByRole("link", { name: /battery/i });
+    await expect(battery).toBeVisible();
+
+    const sidebar = page.getByRole("complementary", { name: "Diagrams" });
+    await sidebar.getByRole("button", { name: "fc-internals.hcl" }).click();
+    await expect(page).toHaveURL(/diagram=fc-internals\.hcl/);
+    // fc-internals does not place the battery; the overview does.
+    await expect(battery).toHaveCount(0);
+
+    await sidebar.getByRole("button", { name: "drone-overview.hcl" }).click();
+    await expect(page).toHaveURL(/diagram=drone-overview\.hcl/);
+    await expect(battery).toBeVisible();
+  });
+});

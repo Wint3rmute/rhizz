@@ -99,6 +99,12 @@
   let layout = $state<DiagramLayout>(emptyDiagramLayout());
   let layoutLoaded = $state(false);
   let layoutMissing = $state(false);
+  // The diagram `layout` was read from. It lags `diagramPath` while the next
+  // layout loads, and is what the scene view is keyed on: keying on
+  // `diagramPath` would announce the new view while the scene still shows the
+  // old one, start the switch tween towards it, and drop the real layout when
+  // it lands mid-tween — the old diagram stays up until the next switch.
+  let layoutPath = $state<string | null>(null);
   let diagramEntries = $state<Dirent[]>([]);
 
   $effect(() => {
@@ -137,6 +143,7 @@
     const path = diagramPath;
     if (!id || !path) {
       layout = emptyDiagramLayout();
+      layoutPath = null;
       layoutMissing = false;
       layoutLoaded = true;
       return;
@@ -153,12 +160,14 @@
       .then((loaded) => {
         if (cancelled) return;
         layout = loaded;
+        layoutPath = path;
         layoutMissing = false;
         layoutLoaded = true;
       })
       .catch(() => {
         if (cancelled) return;
         layout = emptyDiagramLayout();
+        layoutPath = path;
         layoutMissing = true;
         layoutLoaded = true;
       });
@@ -324,7 +333,7 @@
     <DiagramSceneView
       bind:this={sceneView}
       scene={desiredScene}
-      viewKey={diagramPath}
+      viewKey={layoutPath}
       linkNodes={clickable}
       {linkLabel}
       onNodeClick={clickable ? onnodeclick : undefined}
