@@ -21,9 +21,13 @@ Applies on top of `AGENTS.md`; that file's workflow still holds.
 ## CI failures
 
 - Read the failing job's log before changing anything; fix the root cause.
-- VRT (visual regression) failures: only re-accept baselines when the visual
-  change is intended, and rebuild Storybook first so the baselines are not
-  taken from a stale build. Never re-accept to silence an unexplained diff.
+- Every frontend change needs a VRT refresh: `git lfs pull`, then `just vrt`
+  (rebuilds Storybook, so baselines never come from a stale build). Look
+  through every diff and ping the user if any change is unexpected; never
+  re-accept to silence an unexplained diff. If all look as intended, run
+  `just vrt-accept` and push the baselines to the PR, so the user can review
+  the new UI in its screenshot diff. Do this proactively, not only after CI
+  fails.
 - `assets-check` failures mean generated assets are stale: run `just assets`
   and commit the result.
 - Do not skip, disable or quarantine a test to get green.
