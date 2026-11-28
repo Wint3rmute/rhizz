@@ -21,6 +21,7 @@
 
 ### Fix
 
+- **web**: show the selected connection in the inspector when another system uses its name
 - **web**: fade connections in and out when switching diagrams in Explore and Inventory
 - **web**: shorten the leaf checkbox label to "Atomic (no sub-components)"
 - **web**: keep shown port labels on screen during view transitions
