@@ -81,10 +81,8 @@ async function openConnection(page: Page, label: string): Promise<void> {
   await edge.click({ force: true });
   await expect(page.getByTestId("connection-inspector")).toBeVisible();
   await expect(
-    page
-      .getByTestId("connection-inspector")
-      .getByRole("heading", { name: label }),
-  ).toBeVisible();
+    page.getByTestId("connection-inspector").getByLabel("Connection name"),
+  ).toHaveValue(label);
 }
 
 test("each connection panel writes to the file it belongs to", async ({

@@ -73,10 +73,8 @@ async function openConnection(page: Page, label: string): Promise<void> {
   await edge.click({ force: true });
   await expect(page.getByTestId("connection-inspector")).toBeVisible();
   await expect(
-    page
-      .getByTestId("connection-inspector")
-      .getByRole("heading", { name: label }),
-  ).toBeVisible();
+    page.getByTestId("connection-inspector").getByLabel("Connection name"),
+  ).toHaveValue(label);
 }
 
 test("a realization can be removed, undone, and a cycle is refused", async ({
@@ -131,10 +129,8 @@ test("a realization can be removed, undone, and a cycle is refused", async ({
     .getByRole("button", { name: "Select http-request on canvas" })
     .click();
   await expect(
-    page.getByTestId("connection-inspector").getByRole("heading", {
-      name: "http-request",
-    }),
-  ).toBeVisible();
+    page.getByTestId("connection-inspector").getByLabel("Connection name"),
+  ).toHaveValue("http-request");
   const http = page.getByTestId("connection-attributes");
   const before = await systemText(page);
   await http

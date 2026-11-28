@@ -211,6 +211,24 @@ export function initialDraft(
   };
 }
 
+/** Why `name` cannot name a connection, or `undefined` when it can. `taken`
+ * holds every other connection label in the model: views key connections by
+ * name, so a name is taken anywhere. Shared by the New-connection dialog and
+ * the Connection Inspector's rename field, and mirrors the core
+ * `rename_connection` refusals. */
+export function connectionNameProblem(
+  name: string,
+  taken: readonly string[],
+): string | undefined {
+  const trimmed = name.trim();
+  if (trimmed === "") return "Give the connection a name.";
+  if (trimmed.includes("/")) return "A connection name cannot contain “/”.";
+  if (taken.includes(trimmed)) {
+    return `A connection named “${trimmed}” already exists.`;
+  }
+  return undefined;
+}
+
 function nameProblem(
   name: string,
   taken: readonly string[],
@@ -239,14 +257,11 @@ export function validateDraft(
   context: DraftContext,
 ): DraftValidation {
   const problems: DraftProblems = {};
-  const label = draft.label.trim();
-
-  if (label === "") problems.label = "Give the connection a name.";
-  else if (label.includes("/")) {
-    problems.label = "A connection name cannot contain “/”.";
-  } else if (context.takenConnectionLabels.includes(label)) {
-    problems.label = `A connection named “${label}” already exists.`;
-  }
+  const labelProblem = connectionNameProblem(
+    draft.label,
+    context.takenConnectionLabels,
+  );
+  if (labelProblem !== undefined) problems.label = labelProblem;
 
   const protocolLabel = draft.protocol.trim();
   if (protocolLabel.includes("/")) {

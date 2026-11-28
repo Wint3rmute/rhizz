@@ -35,7 +35,8 @@ pub use model::{
     ProtocolId, System, SystemId, ViewDefinition, ViewFilterDefinition,
 };
 pub use mutation::{
-    LoggedAction, ModelOp, MutationResult, PortRename, mutate_to_hcl, rename_ports_in_views,
+    ConnectionRename, LoggedAction, ModelOp, MutationResult, PortRename, mutate_to_hcl,
+    rename_connections_in_views, rename_ports_in_views,
 };
 pub use score::{CategoryScore, ScoreReport, score};
 pub use serialize::{parse_views, serialize_model, serialize_views};

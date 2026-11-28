@@ -131,6 +131,7 @@ pub(super) fn rename_port(
             new_label: new_label.to_owned(),
         }],
         port_renames,
+        connection_renames: Vec::new(),
     })
 }
 

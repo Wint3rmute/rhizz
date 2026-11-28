@@ -5,6 +5,7 @@ import {
   get_example_projects as wasm_get_example_projects,
   type ModelJS,
   parse_views as wasm_parse_views,
+  rename_connections_in_views as wasm_rename_connections_in_views,
   rename_ports_in_views as wasm_rename_ports_in_views,
   serialize_model as wasm_serialize_model,
   serialize_views as wasm_serialize_views,
@@ -108,6 +109,15 @@ export interface PortRename {
   to: string;
 }
 
+/** A connection label that changed (`rename_connection`), with the systems a
+ * copy of it is placed in: views over those systems re-key their
+ * `connection` blocks. */
+export interface ConnectionRename {
+  systems: string[];
+  from: string;
+  to: string;
+}
+
 export interface ApplyModelOpResult {
   applied: boolean;
   hcl?: string;
@@ -116,6 +126,8 @@ export interface ApplyModelOpResult {
   diagnostics: MutationDiagnostic[];
   /** Port labels that changed on placed components (`rename_port` only). */
   portRenames: PortRename[];
+  /** Connection labels that changed (`rename_connection` only). */
+  connectionRenames: ConnectionRename[];
 }
 
 /** Applies one declarative model mutation via Rust; refusals come back as
@@ -144,6 +156,16 @@ export function rename_ports_in_views(
   renames: readonly PortRename[],
 ): string | undefined {
   return wasm_rename_ports_in_views(hcl, renames);
+}
+
+/** Re-keys one view file's `connection` blocks after a connection rename.
+ * `undefined` when the file names none of the renamed connections (nothing
+ * to write). Throws when the view HCL does not parse. */
+export function rename_connections_in_views(
+  hcl: string,
+  renames: readonly ConnectionRename[],
+): string | undefined {
+  return wasm_rename_connections_in_views(hcl, renames);
 }
 
 export interface ExampleFile {

@@ -5,6 +5,7 @@ import {
   type NewConnectionRequest,
   buildConnectOp,
   connectionDirection,
+  connectionNameProblem,
   defaultConnectionLabel,
   defaultPortName,
   delegationOuterSide,
@@ -68,6 +69,18 @@ function protocol(
 }
 
 const NO_CONTEXT = { takenConnectionLabels: [], protocols: [] };
+
+describe("connectionNameProblem", () => {
+  it("refuses empty, slashed and taken names", () => {
+    expect(connectionNameProblem("  ", [])).toContain("name");
+    expect(connectionNameProblem("a/b", [])).toContain("/");
+    expect(connectionNameProblem(" lan ", ["lan"])).toContain("already exists");
+  });
+
+  it("accepts a free name", () => {
+    expect(connectionNameProblem("lan", ["wan"])).toBeUndefined();
+  });
+});
 
 describe("uniqueLabel", () => {
   it("keeps a free label as is", () => {

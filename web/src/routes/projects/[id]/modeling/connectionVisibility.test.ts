@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   drawnConnections,
+  findViewConnection,
   isConnectionDrawn,
   sidebarConnectionRows,
 } from "./connectionVisibility";
@@ -109,5 +110,32 @@ describe("drawnConnections", () => {
     expect(
       drawnConnections(conns, new Set([0, 1]), inSystem([0, 1]), hidden(["c"])),
     ).toEqual([{ label: "a", from: 0, to: 1 }]);
+  });
+});
+
+describe("findViewConnection", () => {
+  // Two systems each declare their own `link`: components 0/1 are alpha's,
+  // 2/3 are beta's.
+  const alpha = { label: "link", from: 0, to: 1, system: "alpha" };
+  const beta = { label: "link", from: 2, to: 3, system: "beta" };
+  const other = { label: "other", from: 2, to: 3, system: "beta" };
+
+  it("picks the connection of the open view's system, not the first one by name", () => {
+    expect(
+      findViewConnection([alpha, beta, other], "link", inSystem([2, 3])),
+    ).toBe(beta);
+  });
+
+  it("falls back to the first by name when none is in the view's system", () => {
+    expect(findViewConnection([alpha, beta], "link", inSystem([7]))).toBe(
+      alpha,
+    );
+  });
+
+  it("finds nothing for an unknown or empty label", () => {
+    expect(
+      findViewConnection([alpha], "nope", inSystem([0, 1])),
+    ).toBeUndefined();
+    expect(findViewConnection([alpha], null, inSystem([0, 1]))).toBeUndefined();
   });
 });

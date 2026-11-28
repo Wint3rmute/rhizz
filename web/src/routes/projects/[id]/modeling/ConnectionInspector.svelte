@@ -9,6 +9,7 @@
   } from "../../../../modelView";
   import { inventoryProtocolHref } from "../inventory/protocolLink";
   import { resolveIcon } from "../../../../iconHelper";
+  import { connectionNameProblem } from "./newConnection";
 
   interface Props {
     /** The project the inspector belongs to, for the protocol deep link. */
@@ -46,6 +47,8 @@
     /** Labels of the connections placed in the open view. */
     placedLabels: readonly string[];
     onupdate: (patch: ConnectionPatch) => void;
+    /** Renames the connection (its HCL label). */
+    onrename?: (newLabel: string) => void;
     /** Selects a connection on the canvas. */
     onselect: (ref: ConnectionRef) => void;
     ondelete: () => void;
@@ -79,6 +82,7 @@
     protocolUsage,
     placedLabels,
     onupdate,
+    onrename = undefined,
     onselect,
     ondelete,
     readonly = false,
@@ -95,6 +99,45 @@
     editTags = connection.tags.join(", ");
     editLevel = connection.level;
   });
+
+  // Why the name field's value cannot be the connection's name, shown under
+  // the field. The value stays so the user can fix it (Escape puts the
+  // current name back).
+  let nameError = $state<string | null>(null);
+
+  $effect(() => {
+    // A different (or renamed) connection starts with a clean field.
+    void connection.ref.label;
+    nameError = null;
+  });
+
+  function commitName(input: HTMLInputElement): void {
+    const current = connection.ref.label;
+    const name = input.value.trim();
+    if (name === current) {
+      input.value = current;
+      nameError = null;
+      return;
+    }
+    const taken = connections
+      .map((other) => other.ref.label)
+      .filter((label) => label !== current);
+    const problem = connectionNameProblem(name, taken);
+    if (problem !== undefined) {
+      nameError = problem;
+      return;
+    }
+    nameError = null;
+    // Show the model's name until it reloads: a refused rename (reported as
+    // a toast) then leaves the field matching the model.
+    input.value = current;
+    onrename?.(name);
+  }
+
+  function cancelName(input: HTMLInputElement): void {
+    input.value = connection.ref.label;
+    nameError = null;
+  }
 
   function commitFullName(): void {
     if (editFullName === connection.full_name) return;
@@ -213,16 +256,41 @@
     <div class="text-[11px] text-base-content/50 font-mono uppercase">
       Connection
     </div>
-    <h4 class="text-base font-bold text-base-content truncate">
-      {connection.ref.label}
+    <h4 class="flex items-center gap-2 text-base font-bold text-base-content">
+      {#key connection.ref.label}
+        <input
+          type="text"
+          value={connection.ref.label}
+          onchange={(e) => commitName(e.currentTarget)}
+          onkeydown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") cancelName(e.currentTarget);
+          }}
+          disabled={readonly || onrename === undefined}
+          class="input input-sm input-ghost font-bold text-base px-1 -mx-1 min-w-0 flex-1"
+          class:input-error={nameError !== null}
+          aria-label="Connection name"
+          aria-invalid={nameError !== null}
+          data-testid="connection-name-input"
+        />
+      {/key}
       {#if connection.isDelegation}
         <span
-          class="badge badge-ghost badge-sm ml-2 align-middle"
+          class="badge badge-ghost badge-sm align-middle shrink-0"
           title="Delegation edge: forwards the boundary dot inward to a child port. Draws with an arrowhead showing flow direction and only when both ends are placed."
           >Delegation</span
         >
       {/if}
     </h4>
+    {#if nameError !== null}
+      <p
+        class="text-xs text-error mt-1"
+        role="alert"
+        data-testid="connection-name-error"
+      >
+        {nameError}
+      </p>
+    {/if}
     {#if connection.isDelegation}
       <p class="text-xs text-base-content/60 mt-1">
         Forwards a boundary dot inward — arrow shows flow (provider outward,

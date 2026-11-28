@@ -4,6 +4,18 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Rename a connection from the Modeling editor
+
+- **Core (`crates/rhizome-core/src/mutation/rename_connection.rs`):** new `ModelOp::RenameConnection { scopePath, label, newLabel }` / `LoggedAction::RenameConnection` (`rename_connection`), addressed like `update_connection` (instance paths go to the declaring definition). Refuses empty, `/` and taken names (taken anywhere in the model, the New-connection rule) with E000; unknown scope/label or unchanged name is idle. `realized_by` entries to rewrite are found by resolving the baseline (`resolve::connection_references`, comparing resolved targets by declaration) and only their last segment changes. `MutationResult.connection_renames` lists the systems holding a copy; `rename_connections_in_views` re-keys a view file's `connection` blocks in views over those systems. `UnresolvedRealizedBy` became `RawRealizedByEntry`.
+- **WASM:** `apply_model_op` returns `connectionRenames`; new `rename_connections_in_views` binding.
+- **Server:** `mutate_project` re-keys every view file after port or connection renames (one shared `rewrite_view_files`). MCP `rename_connection` tool, mapped in `tool_name_for_op`.
+- **Web:** Connection Inspector heading is an input (Enter/blur commits, Escape reverts, disabled when read-only) with inline errors from `connectionNameProblem` (extracted from `validateDraft` in `newConnection.ts`). `handleRenameSelectedConnection` runs one `runModelLayoutTransaction`; it re-keys the open view's `savedConnections` (`connectionRenames.ts`) and rewrites the other views (shared `viewFiles.ts` loop, also used by port renames), keeping the connection selected. Action log encodes/replays `rename_connection`.
+- **Tests:** 12 Rust unit tests (system/definition/instance-path renames, same-scope, child-instance and absolute `realized_by`, unrelated same-named connection, delegation edge, refusals, idle cases, JSON shapes, no new diagnostics, views re-keying), 2 MCP tests; vitest `connectionRenames.test.ts`, `applyMutation.test.ts`, `actionLog.test.ts`, `newConnection.test.ts`; stories `NameTaken` (VRT) and `Rename`; e2e `connection-rename.spec.ts`. Inspector e2e helpers now read the name field instead of the heading.
+- **Docs:** `SPEC/frontend.md` "Renaming a connection", `SPEC/models.md` note on `realized_by` rewriting.
+- **Follow-up filed:** "Renaming a component keeps its state in every view" (component renames only re-key the open view).
+
+---
+
 ## Task <N> — Examples declare their own name and description
 
 - **Language:** the `project` block takes optional `full_name` (display title) and `description` (one-sentence summary). Parsed (`RawProject`), resolved into `Project.full_name`/`description` (`Option<String>`, skipped in JSON when absent) and round-tripped by the serializer. SPEC.md §2.1 updated.

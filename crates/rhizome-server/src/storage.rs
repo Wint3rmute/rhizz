@@ -1308,7 +1308,25 @@ pub fn mutate_project(
                 }
                 SaveVfsError::Io(err) => MutateProjectError::Io(err),
             })?;
-            rename_ports_in_view_files(data_dir, project_id, &root, &result.port_renames)?;
+            if !result.port_renames.is_empty() {
+                rewrite_view_files(data_dir, project_id, &root, "rename_port", |content| {
+                    rhizome_core::rename_ports_in_views(content, &result.port_renames)
+                })?;
+            }
+            if !result.connection_renames.is_empty() {
+                rewrite_view_files(
+                    data_dir,
+                    project_id,
+                    &root,
+                    "rename_connection",
+                    |content| {
+                        rhizome_core::rename_connections_in_views(
+                            content,
+                            &result.connection_renames,
+                        )
+                    },
+                )?;
+            }
             // The model changed: the idle timer restarts. (Always held here —
             // the acquire above succeeded.)
             let _ = locks.note_edit(project_id, user);
@@ -1319,19 +1337,18 @@ pub fn mutate_project(
     }
 }
 
-/// Re-keys the `port` blocks of every view file after a port rename, so a
-/// renamed port keeps its outline side and shown flag in every view, open or
-/// not. A view file that does not parse is left as it is: it is already
-/// broken, and the model write it follows has landed.
-fn rename_ports_in_view_files(
+/// Re-keys every view file after a rename (`rewrite` is
+/// `rename_ports_in_views` or `rename_connections_in_views`), so a renamed
+/// port or connection keeps its per-view state in every view, open or not. A
+/// view file that does not parse is left as it is: it is already broken, and
+/// the model write it follows has landed. `op` names the rename in the log.
+fn rewrite_view_files(
     data_dir: &Path,
     project_id: &str,
     root: &Path,
-    renames: &[rhizome_core::PortRename],
+    op: &str,
+    rewrite: impl Fn(&str) -> anyhow::Result<Option<String>>,
 ) -> Result<(), MutateProjectError> {
-    if renames.is_empty() {
-        return Ok(());
-    }
     let Some(found) = collect_project_entries(data_dir, project_id)? else {
         return Ok(());
     };
@@ -1343,11 +1360,11 @@ fn rename_ports_in_view_files(
         if !is_view_path(relative) || !is_hcl_path(relative) {
             continue;
         }
-        let rewritten = match rhizome_core::rename_ports_in_views(content, renames) {
+        let rewritten = match rewrite(content) {
             Ok(Some(rewritten)) => rewritten,
             Ok(None) => continue,
             Err(err) => {
-                tracing::warn!(?err, path = %relative.display(), "rename_port: view left as is");
+                tracing::warn!(?err, path = %relative.display(), "{op}: view left as is");
                 continue;
             }
         };

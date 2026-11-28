@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **web**: rename a connection from the Connection Inspector
 - **language**: add `full_name` and `description` to the `project` block
 - **web**: jump from a diagnostic to its line in the Code page
 - **core**: report the file and line of the block each diagnostic is about
@@ -20,6 +21,7 @@
 
 ### Fix
 
+- **web**: show the selected connection in the inspector when another system uses its name
 - **web**: fade connections in and out when switching diagrams in Explore and Inventory
 - **web**: shorten the leaf checkbox label to "Atomic (no sub-components)"
 - **web**: keep shown port labels on screen during view transitions

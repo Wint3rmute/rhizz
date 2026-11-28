@@ -947,6 +947,9 @@ struct ApplyOpResultJS {
     /// Port labels that changed on placed components (`rename_port` only).
     #[serde(rename = "portRenames")]
     port_renames: Vec<rhizome_core::PortRename>,
+    /// Connection labels that changed (`rename_connection` only).
+    #[serde(rename = "connectionRenames")]
+    connection_renames: Vec<rhizome_core::ConnectionRename>,
 }
 
 /// Applies one declarative model mutation to a primary file and returns
@@ -967,6 +970,7 @@ pub fn apply_model_op(filename: &str, content: &str, op: JsValue) -> Result<JsVa
             actions: result.actions,
             diagnostics: result.warnings,
             port_renames: result.port_renames,
+            connection_renames: result.connection_renames,
         },
         Err(diagnostics) => ApplyOpResultJS {
             applied: false,
@@ -975,6 +979,7 @@ pub fn apply_model_op(filename: &str, content: &str, op: JsValue) -> Result<JsVa
             actions: Vec::new(),
             diagnostics,
             port_renames: Vec::new(),
+            connection_renames: Vec::new(),
         },
     };
     serde_wasm_bindgen::to_value(&outcome).map_err(|e| JsError::new(&e.to_string()))
@@ -993,6 +998,24 @@ pub fn rename_ports_in_views(hcl: &str, renames: JsValue) -> Result<Option<Strin
     let renames: Vec<rhizome_core::PortRename> =
         serde_wasm_bindgen::from_value(renames).map_err(|e| JsError::new(&e.to_string()))?;
     rhizome_core::rename_ports_in_views(hcl, &renames)
+        .map_err(|e| JsError::new(&format!("failed to parse views HCL: {e}")))
+}
+
+/// Re-keys the `connection` blocks of one view file after a connection rename.
+///
+/// `renames` is `connectionRenames` from [`apply_model_op`]. Returns the
+/// rewritten canonical HCL, or `undefined` when the file names none of the
+/// renamed connections.
+///
+/// # Errors
+///
+/// Returns a `JsError` when the renames do not deserialize or the view HCL
+/// does not parse.
+#[wasm_bindgen]
+pub fn rename_connections_in_views(hcl: &str, renames: JsValue) -> Result<Option<String>, JsError> {
+    let renames: Vec<rhizome_core::ConnectionRename> =
+        serde_wasm_bindgen::from_value(renames).map_err(|e| JsError::new(&e.to_string()))?;
+    rhizome_core::rename_connections_in_views(hcl, &renames)
         .map_err(|e| JsError::new(&format!("failed to parse views HCL: {e}")))
 }
 

@@ -126,6 +126,10 @@ Errors (`E*`) abort; warnings (`W*`) travel with the model. Scopes for
 label)` pairs held in a transient index built during resolution. A
 `realized_by` entry resolves through the same `.`/`..`/child walk as an endpoint
 path, and its target must share the declaring system or definition tree.
+Mutations that rename a connection (`rename_connection`) rely on this: they
+resolve every entry before the rename and rewrite the last segment of each one
+that lands on a copy of the renamed declaration, keeping the rest of its
+spelling (`low`, `bank-x/low` and `/banking/bank-a/low` all follow).
 
 ## View models
 

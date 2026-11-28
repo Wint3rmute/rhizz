@@ -16,106 +16,6 @@ How to work on this file:
 
 ---
 
-## Task — Rename a connection from the Modeling editor
-
-A connection's name (its HCL label, `connection "<label>" { … }`) can only be
-chosen once, in the New-connection modal. The Connection Inspector shows it as
-a read-only heading, `ConnectionPatch` (Rust `crates/rhizome-core/src/mutation.rs`
-and TS `web/src/actionLog.ts`) has no `label` field, and there is no rename op.
-The only way to change it today is to delete and recreate the connection, which
-loses its `full_name`/`tags`/`level` and breaks every `realized_by` that points
-to it. Users want to rename a connection the way they can rename a component
-(`rename_component`).
-
-### What a connection's name is referenced by
-
-The rename has to keep all of these consistent, or the model breaks or the view
-quietly loses state:
-
-1. **The declaration**: the label of the block in the declaring scope's
-   `connections` (a system or a component definition).
-2. **`realized_by` entries** on other connections, written as paths from
-   *their* declaring scope (`"sub"`, `"outer/sub"`, `"../x"`, … — see
-   SPEC/models.md step 7 and `realized_by_entries`). A stale entry is E017.
-3. **Views** (`views/*.hcl`): per-view `connection "<label>" { hidden = …,
-   layout … }` blocks keyed by name (`savedConnections` in `ModelingPage.svelte`,
-   `connectionVisibility.ts`). A stale key does not error, but the connection
-   silently loses its hidden state and layout.
-
-### Implementation
-
-1. **Core op** `ModelOp::RenameConnection { scope_path, label, new_label }`
-   (`"kind": "rename_connection"`, camelCase like `update_connection`) plus a
-   matching `LoggedAction::RenameConnection`, in `mutation.rs`:
-   - Address and redirect it like `update_connection`: an instance path goes
-     to the definition the connection is declared in, so every copy is renamed.
-   - Refuse with `MutationError::InvalidInput`/E000 when `new_label` is empty
-     or contains `/`. Stay idle (as other ops do on a guard miss) when the
-     scope or label is unknown or `new_label == label`. Refuse a collision.
-     Since views key connections by name, use the same uniqueness rule as the
-     New-connection modal (`takenConnectionLabels` in `newConnection.ts`, which
-     checks every label in the model), not only the declaring scope.
-   - Rewrite every `realized_by` entry in every scope that *resolves* to the
-     renamed connection. Resolve before the rename (to a `ConnectionId`) and
-     compare ids rather than matching text, because the same connection is
-     spelled differently from different scopes. Rewrite only the last path
-     segment and keep the rest of the spelling.
-   - A refusal leaves the model untouched (one atomic op).
-2. **Views.** Re-key `connection "<old>"` blocks to `<new>` in **every** view
-   file, not only the open one: a view that is not open would otherwise lose
-   the hidden state. Decide where this lives. The preferred option is a core
-   helper that the web layer and the MCP tool both call on each `views/*.hcl`.
-   Note that `handleRenameSelectedComponent` only re-keys the *open* view's
-   layout. If that turns out to be a gap for components too, file a follow-up
-   task rather than widening this one.
-3. **WASM / web plumbing**: add `rename_connection` to `ModelMutationOp`
-   (`web/src/history/applyMutation.ts`), `ModelAction` + its replay mapping in
-   `web/src/actionLog.ts` (so "Copy Debug Info" dumps replay it), and the WASM
-   wrapper.
-4. **UI** (`ConnectionInspector.svelte`): make the name heading editable. Use an
-   input committed on blur/Enter, like the Full name field, with Escape to
-   cancel. Disable it when `readonly`. Show the modal's validation messages
-   inline (empty, `/`, already exists) and reuse `validateNewConnection`'s
-   rules rather than copying them. `ModelingPage.svelte` runs it through
-   `runModelLayoutTransaction` (one undo step) and, in the layout callback,
-   moves `savedConnections[old]` → `[new]` and keeps the connection selected
-   under its new name. Delegation edges can be renamed too.
-5. **MCP**: add a `rename_connection` tool in `crates/rhizome-server/src/mcp.rs`
-   next to `update_connection` (same lock and refusal behavior as
-   `rename_component`), and map it in the op→tool-name table.
-6. **SPEC**: document the op (SPEC.md mutation/ops section, `SPEC/frontend.md`
-   for the inspector, `SPEC/models.md` if `realized_by` rewriting needs a note).
-
-### Tests
-
-- Rust unit tests in `mutation.rs`:
-  - a rename in a system;
-  - a rename in a definition, reached through an instance path;
-  - `realized_by` rewritten from the same scope, a parent scope and a child
-    scope;
-  - the empty/`/`/collision refusals;
-  - a no-op when the label is unchanged or unknown;
-  - JSON round-trip of the op and the logged action;
-  - the model still resolves with no new diagnostics after the rename.
-- Views re-key test (core helper or vitest): hidden state and layout follow the
-  rename in an open and a non-open view.
-- `actionLog.test.ts` / `applyMutation.test.ts`: the op is recorded and replays.
-- MCP: the tool is listed and is refused when a human holds the lock, like
-  `rename_component`.
-- e2e (new interaction): rename from the inspector → HCL label, `realized_by`
-  and view block updated, the edge stays drawn and selected, a hidden connection
-  stays hidden, a collision shows an inline error and writes nothing, and
-  Ctrl+Z restores the old name everywhere.
-- Storybook: add a `ConnectionInspector` story only if the editable heading
-  looks different from an existing story (e.g. the inline error state).
-
-**Done when:** a connection can be renamed from the Connection Inspector (and
-over MCP). After the rename, the model compiles with no new diagnostics, every
-`realized_by` and view that referred to the old name uses the new one, and the
-whole rename is one undo step.
-
----
-
 ## Task — Line numbers for view-file diagnostics
 
 Model diagnostics report the `file` and `line` of the block they are about (see
@@ -135,3 +35,57 @@ reads `hcl::Body` and so has no spans.
 
 **Done when:** every view diagnostic in `validate_view` carries a line, with a
 test per code asserting the exact line.
+
+## Task — Renaming a component keeps its state in every view
+
+Found while doing "Rename a connection from the Modeling editor".
+`handleRenameSelectedComponent` (`web/src/routes/projects/[id]/modeling/ModelingPage.svelte`)
+re-keys only the *open* view, and only the renamed node itself: `checked`,
+`savedLayout` and `visiblePorts` under the old key move to the new key.
+
+- Every other view file keeps `node "<old key>"` (and its `port` blocks), so
+  the node silently drops out of those views (W016, unknown component path).
+- Descendant keys (`<old key>/child/...`) are not re-keyed in any view, not even
+  the open one, and neither are `portPositions`.
+- The MCP `rename_component` tool does not touch view files at all.
+
+Mirror what `rename_port` / `rename_connection` do: have `rename_component`
+report the key prefix change in `MutationResult`, add a core helper
+(`rename_components_in_views`) that rewrites `node` keys (the node and its
+descendants) in one view file, call it from the web transaction for every
+other view and from `mutate_project` in `crates/rhizome-server/src/storage.rs`,
+and re-key the open view in memory. One undo step.
+
+**Done when:** renaming a placed component (with placed children) keeps its
+nodes, sizes and port spots in every view, open or not, from the inspector and
+over MCP, and Ctrl+Z restores all of it.
+
+---
+
+## Task — Delete the connection the open view shows, not the first by name
+
+Found while doing "Rename a connection from the Modeling editor". Connection
+names are unique within a system (E001) but not across systems or
+definitions. Deleting a connection is addressed by label alone:
+
+- `buildDeleteConnectionRequest` (`web/src/routes/projects/[id]/modeling/deleteConnection.ts`)
+  takes the first connection in the model with that label.
+- The core op `delete_connection_by_label` (`find_connection` in
+  `crates/rhizome-core/src/mutation.rs`) searches systems, then definitions,
+  and deletes the first match.
+
+So with `connection "link"` in both system `alpha` and system `beta`,
+deleting `link` from a view over `beta` (inspector button or the Connections
+sidebar trash) deletes `alpha`'s `link`. (The inspector itself now shows the
+right one: `findViewConnection` in `connectionVisibility.ts`.)
+
+Give the delete an optional `scopePath` (like `update_connection` /
+`rename_connection`; absent keeps today's search, so old action-log dumps still
+replay), send the inspected connection's scope from the web, and build the
+dialog's port list from that connection. Add the same to the MCP tool.
+
+**Done when:** deleting a same-named connection from a view removes the one
+that view's system draws, from the inspector, the sidebar and over MCP, with a
+Rust test and an e2e covering two systems that share a connection name.
+
+---
