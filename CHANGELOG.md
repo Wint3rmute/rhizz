@@ -2,6 +2,7 @@
 
 ### Feat
 
+- **language**: add `full_name` and `description` to the `project` block
 - **web**: jump from a diagnostic to its line in the Code page
 - **core**: report the file and line of the block each diagnostic is about
 - **web**: use matching underlined tabs in the inventory sidebars
