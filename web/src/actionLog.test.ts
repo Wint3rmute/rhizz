@@ -123,6 +123,19 @@ describe("actionLog", () => {
       'await applyModelMutation(fs, "system.hcl", await fs.readFile("system.hcl"), {"kind":"rename_component","path":"main/drone","newLabel":"quad"});',
     );
     expect(
+      encodeCall(
+        {
+          op: "rename_port",
+          component: "drone",
+          label: "link",
+          newLabel: "eth",
+        },
+        "fs",
+      ),
+    ).toContain(
+      '{"kind":"rename_port","component":"drone","label":"link","newLabel":"eth"}',
+    );
+    expect(
       encodeCall({ op: "delete_component", path: "main/drone" }, "fs"),
     ).toContain('{"kind":"delete_component","path":"main/drone"}');
     expect(

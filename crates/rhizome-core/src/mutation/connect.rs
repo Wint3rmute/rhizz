@@ -130,6 +130,7 @@ pub fn connect_components(
             create_protocol: create_protocol.map(str::to_owned),
             convert_outer_to_proxy,
         }],
+        port_renames: Vec::new(),
     })
 }
 

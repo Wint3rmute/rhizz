@@ -183,6 +183,32 @@ connection and both endpoints. Delete/Enter confirms and Esc cancels.
   removal shows a success toast: ``connection `name` removed!`` (the name is
   inline code).
 
+## Renaming a port
+
+A port's name field in the Node Inspector renames the port with one
+`rename_port` op (`rhizome-core::mutation`), committed on Enter or when the
+field loses focus. Escape puts the current name back.
+
+- Ports live on component *definitions*, so the rename reaches every instance.
+  The op rewrites every connection endpoint that lands on the port, in every
+  scope: relative, absolute, nested (`outer/inner/port`) and `./port`
+  delegation endpoints. Endpoints are found by resolving the model, so a port
+  of the same name on another definition is left alone.
+- Views key a port's `port` block (`side`, `offset`, `visible`) by its label.
+  The op reports each placed instance whose port changed (`portRenames`). The
+  open view's state is re-keyed in memory, and every other view file is
+  rewritten with `rename_ports_in_views`, so the port keeps its spot and shown
+  flag everywhere.
+- The field refuses an empty name, a name with `/`, or one the component
+  already uses. The error shows under the field and nothing is written.
+- Model and view rewrites are one undo step.
+- A full `ports` list update (`update_component`) still replaces the list. One
+  that drops a port a connection ends on is refused with E000 naming the
+  connection, instead of the resolver's bare "has no port" error.
+
+The MCP `rename_port` tool runs the same op and re-keys every view file on
+disk.
+
 ## View filters
 
 With nothing selected, the Modeling page's left sidebar shows a **Filters**

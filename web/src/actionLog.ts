@@ -119,6 +119,7 @@ export type ModelAction =
       source: string;
     }
   | { op: "rename_component"; path: string; newLabel: string }
+  | { op: "rename_port"; component: string; label: string; newLabel: string }
   | { op: "delete_component"; path: string }
   | { op: "delete_system"; path: string }
   | { op: "reparent_component"; sourcePath: string; targetParentPath: string }
@@ -246,6 +247,13 @@ function toMutationOp(action: ModelAction): unknown {
       return {
         kind: "rename_component",
         path: action.path,
+        newLabel: action.newLabel,
+      };
+    case "rename_port":
+      return {
+        kind: "rename_port",
+        component: action.component,
+        label: action.label,
         newLabel: action.newLabel,
       };
     case "delete_component":

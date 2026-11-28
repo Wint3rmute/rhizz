@@ -4,6 +4,19 @@ Completed tasks are listed here, most recent first.
 
 ---
 
+## Task <N> — Rename a port without breaking its connections
+
+- **Bug:** renaming a port a connection ends on was refused (`connection ethernet: component router has no port link-thinkcentre`), because the Node Inspector's name field sent a full `ports` list through `update_component` and nothing rewrote the endpoints.
+- **Core (`crates/rhizome-core/src/mutation/rename_port.rs`):** new `ModelOp::RenamePort { component, label, newLabel }` / `LoggedAction::RenamePort` (`rename_port`). Instance paths redirect to the definition. Endpoints to rewrite are found by resolving the baseline model and keeping the ends that land on the renamed `(definition, port)` (`endpoint_port_target`), so relative, absolute, nested and `./port` spellings all follow and a same-named port on another definition stays. Refuses empty, `/` and taken names with E000; unknown component/port or unchanged name is idle. `MutationResult.port_renames` lists each placed instance's component key; `rename_ports_in_views` re-keys a view file's `port` blocks.
+- **Clearer refusal:** a full-list `ports` patch that drops a connected port is refused with E000 naming the connection (`refuse_dropping_connected_ports`).
+- **WASM:** `apply_model_op` returns `portRenames`; new `rename_ports_in_views` binding.
+- **Web:** Node Inspector port name commits on Enter/blur via `rename_port` with inline validation (`portName.ts`), Escape reverts. `runModelLayoutTransaction` re-keys the open view's `portPositions`/`visiblePorts` in memory and rewrites every other view file (`portRenames.ts`), restoring them on undo — one undo step. Action log encodes/replays `rename_port`.
+- **MCP:** `rename_port` tool; `mutate_project` re-keys every view file on disk after any op that reports port renames.
+- **Tests:** 15 Rust unit tests (homelab regression, weather-service delegation/same-name cases, nested ancestor paths, refusals, views re-keying), 2 MCP tests (views rewritten, human lock refuses); vitest `portRenames.test.ts`, `portName.test.ts`, `applyMutation.test.ts`, `actionLog.test.ts`; e2e `port-rename.spec.ts`.
+- **Docs:** `SPEC/frontend.md` "Renaming a port" (editor behaviour only; the language spec is unchanged).
+
+---
+
 ## Task <N> — View filter `include_tags` as a coverage contract (W023)
 
 - **Semantics:** `filter { include_tags = [...] }` no longer does nothing: every component of the view's system carrying ≥1 of the tags must be placed as a `node`, else **W023** (architectural) per missing component, sorted by key. Not a selection — layout stays hand-placed. Placed ancestors don't count; other systems and bare definitions never match. Other filter attributes are still parsed-only.

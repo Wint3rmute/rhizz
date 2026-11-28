@@ -30,8 +30,10 @@ use crate::parse::{
 use crate::{Source, resolve, serialize};
 
 mod connect;
+mod rename_port;
 
 pub use connect::{ConnectEnd, NewPort, PortSpec};
+pub use rename_port::{PortRename, rename_ports_in_views};
 
 // ── Op input (mirrors the TypeScript `ModelMutationOp` JSON 1:1) ─────────────
 
@@ -94,6 +96,15 @@ pub enum ModelOp {
     #[serde(rename = "rename_component")]
     #[serde(rename_all = "camelCase")]
     Rename { path: String, new_label: String },
+    /// Rename a port on a definition (an instance path redirects to its
+    /// definition) and rewrite every connection endpoint that lands on it.
+    #[serde(rename = "rename_port")]
+    #[serde(rename_all = "camelCase")]
+    RenamePort {
+        component: String,
+        label: String,
+        new_label: String,
+    },
     /// Patch attributes on a definition (instance paths redirect to their
     /// definition, mirroring the old TypeScript store).
     #[serde(rename = "update_component")]
@@ -380,6 +391,14 @@ pub enum LoggedAction {
     #[serde(rename = "rename_component")]
     #[serde(rename_all = "camelCase")]
     RenameComponent { path: String, new_label: String },
+    /// A port was renamed (`component` is the definition it is declared on).
+    #[serde(rename = "rename_port")]
+    #[serde(rename_all = "camelCase")]
+    RenamePort {
+        component: String,
+        label: String,
+        new_label: String,
+    },
     /// A definition or placed instance was deleted.
     #[serde(rename = "delete_component")]
     DeleteComponent { path: String },
@@ -465,6 +484,9 @@ pub struct ApplyOutcome {
     pub path: Option<String>,
     /// Actions for the web action log.
     pub actions: Vec<LoggedAction>,
+    /// Port labels that changed on placed components (`RenamePort` only),
+    /// for re-keying view files.
+    pub port_renames: Vec<PortRename>,
 }
 
 /// Malformed op input (as opposed to guard refusals, which are `applied:
@@ -496,6 +518,9 @@ pub struct MutationResult {
     pub actions: Vec<LoggedAction>,
     /// Non-blocking resolve warnings accompanying the new model.
     pub warnings: Vec<Diagnostic>,
+    /// Port labels that changed on placed components (`RenamePort` only).
+    /// Callers re-key every view file with [`rename_ports_in_views`].
+    pub port_renames: Vec<PortRename>,
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -526,6 +551,7 @@ pub fn mutate_to_hcl(
             path: None,
             actions: Vec::new(),
             warnings: Vec::new(),
+            port_renames: Vec::new(),
         });
     }
     if removes_connections(op) {
@@ -551,6 +577,7 @@ pub fn mutate_to_hcl(
             path: outcome.path,
             actions: outcome.actions,
             warnings,
+            port_renames: outcome.port_renames,
         }),
         Err(diagnostics) => Err(diagnostics),
     }
@@ -725,6 +752,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                 applied: true,
                 path: None,
                 actions: action.into_iter().collect(),
+                port_renames: Vec::new(),
             })
         }
         ModelOp::AddDefinition { label, options } => {
@@ -733,6 +761,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                 applied: true,
                 path: None,
                 actions: action.into_iter().collect(),
+                port_renames: Vec::new(),
             })
         }
         ModelOp::AddInstance {
@@ -748,6 +777,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                 applied: true,
                 path: Some(format!("{parent_path}/{label}")),
                 actions: action.into_iter().collect(),
+                port_renames: Vec::new(),
             })
         }
         ModelOp::CreateComponent {
@@ -775,6 +805,11 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             target_parent_path,
         } => reparent(raw, source_path, target_parent_path),
         ModelOp::Rename { path, new_label } => rename(raw, path, new_label),
+        ModelOp::RenamePort {
+            component,
+            label,
+            new_label,
+        } => rename_port::rename_port(raw, component, label, new_label),
         ModelOp::Update { path, patch } => update(raw, path, patch),
         ModelOp::UpdateSystem { path, patch } => Ok(update_system(raw, path, patch)),
         ModelOp::Delete { path } => delete(raw, path),
@@ -816,6 +851,7 @@ const fn idle() -> ApplyOutcome {
         applied: false,
         path: None,
         actions: Vec::new(),
+        port_renames: Vec::new(),
     }
 }
 
@@ -824,6 +860,7 @@ const fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
         applied: true,
         path: None,
         actions,
+        port_renames: Vec::new(),
     }
 }
 
@@ -1067,6 +1104,7 @@ fn create_component(
         applied: true,
         path: Some(format!("{parent}/{label}")),
         actions,
+        port_renames: Vec::new(),
     })
 }
 
@@ -1457,6 +1495,9 @@ fn update(
     let Some(definition) = find_definition(raw, &definition_label) else {
         return Ok(idle());
     };
+    if let Some(ports) = &changes.ports {
+        rename_port::refuse_dropping_connected_ports(raw, &definition_label, ports)?;
+    }
     let Some(body) = raw.components.get_mut(definition) else {
         return Ok(idle());
     };

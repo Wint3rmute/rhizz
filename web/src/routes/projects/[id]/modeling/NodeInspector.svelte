@@ -4,6 +4,7 @@
   import type { TextAlign } from "./geometry";
   import type { ComponentData, PortData } from "../../../../modelView";
   import ComponentStyleFields from "../../../../components/ComponentStyleFields.svelte";
+  import { portNameProblem } from "./portName";
 
   interface Props {
     componentKey: string;
@@ -17,6 +18,12 @@
      */
     onupdate: (patch: ComponentPatch) => void;
     onrename: (newLabel: string) => void;
+    /**
+     * Rename a port in the model, rewriting the connections that end on it.
+     * Omitted (e.g. a draft component in the creation modal, not yet in the
+     * model), the port's name is edited as part of the `ports` list instead.
+     */
+    onrenameport?: ((label: string, newLabel: string) => void) | undefined;
     onsettextalign: (align: TextAlign) => void;
     ondelete?: () => void;
     /** Open (creating if needed) the component's `docs/<label>.md` file. */
@@ -48,6 +55,7 @@
     textAlign,
     onupdate,
     onrename,
+    onrenameport = undefined,
     onsettextalign,
     ondelete,
     onopendocumentation,
@@ -126,6 +134,45 @@
   function handleDeletePort(portIdx: number) {
     const newPorts = component.ports.filter((_, i) => i !== portIdx);
     onupdate({ ports: newPorts });
+  }
+
+  // The port whose name field holds a value that cannot be its name, and why.
+  // Shown under that field; the value stays so the user can fix it (Escape
+  // puts the current name back).
+  let portNameError = $state<{ index: number; message: string } | null>(null);
+
+  function commitPortName(portIdx: number, input: HTMLInputElement) {
+    const port = component.ports[portIdx];
+    if (port === undefined) return;
+    const name = input.value.trim();
+    if (name === port.label) {
+      input.value = port.label;
+      portNameError = null;
+      return;
+    }
+    const problem = portNameProblem(
+      name,
+      component.ports.map((p) => p.label),
+      portIdx,
+    );
+    if (problem !== undefined) {
+      portNameError = { index: portIdx, message: problem };
+      return;
+    }
+    portNameError = null;
+    if (onrenameport) {
+      // Show the model's name until it reloads: a refused rename (reported
+      // as a toast) then leaves the field matching the model.
+      input.value = port.label;
+      onrenameport(port.label, name);
+    } else {
+      handleUpdatePort(portIdx, { label: name });
+    }
+  }
+
+  function cancelPortName(portIdx: number, input: HTMLInputElement) {
+    input.value = component.ports[portIdx]?.label ?? input.value;
+    portNameError = null;
   }
 
   function handleUpdatePort(portIdx: number, patch: Partial<PortData>) {
@@ -339,11 +386,16 @@
               <input
                 type="text"
                 value={port.label}
-                onchange={(e) =>
-                  handleUpdatePort(portIdx, {
-                    label: (e.target as HTMLInputElement).value.trim(),
-                  })}
+                onchange={(e) => commitPortName(portIdx, e.currentTarget)}
+                onkeydown={(e) => {
+                  if (e.key === "Enter") e.currentTarget.blur();
+                  if (e.key === "Escape")
+                    cancelPortName(portIdx, e.currentTarget);
+                }}
                 class="input input-xs input-bordered font-semibold flex-1"
+                class:input-error={portNameError?.index === portIdx}
+                aria-label="Port name"
+                aria-invalid={portNameError?.index === portIdx}
                 placeholder="Port name"
               />
               {#if port.inferred}
@@ -363,6 +415,11 @@
                 ✕
               </button>
             </div>
+            {#if portNameError?.index === portIdx}
+              <p class="text-xs text-error" data-testid="port-name-error">
+                {portNameError.message}
+              </p>
+            {/if}
             {#if port.inferred}
               <p class="text-xs text-base-content/60">
                 Inherits <span class="font-mono"

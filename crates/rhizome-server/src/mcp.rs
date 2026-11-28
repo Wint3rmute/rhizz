@@ -256,6 +256,24 @@ struct RenameComponentParams {
     new_label: String,
 }
 
+/// Arguments accepted by the `rename_port` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct RenamePortParams {
+    /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
+    project: String,
+    /// Definition label, or an instance path that redirects to its definition.
+    #[schemars(length(min = 1))]
+    component: String,
+    /// Current port label.
+    #[schemars(length(min = 1))]
+    label: String,
+    /// New port label.
+    #[schemars(length(min = 1))]
+    new_label: String,
+}
+
 /// Arguments accepted by the `reparent_component` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1100,6 +1118,25 @@ impl RhizomeMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
+    /// Renames a port and every endpoint and view naming it. Takes the project lock as the hardcoded `AI` user (proposal 0004).
+    #[tool(
+        name = "rename_port",
+        title = "Rename port",
+        annotations(title = "Rename port", destructive_hint = true, idempotent_hint = true),
+        description = "Rename a port on a definition (`ModelOp rename_port`; instance paths redirect). `component` + `label` + `newLabel`; connection endpoints and view `port` blocks follow. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
+    )]
+    async fn rename_port(
+        &self,
+        params: Parameters<RenamePortParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizome_core::mutation::ModelOp::RenamePort {
+            component: params.0.component.clone(),
+            label: params.0.label.clone(),
+            new_label: params.0.new_label.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
     /// Moves a placed instance between containers. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "reparent_component",
@@ -1131,7 +1168,7 @@ impl RhizomeMcp {
             destructive_hint = true,
             idempotent_hint = true
         ),
-        description = "Patch a component definition (`ModelOp update_component`; instance paths redirect). `path` + `patch` (ports are a full replacement; omit `protocol`/`role` to keep a proxy inferred, writing them onto a delegated port is refused with E022 (delegation shape)). Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
+        description = "Patch a component definition (`ModelOp update_component`; instance paths redirect). `path` + `patch` (ports are a full replacement, so rename a port with `rename_port`; omit `protocol`/`role` to keep a proxy inferred, writing them onto a delegated port is refused with E022 (delegation shape)). Writes take the project lock as `AI`; held-by-human is a refusal naming the holder. For whole-file edits use `create_file`/`edit_file`."
     )]
     async fn update_component(
         &self,
@@ -1756,6 +1793,7 @@ const fn tool_name_for_op(op: &rhizome_core::mutation::ModelOp) -> Option<&'stat
         rhizome_core::mutation::ModelOp::CreateComponent { .. } => None,
         rhizome_core::mutation::ModelOp::Reparent { .. } => Some("reparent_component"),
         rhizome_core::mutation::ModelOp::Rename { .. } => Some("rename_component"),
+        rhizome_core::mutation::ModelOp::RenamePort { .. } => Some("rename_port"),
         rhizome_core::mutation::ModelOp::Update { .. } => Some("update_component"),
         rhizome_core::mutation::ModelOp::UpdateSystem { .. } => Some("update_system"),
         rhizome_core::mutation::ModelOp::Delete { .. } => Some("delete_component"),
@@ -2262,6 +2300,7 @@ mod tests {
                 "list_files",
                 "read_file",
                 "rename_component",
+                "rename_port",
                 "reparent_component",
                 "update_component",
                 "update_connection",
@@ -2303,7 +2342,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 22, "all tools must be listed: {tools:?}");
+        assert_eq!(tools.len(), 23, "all tools must be listed: {tools:?}");
 
         // (name, expect_read_only, expect_destructive).
         let expectations = [
@@ -2317,6 +2356,7 @@ mod tests {
             ("connect_components", false, Some(false)),
             ("add_protocol", false, Some(false)),
             ("rename_component", false, Some(true)),
+            ("rename_port", false, Some(true)),
             ("reparent_component", false, Some(true)),
             ("update_component", false, Some(true)),
             ("update_system", false, Some(true)),
@@ -2374,7 +2414,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 22);
+        assert_eq!(tools.len(), 23);
 
         let mut total = 0usize;
         let mut by_name = std::collections::HashMap::new();
@@ -2422,6 +2462,7 @@ mod tests {
             "add_component_definition",
             "add_instance",
             "rename_component",
+            "rename_port",
             "reparent_component",
             "update_component",
             "update_system",
@@ -3172,6 +3213,126 @@ mod tests {
 
         let after = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
         assert_eq!(before, after, "a refused rename must not touch system.hcl");
+    }
+
+    /// A project whose `router/link` port is wired by a connection and has a
+    /// shown `port` block in its view.
+    fn write_port_rename_project(data_dir: &std::path::Path) {
+        let project = data_dir.join("demo");
+        std::fs::create_dir_all(project.join("views")).unwrap();
+        std::fs::write(
+            project.join("system.hcl"),
+            r#"component "router" {
+  leaf = true
+  port "link" {}
+}
+component "pc" {
+  leaf = true
+  port "eth" {}
+}
+system "demo" {
+  instance "router" { source = "router" }
+  instance "pc" { source = "pc" }
+  connection "ethernet" {
+    from = "pc/eth"
+    to   = "router/link"
+  }
+}
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            project.join("views/main.hcl"),
+            r#"view "main" {
+  system = "demo"
+  node "demo/router" {
+    x = 0
+    y = 0
+    port "link" {
+      visible = true
+    }
+  }
+}
+"#,
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn tools_call_rename_port_rewrites_endpoints_and_views() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_port_rename_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            85,
+            "rename_port",
+            json!({
+                "project": "demo",
+                "component": "demo/router",
+                "label": "link",
+                "newLabel": "eth",
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+
+        let model = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(model.contains(r#"port "eth""#), "{model}");
+        assert!(model.contains(r#""/demo/router/eth""#), "{model}");
+        assert!(!model.contains("link"), "{model}");
+        let view = std::fs::read_to_string(tmp.path().join("demo/views/main.hcl")).unwrap();
+        assert!(view.contains(r#"port "eth""#), "{view}");
+        assert!(!view.contains(r#"port "link""#), "{view}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_rename_port_refuses_while_a_human_holds_the_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_port_rename_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let model = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        let view = std::fs::read(tmp.path().join("demo/views/main.hcl")).unwrap();
+
+        let lock = Request::builder()
+            .method("POST")
+            .uri("/api/projects/demo/lock")
+            .header("x-rhizome-user", "alice")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(lock).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = call_tool(
+            &app,
+            &session,
+            86,
+            "rename_port",
+            json!({
+                "project": "demo",
+                "component": "router",
+                "label": "link",
+                "newLabel": "eth",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(
+            text.contains("alice"),
+            "expected the holder in the refusal: {text}"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/system.hcl")).unwrap(),
+            model
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/views/main.hcl")).unwrap(),
+            view
+        );
     }
 
     #[tokio::test]

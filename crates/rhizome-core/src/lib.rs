@@ -32,7 +32,9 @@ pub use model::{
     FieldId, Message, MessageId, Model, NodeLayout, Port, PortId, PortLayout, Project, Protocol,
     ProtocolId, System, SystemId, ViewDefinition, ViewFilterDefinition,
 };
-pub use mutation::{LoggedAction, ModelOp, MutationResult, mutate_to_hcl};
+pub use mutation::{
+    LoggedAction, ModelOp, MutationResult, PortRename, mutate_to_hcl, rename_ports_in_views,
+};
 pub use score::{CategoryScore, ScoreReport, score};
 pub use serialize::{parse_views, serialize_model, serialize_views};
 

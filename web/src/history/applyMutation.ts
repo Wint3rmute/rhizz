@@ -20,7 +20,7 @@ import type {
   SystemPatch,
 } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
-import { apply_model_op } from "../rhizome_wasm_wrapper";
+import { apply_model_op, type PortRename } from "../rhizome_wasm_wrapper";
 import { isLockRefusal } from "../vfs/vfsStore";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it
@@ -68,6 +68,14 @@ export type ModelMutationOp =
       targetParentPath: string;
     }
   | { kind: "rename_component"; path: string; newLabel: string }
+  | {
+      // Renames a port on the definition `component` names (an instance path
+      // redirects) and rewrites every connection endpoint that lands on it.
+      kind: "rename_port";
+      component: string;
+      label: string;
+      newLabel: string;
+    }
   | { kind: "update_component"; path: string; patch: Partial<ComponentData> }
   | { kind: "update_system"; path: string; patch: SystemPatch }
   | { kind: "delete_component"; path: string }
@@ -112,6 +120,9 @@ export interface ApplyMutationResult {
   refusal?: string;
   /** The write was refused because someone else holds the project lock (`applied: false` only). */
   locked?: boolean;
+  /** Port labels that changed on placed components (`rename_port` only), for
+   * re-keying the views' `port` blocks. */
+  portRenames?: PortRename[];
 }
 
 type MutationPlan =
@@ -120,6 +131,7 @@ type MutationPlan =
       hcl: string;
       path: string | undefined;
       actions: ModelAction[];
+      portRenames: PortRename[];
     }
   | { ok: false; refusal: string };
 
@@ -162,6 +174,7 @@ function planModelMutation(
     hcl: result.hcl,
     path: result.path,
     actions: result.actions,
+    portRenames: result.portRenames,
   };
 }
 
@@ -196,6 +209,8 @@ export async function applyModelMutation(
     throw error;
   }
   for (const action of plan.actions) recordModelAction(action);
-  if (plan.path === undefined) return { applied: true };
-  return { applied: true, path: plan.path };
+  const result: ApplyMutationResult = { applied: true };
+  if (plan.path !== undefined) result.path = plan.path;
+  if (plan.portRenames.length > 0) result.portRenames = plan.portRenames;
+  return result;
 }
