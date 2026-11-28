@@ -152,7 +152,9 @@ export const Readonly: Story = {
     // ...but nothing editable.
     await expect(canvas.getByLabelText(/instance name/i)).toBeDisabled();
     await expect(canvas.getByLabelText(/tags/i)).toBeDisabled();
-    await expect(canvas.getByLabelText(/atomic leaf/i)).toBeDisabled();
+    await expect(
+      canvas.getByLabelText(/^atomic \(no sub-components\)/i),
+    ).toBeDisabled();
     await expect(
       canvas.getByRole("button", { name: "+ Add Port" }),
     ).toBeDisabled();

@@ -254,9 +254,7 @@
             onchange={handleLeafChange}
             class="checkbox checkbox-xs checkbox-primary"
           />
-          <span class="label-text font-medium"
-            >Atomic Leaf (no sub-components)</span
-          >
+          <span class="label-text font-medium">Atomic (no sub-components)</span>
         </label>
       </div>
     </div>
