@@ -196,3 +196,74 @@ test("renaming a connection keeps its realizations, views and undo", async ({
   await expect.poll(() => modelFile(page)).toBe(before);
   expect(await fileEnding(page, "views/other.hcl")).toBe(OTHER_VIEW);
 });
+
+// Names are unique within a system, not across systems: with a `link` in
+// both, the inspector edits the one the open view's system draws.
+const TWO_SYSTEMS = `component "box" {
+  leaf = true
+  port "p" {}
+}
+
+system "alpha" {
+  instance "a1" { source = "box" }
+  instance "a2" { source = "box" }
+
+  connection "link" {
+    full_name = "Alpha link"
+    from      = "a1/p"
+    to        = "a2/p"
+  }
+}
+
+system "beta" {
+  instance "b1" { source = "box" }
+  instance "b2" { source = "box" }
+
+  connection "link" {
+    full_name = "Beta link"
+    from      = "b1/p"
+    to        = "b2/p"
+  }
+}
+`;
+
+test("the inspector shows and renames the open view's own connection", async ({
+  page,
+}) => {
+  const id = await createNewProject(page, "E2E same-named connections");
+  await replaceModel(page, TWO_SYSTEMS);
+  await seedView(page, id, "beta.hcl", 'view "beta" {\n  system = "beta"\n}\n');
+  await page.goto(`/projects/${id}/modeling/beta.hcl`);
+  await expect(page.getByTestId("diagram-toolbar")).toBeVisible();
+
+  const tree = page.getByTestId("modeling-pane-right");
+  for (const name of ["b1", "b2"]) {
+    await tree
+      .locator("li")
+      .filter({ has: page.getByRole("button", { name, exact: true }) })
+      .last()
+      .getByRole("checkbox")
+      .first()
+      .check();
+  }
+  await tree.getByRole("button", { name: "b2", exact: true }).click();
+  for (let i = 0; i < 12; i++) await page.keyboard.press("ArrowRight");
+
+  await page
+    .getByTestId("diagram-canvas")
+    .getByTestId("diagram-edge")
+    .filter({ hasText: "link" })
+    .first()
+    .click({ force: true });
+  const inspector = page.getByTestId("connection-inspector");
+  await expect(inspector.getByLabel("Full name")).toHaveValue("Beta link");
+
+  const name = inspector.getByLabel("Connection name");
+  await name.fill("beta-link");
+  await name.press("Enter");
+  await expect(name).toHaveValue("beta-link");
+  await expect.poll(() => modelFile(page)).toContain('connection "beta-link"');
+  const model = await modelFile(page);
+  // Alpha's `link` keeps its name.
+  expect(model).toMatch(/connection "link" \{\s+full_name\s+= "Alpha link"/);
+});

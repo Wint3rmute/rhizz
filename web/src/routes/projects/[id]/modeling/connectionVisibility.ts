@@ -29,6 +29,25 @@ export function isPlacedInSystem(
   );
 }
 
+/**
+ * The connection named `label` that the open view shows. The selection is
+ * kept by name, and names are unique within a system (E001) but not across
+ * systems, so a connection whose endpoints are in the view's system wins over
+ * another system's connection of the same name. Falls back to the first one
+ * with that name (e.g. a view with no system bound).
+ */
+export function findViewConnection<C extends ConnectionRef>(
+  connections: readonly C[],
+  label: string | null,
+  inSystem: (index: number) => boolean,
+): C | undefined {
+  if (label === null || label === "") return undefined;
+  const named = connections.filter((conn) => conn.label === label);
+  return (
+    named.find((conn) => inSystem(conn.from) && inSystem(conn.to)) ?? named[0]
+  );
+}
+
 /** Drawn means placed, in-system, and not hidden. */
 export function isConnectionDrawn(
   conn: Pick<ConnectionRef, "from" | "to" | "label">,

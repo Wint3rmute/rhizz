@@ -150,7 +150,7 @@
     type EditorSceneEdgeInput,
     portsUsedByEdges,
   } from "./scene";
-  import { isPlacedInSystem } from "./connectionVisibility";
+  import { findViewConnection, isPlacedInSystem } from "./connectionVisibility";
   import {
     delegationArrowDirection,
     isProjectionDrawn,
@@ -3787,7 +3787,11 @@
   // endpoints, its protocol (and why there is none), and what else uses it.
   let selectedConnectionInspector = $derived.by(() => {
     if (!selectedConnection) return null;
-    const conn = connections.find((c) => c.label === selectedConnection);
+    const conn = findViewConnection(
+      connections,
+      selectedConnection,
+      isInViewSystem,
+    );
     if (!conn) return null;
     const connection = connectionByRef(allConnectionData, {
       scopePath: conn.scope_path,

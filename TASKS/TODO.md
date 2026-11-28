@@ -61,3 +61,31 @@ nodes, sizes and port spots in every view, open or not, from the inspector and
 over MCP, and Ctrl+Z restores all of it.
 
 ---
+
+## Task — Delete the connection the open view shows, not the first by name
+
+Found while doing "Rename a connection from the Modeling editor". Connection
+names are unique within a system (E001) but not across systems or
+definitions. Deleting a connection is addressed by label alone:
+
+- `buildDeleteConnectionRequest` (`web/src/routes/projects/[id]/modeling/deleteConnection.ts`)
+  takes the first connection in the model with that label.
+- The core op `delete_connection_by_label` (`find_connection` in
+  `crates/rhizome-core/src/mutation.rs`) searches systems, then definitions,
+  and deletes the first match.
+
+So with `connection "link"` in both system `alpha` and system `beta`,
+deleting `link` from a view over `beta` (inspector button or the Connections
+sidebar trash) deletes `alpha`'s `link`. (The inspector itself now shows the
+right one: `findViewConnection` in `connectionVisibility.ts`.)
+
+Give the delete an optional `scopePath` (like `update_connection` /
+`rename_connection`; absent keeps today's search, so old action-log dumps still
+replay), send the inspected connection's scope from the web, and build the
+dialog's port list from that connection. Add the same to the MCP tool.
+
+**Done when:** deleting a same-named connection from a view removes the one
+that view's system draws, from the inspector, the sidebar and over MCP, with a
+Rust test and an e2e covering two systems that share a connection name.
+
+---
