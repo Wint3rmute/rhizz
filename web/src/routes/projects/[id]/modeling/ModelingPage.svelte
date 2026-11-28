@@ -44,6 +44,10 @@
     renameVisiblePorts,
   } from "./portRenames";
   import {
+    renameConnectionsInViewFiles,
+    renameSavedConnections,
+  } from "./connectionRenames";
+  import {
     type DetailViewTarget,
     detailViewTarget,
   } from "../explore/navigation";
@@ -1797,8 +1801,9 @@
     }
     const diagramBefore = snapshotDiagram();
     const { path: targetPath, content: systemBefore } = await readMainContent();
-    // Other views a port rename rewrote, with their content before it, so the
-    // undo puts them back too. Refilled by every do (redo included).
+    // Other views a port or connection rename rewrote, with their content
+    // before it, so the undo puts them back too. Refilled by every do (redo
+    // included).
     let otherViewsBefore = new Map<string, string>();
     const tx = {
       label,
@@ -1823,6 +1828,24 @@
             otherViewsBefore = await renamePortsInViewFiles(
               fs,
               result.portRenames,
+              fullDiagramPath,
+            );
+          } catch (error) {
+            if (!isLockRefusal(error)) throw error;
+            await handleModelingLockLost();
+          }
+        }
+        if (result.connectionRenames !== undefined) {
+          // Same split as ports: the open view in memory, the rest on disk.
+          savedConnections = renameSavedConnections(
+            savedConnections,
+            result.connectionRenames,
+            effectiveSystem,
+          );
+          try {
+            otherViewsBefore = await renameConnectionsInViewFiles(
+              fs,
+              result.connectionRenames,
               fullDiagramPath,
             );
           } catch (error) {
@@ -3865,6 +3888,30 @@
     });
   }
 
+  // Renames the inspected connection. The core op rewrites every
+  // `realized_by` entry naming it; the transaction re-keys the views'
+  // `connection` blocks. The connection stays selected under its new name.
+  // One undo step.
+  async function handleRenameSelectedConnection(
+    newLabel: string,
+  ): Promise<void> {
+    const inspected = selectedConnectionInspector;
+    if (!inspected) return;
+    const { ref } = inspected.connection;
+    await runModelLayoutTransaction(
+      `rename connection ${ref.label}`,
+      {
+        kind: "rename_connection",
+        scopePath: ref.scopePath,
+        label: ref.label,
+        newLabel,
+      },
+      () => {
+        selectedConnection = newLabel;
+      },
+    );
+  }
+
   // Selects a connection from the inspector's realization list. Only placed
   // connections can be selected on the canvas, so the caller checks that.
   function selectConnectionByRef(ref: ConnectionRef): void {
@@ -4684,6 +4731,10 @@
           {readonly}
           onupdate={(patch) =>
             void handleUpdateSelectedConnection(patch).catch(
+              reportDiagramError,
+            )}
+          onrename={(newLabel) =>
+            void handleRenameSelectedConnection(newLabel).catch(
               reportDiagramError,
             )}
           onselect={selectConnectionByRef}

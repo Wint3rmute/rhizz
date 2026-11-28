@@ -30,9 +30,11 @@ use crate::parse::{
 use crate::{Source, resolve, serialize};
 
 mod connect;
+mod rename_connection;
 mod rename_port;
 
 pub use connect::{ConnectEnd, NewPort, PortSpec};
+pub use rename_connection::{ConnectionRename, rename_connections_in_views};
 pub use rename_port::{PortRename, rename_ports_in_views};
 
 // ── Op input (mirrors the TypeScript `ModelMutationOp` JSON 1:1) ─────────────
@@ -178,6 +180,17 @@ pub enum ModelOp {
         scope_path: String,
         label: String,
         patch: ConnectionPatch,
+    },
+    /// Rename a connection, addressed like [`ModelOp::UpdateConnection`]
+    /// (an instance path redirects to the declaring definition), and rewrite
+    /// every `realized_by` entry that resolves to it. The new name must be
+    /// unused by every connection in the model.
+    #[serde(rename = "rename_connection")]
+    #[serde(rename_all = "camelCase")]
+    RenameConnection {
+        scope_path: String,
+        label: String,
+        new_label: String,
     },
     /// Add a top-level protocol. A blank label, a label containing `/`, or
     /// a label that already exists is refused with `E000`.
@@ -459,6 +472,14 @@ pub enum LoggedAction {
         label: String,
         patch: ConnectionPatch,
     },
+    /// A connection was renamed (`scope_path` as addressed).
+    #[serde(rename = "rename_connection")]
+    #[serde(rename_all = "camelCase")]
+    RenameConnection {
+        scope_path: String,
+        label: String,
+        new_label: String,
+    },
     /// A protocol was added (`options` as sent; absent fields are `{}`).
     #[serde(rename = "add_protocol")]
     AddProtocol {
@@ -487,6 +508,9 @@ pub struct ApplyOutcome {
     /// Port labels that changed on placed components (`RenamePort` only),
     /// for re-keying view files.
     pub port_renames: Vec<PortRename>,
+    /// Connection labels that changed (`RenameConnection` only), for
+    /// re-keying view files.
+    pub connection_renames: Vec<ConnectionRename>,
 }
 
 /// Malformed op input (as opposed to guard refusals, which are `applied:
@@ -521,6 +545,9 @@ pub struct MutationResult {
     /// Port labels that changed on placed components (`RenamePort` only).
     /// Callers re-key every view file with [`rename_ports_in_views`].
     pub port_renames: Vec<PortRename>,
+    /// Connection labels that changed (`RenameConnection` only). Callers
+    /// re-key every view file with [`rename_connections_in_views`].
+    pub connection_renames: Vec<ConnectionRename>,
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────────
@@ -551,6 +578,7 @@ pub fn mutate_to_hcl(
             actions: Vec::new(),
             warnings: Vec::new(),
             port_renames: Vec::new(),
+            connection_renames: Vec::new(),
         });
     }
     if removes_connections(op) {
@@ -585,6 +613,7 @@ pub fn mutate_to_hcl(
                 })
                 .collect(),
             port_renames: outcome.port_renames,
+            connection_renames: outcome.connection_renames,
         }),
         Err(diagnostics) => Err(diagnostics),
     }
@@ -754,24 +783,12 @@ fn port_from_json(port: &PortJson) -> Result<Labeled<RawPort>, MutationError> {
 
 fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, MutationError> {
     match op {
-        ModelOp::AddSystem { label, full_name } => {
-            let action = add_system(raw, label, full_name)?;
-            Ok(ApplyOutcome {
-                applied: true,
-                path: None,
-                actions: action.into_iter().collect(),
-                port_renames: Vec::new(),
-            })
-        }
-        ModelOp::AddDefinition { label, options } => {
-            let action = add_definition(raw, label, options)?;
-            Ok(ApplyOutcome {
-                applied: true,
-                path: None,
-                actions: action.into_iter().collect(),
-                port_renames: Vec::new(),
-            })
-        }
+        ModelOp::AddSystem { label, full_name } => Ok(applied(
+            add_system(raw, label, full_name)?.into_iter().collect(),
+        )),
+        ModelOp::AddDefinition { label, options } => Ok(applied(
+            add_definition(raw, label, options)?.into_iter().collect(),
+        )),
         ModelOp::AddInstance {
             parent_path,
             label,
@@ -786,6 +803,7 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
                 path: Some(format!("{parent_path}/{label}")),
                 actions: action.into_iter().collect(),
                 port_renames: Vec::new(),
+                connection_renames: Vec::new(),
             })
         }
         ModelOp::CreateComponent {
@@ -848,6 +866,11 @@ fn apply_to_raw(raw: &mut RawFile, op: &ModelOp) -> Result<ApplyOutcome, Mutatio
             label,
             patch,
         } => update_connection(raw, scope_path, label, patch),
+        ModelOp::RenameConnection {
+            scope_path,
+            label,
+            new_label,
+        } => rename_connection::rename_connection(raw, scope_path, label, new_label),
         ModelOp::AddProtocol { label, options } => add_protocol(raw, label, options),
         ModelOp::UpdateProtocol { path, patch } => Ok(update_protocol(raw, path, patch)),
         ModelOp::DeleteProtocol { path } => delete_protocol(raw, path),
@@ -860,6 +883,7 @@ const fn idle() -> ApplyOutcome {
         path: None,
         actions: Vec::new(),
         port_renames: Vec::new(),
+        connection_renames: Vec::new(),
     }
 }
 
@@ -869,6 +893,7 @@ const fn applied(actions: Vec<LoggedAction>) -> ApplyOutcome {
         path: None,
         actions,
         port_renames: Vec::new(),
+        connection_renames: Vec::new(),
     }
 }
 
@@ -1116,6 +1141,7 @@ fn create_component(
         path: Some(format!("{parent}/{label}")),
         actions,
         port_renames: Vec::new(),
+        connection_renames: Vec::new(),
     })
 }
 

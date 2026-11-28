@@ -274,6 +274,25 @@ struct RenamePortParams {
     new_label: String,
 }
 
+/// Arguments accepted by the `rename_connection` tool.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+struct RenameConnectionParams {
+    /// The project id as returned by `fetch_projects`.
+    #[schemars(length(min = 1))]
+    project: String,
+    /// Declaring system or definition, or an instance path that redirects to
+    /// its definition.
+    #[schemars(length(min = 1))]
+    scope_path: String,
+    /// Current connection label.
+    #[schemars(length(min = 1))]
+    label: String,
+    /// New connection label, unused by every connection in the model.
+    #[schemars(length(min = 1))]
+    new_label: String,
+}
+
 /// Arguments accepted by the `reparent_component` tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -1330,6 +1349,29 @@ impl RhizomeMcp {
         Ok(self.run_mutation(params.0.project.clone(), op).await)
     }
 
+    /// Renames a connection and every `realized_by` entry and view naming it. Takes the project lock as the hardcoded `AI` user (proposal 0004).
+    #[tool(
+        name = "rename_connection",
+        title = "Rename connection",
+        annotations(
+            title = "Rename connection",
+            destructive_hint = true,
+            idempotent_hint = true
+        ),
+        description = "Rename a connection (`ModelOp rename_connection`; instance paths redirect). `scopePath` + `label` + `newLabel` (unique model-wide); `realized_by` entries and view `connection` blocks follow. Writes take the project lock as `AI`; held-by-human is a refusal naming the holder."
+    )]
+    async fn rename_connection(
+        &self,
+        params: Parameters<RenameConnectionParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let op = rhizome_core::mutation::ModelOp::RenameConnection {
+            scope_path: params.0.scope_path.clone(),
+            label: params.0.label.clone(),
+            new_label: params.0.new_label.clone(),
+        };
+        Ok(self.run_mutation(params.0.project.clone(), op).await)
+    }
+
     /// Adds a top-level protocol. Takes the project lock as the hardcoded `AI` user (proposal 0004).
     #[tool(
         name = "add_protocol",
@@ -1803,6 +1845,7 @@ const fn tool_name_for_op(op: &rhizome_core::mutation::ModelOp) -> Option<&'stat
             Some("delete_connection_by_label")
         }
         rhizome_core::mutation::ModelOp::UpdateConnection { .. } => Some("update_connection"),
+        rhizome_core::mutation::ModelOp::RenameConnection { .. } => Some("rename_connection"),
         rhizome_core::mutation::ModelOp::AddProtocol { .. } => Some("add_protocol"),
         rhizome_core::mutation::ModelOp::UpdateProtocol { .. } => Some("update_protocol"),
         rhizome_core::mutation::ModelOp::DeleteProtocol { .. } => Some("delete_protocol"),
@@ -2300,6 +2343,7 @@ mod tests {
                 "list_files",
                 "read_file",
                 "rename_component",
+                "rename_connection",
                 "rename_port",
                 "reparent_component",
                 "update_component",
@@ -2342,7 +2386,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 23, "all tools must be listed: {tools:?}");
+        assert_eq!(tools.len(), 24, "all tools must be listed: {tools:?}");
 
         // (name, expect_read_only, expect_destructive).
         let expectations = [
@@ -2357,6 +2401,7 @@ mod tests {
             ("add_protocol", false, Some(false)),
             ("rename_component", false, Some(true)),
             ("rename_port", false, Some(true)),
+            ("rename_connection", false, Some(true)),
             ("reparent_component", false, Some(true)),
             ("update_component", false, Some(true)),
             ("update_system", false, Some(true)),
@@ -2414,7 +2459,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let payload = payload.expect("tools/list must reply");
         let tools = payload["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 23);
+        assert_eq!(tools.len(), 24);
 
         let mut total = 0usize;
         let mut by_name = std::collections::HashMap::new();
@@ -2463,6 +2508,7 @@ mod tests {
             "add_instance",
             "rename_component",
             "rename_port",
+            "rename_connection",
             "reparent_component",
             "update_component",
             "update_system",
@@ -3317,6 +3363,98 @@ system "demo" {
                 "component": "router",
                 "label": "link",
                 "newLabel": "eth",
+            }),
+        )
+        .await;
+        let text = tool_error_text(&payload);
+        assert!(
+            text.contains("alice"),
+            "expected the holder in the refusal: {text}"
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/system.hcl")).unwrap(),
+            model
+        );
+        assert_eq!(
+            std::fs::read(tmp.path().join("demo/views/main.hcl")).unwrap(),
+            view
+        );
+    }
+
+    /// `write_port_rename_project` plus a view that hides `ethernet`.
+    fn write_connection_rename_project(data_dir: &std::path::Path) {
+        write_port_rename_project(data_dir);
+        std::fs::write(
+            data_dir.join("demo/views/main.hcl"),
+            r#"view "main" {
+  system = "demo"
+  connection "ethernet" {
+    hidden = true
+  }
+}
+"#,
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn tools_call_rename_connection_rewrites_the_model_and_views() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connection_rename_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+
+        let payload = call_tool(
+            &app,
+            &session,
+            87,
+            "rename_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "ethernet",
+                "newLabel": "lan",
+            }),
+        )
+        .await;
+        assert_ne!(payload["result"]["isError"], json!(true), "{payload}");
+
+        let model = std::fs::read_to_string(tmp.path().join("demo/system.hcl")).unwrap();
+        assert!(model.contains(r#"connection "lan""#), "{model}");
+        assert!(!model.contains("ethernet"), "{model}");
+        let view = std::fs::read_to_string(tmp.path().join("demo/views/main.hcl")).unwrap();
+        assert!(view.contains(r#"connection "lan""#), "{view}");
+        assert!(!view.contains("ethernet"), "{view}");
+    }
+
+    #[tokio::test]
+    async fn tools_call_rename_connection_refuses_while_a_human_holds_the_lock() {
+        let tmp = tempfile::tempdir().unwrap();
+        write_connection_rename_project(tmp.path());
+        let app = app(tmp.path().to_path_buf());
+        let session = handshake(&app).await;
+        let model = std::fs::read(tmp.path().join("demo/system.hcl")).unwrap();
+        let view = std::fs::read(tmp.path().join("demo/views/main.hcl")).unwrap();
+
+        let lock = Request::builder()
+            .method("POST")
+            .uri("/api/projects/demo/lock")
+            .header("x-rhizome-user", "alice")
+            .body(Body::empty())
+            .unwrap();
+        let response = app.clone().oneshot(lock).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let payload = call_tool(
+            &app,
+            &session,
+            88,
+            "rename_connection",
+            json!({
+                "project": "demo",
+                "scopePath": "demo",
+                "label": "ethernet",
+                "newLabel": "lan",
             }),
         )
         .await;

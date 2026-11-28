@@ -20,7 +20,11 @@ import type {
   SystemPatch,
 } from "../actionLog";
 import { recordModelAction } from "../mutationObserver";
-import { apply_model_op, type PortRename } from "../rhizome_wasm_wrapper";
+import {
+  apply_model_op,
+  type ConnectionRename,
+  type PortRename,
+} from "../rhizome_wasm_wrapper";
 import { isLockRefusal } from "../vfs/vfsStore";
 
 // Minimal filesystem surface the dispatcher needs; `ProjectFs` satisfies it
@@ -108,6 +112,14 @@ export type ModelMutationOp =
       label: string;
       patch: ConnectionPatch;
     }
+  | {
+      // Renames a connection (addressed like `update_connection`) and
+      // rewrites every `realized_by` entry that resolves to it.
+      kind: "rename_connection";
+      scopePath: string;
+      label: string;
+      newLabel: string;
+    }
   | { kind: "add_protocol"; label: string; options?: ProtocolPatch }
   | { kind: "update_protocol"; path: string; patch: ProtocolPatch }
   | { kind: "delete_protocol"; path: string };
@@ -123,6 +135,9 @@ export interface ApplyMutationResult {
   /** Port labels that changed on placed components (`rename_port` only), for
    * re-keying the views' `port` blocks. */
   portRenames?: PortRename[];
+  /** Connection labels that changed (`rename_connection` only), for
+   * re-keying the views' `connection` blocks. */
+  connectionRenames?: ConnectionRename[];
 }
 
 type MutationPlan =
@@ -132,6 +147,7 @@ type MutationPlan =
       path: string | undefined;
       actions: ModelAction[];
       portRenames: PortRename[];
+      connectionRenames: ConnectionRename[];
     }
   | { ok: false; refusal: string };
 
@@ -175,6 +191,7 @@ function planModelMutation(
     path: result.path,
     actions: result.actions,
     portRenames: result.portRenames,
+    connectionRenames: result.connectionRenames,
   };
 }
 
@@ -212,5 +229,7 @@ export async function applyModelMutation(
   const result: ApplyMutationResult = { applied: true };
   if (plan.path !== undefined) result.path = plan.path;
   if (plan.portRenames.length > 0) result.portRenames = plan.portRenames;
+  if (plan.connectionRenames.length > 0)
+    result.connectionRenames = plan.connectionRenames;
   return result;
 }

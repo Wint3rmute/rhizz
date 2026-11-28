@@ -149,6 +149,12 @@ export type ModelAction =
       label: string;
       patch: ConnectionPatch;
     }
+  | {
+      op: "rename_connection";
+      scopePath: string;
+      label: string;
+      newLabel: string;
+    }
   | { op: "add_protocol"; label: string; options: ProtocolPatch }
   | { op: "update_protocol"; path: string; patch: ProtocolPatch }
   | { op: "delete_protocol"; path: string };
@@ -301,6 +307,13 @@ function toMutationOp(action: ModelAction): unknown {
         scopePath: action.scopePath,
         label: action.label,
         patch: action.patch,
+      };
+    case "rename_connection":
+      return {
+        kind: "rename_connection",
+        scopePath: action.scopePath,
+        label: action.label,
+        newLabel: action.newLabel,
       };
     case "add_protocol":
       return {

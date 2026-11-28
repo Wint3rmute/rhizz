@@ -1462,10 +1462,10 @@ fn process_fields(
 
 // ── realized_by (E017, E018, E019) ───────────────────────────────────────────
 
-/// A `realized_by` entry that did not resolve, with the connection declaring it
-/// identified by its raw owner, so mutations can edit the raw source.
+/// One `realized_by` entry, with the connection declaring it identified by its
+/// raw owner, so mutations can edit the raw source.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct UnresolvedRealizedBy {
+pub(crate) struct RawRealizedByEntry {
     /// Raw block the declaring connection was written in.
     pub(crate) owner: RawOwner,
     /// Label of the declaring connection within that block.
@@ -1485,24 +1485,86 @@ pub(crate) enum RawOwner {
 
 /// Raw `realized_by` entries that do not resolve, for mutations that delete
 /// connections. Runs the resolver and ignores every other diagnostic.
-pub(crate) fn unresolved_realized_by(raw: RawFile) -> Vec<UnresolvedRealizedBy> {
+pub(crate) fn unresolved_realized_by(raw: RawFile) -> Vec<RawRealizedByEntry> {
     let r = resolve_pass(raw);
     r.unresolved_realized_by
         .iter()
-        .filter_map(|(cid, entry)| {
-            let conn = r.model.connection(*cid)?;
-            let owner = if let Some(label) = conn.decl.strip_prefix("system:") {
-                RawOwner::System(label.to_owned())
-            } else {
-                RawOwner::Definition(conn.decl.strip_prefix("component:")?.to_owned())
-            };
-            Some(UnresolvedRealizedBy {
-                owner,
-                label: conn.label.clone(),
-                entry: entry.clone(),
-            })
-        })
+        .filter_map(|(cid, entry)| raw_entry(&r.model, *cid, entry))
         .collect()
+}
+
+/// The raw block `decl` (`"system:<label>"` / `"component:<label>"`) names.
+fn raw_owner(decl: &str) -> Option<RawOwner> {
+    if let Some(label) = decl.strip_prefix("system:") {
+        return Some(RawOwner::System(label.to_owned()));
+    }
+    Some(RawOwner::Definition(
+        decl.strip_prefix("component:")?.to_owned(),
+    ))
+}
+
+/// `entry` as written on connection `cid`, addressed by its raw owner.
+fn raw_entry(model: &Model, cid: ConnectionId, entry: &str) -> Option<RawRealizedByEntry> {
+    let conn = model.connection(cid)?;
+    Some(RawRealizedByEntry {
+        owner: raw_owner(&conn.decl)?,
+        label: conn.label.clone(),
+        entry: entry.to_owned(),
+    })
+}
+
+/// What names the connection declared as `label` in the raw block `decl`
+/// (`"system:<label>"` / `"component:<label>"`), across every copy of it.
+#[derive(Debug, Default)]
+pub(crate) struct ConnectionReferences {
+    /// `realized_by` entries that resolve to a copy of it, deduplicated. The
+    /// copies of one declaration share their raw entries, so each raw entry is
+    /// listed once.
+    pub(crate) realized_by: Vec<RawRealizedByEntry>,
+    /// Labels of the systems a copy of it is placed in, sorted, deduplicated.
+    pub(crate) systems: Vec<String>,
+}
+
+/// Find what refers to a connection, by resolving the model (with whatever
+/// errors it has) and comparing resolved targets, not entry text: one
+/// connection is spelled differently from different scopes.
+pub(crate) fn connection_references(raw: RawFile, decl: &str, label: &str) -> ConnectionReferences {
+    let r = resolve_pass(raw);
+    let is_target = |cid: ConnectionId| {
+        r.model
+            .connection(cid)
+            .is_some_and(|c| c.decl == decl && c.label == label)
+    };
+    let mut refs = ConnectionReferences::default();
+    let mut declared: Vec<(ConnectionId, Scope)> = r
+        .scope_index
+        .connections
+        .iter()
+        .map(|((scope, _), cid)| (*cid, *scope))
+        .collect();
+    declared.sort_by_key(|(cid, _)| cid.0);
+    for (cid, scope) in declared {
+        let Some(conn) = r.model.connection(cid) else {
+            continue;
+        };
+        if is_target(cid)
+            && let Scope::System(sid) = scope_root(&r.model, scope)
+            && let Some(system) = r.model.system(sid)
+        {
+            refs.systems.push(system.label.clone());
+        }
+        for entry in &conn.realized_by {
+            if resolve_realized_by_entry(&r, entry, scope).is_ok_and(is_target)
+                && let Some(found) = raw_entry(&r.model, cid, entry)
+                && !refs.realized_by.contains(&found)
+            {
+                refs.realized_by.push(found);
+            }
+        }
+    }
+    refs.systems.sort();
+    refs.systems.dedup();
+    refs
 }
 
 /// Human-readable path of a scope, e.g. `banking/bank-a`.

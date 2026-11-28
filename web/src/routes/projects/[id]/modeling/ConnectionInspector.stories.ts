@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/svelte";
-import { expect, within } from "storybook/test";
+import { expect, fn, userEvent, within } from "storybook/test";
 import type {
   ConnectionData,
   PortData,
@@ -84,6 +84,7 @@ const meta = {
     connections: [fundTransfer, httpRequest],
     placedLabels: ["fund-transfer", "http-request"],
     onupdate: noop,
+    onrename: noop,
     onselect: noop,
     ondelete: noop,
   },
@@ -153,6 +154,46 @@ export const PortConnectionStatus: Story = {
 };
 
 /**
+ * Renaming to a name another connection already uses: the field says why
+ * inline and nothing is sent to the model. Escape puts the current name back.
+ */
+export const NameTaken: Story = {
+  args: {
+    onrename: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const name = canvas.getByLabelText("Connection name");
+    await userEvent.clear(name);
+    await userEvent.type(name, "http-request{Enter}");
+    await expect(
+      await canvas.findByTestId("connection-name-error"),
+    ).toHaveTextContent("already exists");
+    await expect(name).toHaveAttribute("aria-invalid", "true");
+    await expect(args.onrename).not.toHaveBeenCalled();
+  },
+};
+
+/** A free name is sent once, trimmed; Escape cancels an edit. */
+export const Rename: Story = {
+  tags: ["no-vrt"],
+  args: {
+    onrename: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+    const name = canvas.getByLabelText("Connection name");
+    await userEvent.clear(name);
+    await userEvent.type(name, "draft{Escape}");
+    await expect(name).toHaveValue("fund-transfer");
+    await userEvent.clear(name);
+    await userEvent.type(name, " wire-transfer {Enter}");
+    await expect(args.onrename).toHaveBeenCalledTimes(1);
+    await expect(args.onrename).toHaveBeenCalledWith("wire-transfer");
+  },
+};
+
+/**
  * Locked by someone else: every editing control is disabled, while
  * navigation (the "Show" row button, the protocol link) stays live.
  */
@@ -167,6 +208,7 @@ export const Readonly: Story = {
     await expect(canvas.getByDisplayValue("Fund transfer")).toBeTruthy();
     // ...but nothing editable.
     await expect(canvas.getByLabelText(/full name/i)).toBeDisabled();
+    await expect(canvas.getByLabelText("Connection name")).toBeDisabled();
     await expect(canvas.getByLabelText(/tags/i)).toBeDisabled();
     await expect(canvas.getByLabelText(/^level$/i)).toBeDisabled();
     await expect(

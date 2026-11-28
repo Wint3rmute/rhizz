@@ -186,6 +186,68 @@ system "homelab" {
     }
   });
 
+  it("renames a connection, rewriting realized_by and reporting the views to re-key", async () => {
+    const lan = `component "box" {
+  leaf = true
+  port "p" {}
+}
+system "home" {
+  instance "a" { source = "box" }
+  instance "b" { source = "box" }
+  connection "ethernet" {
+    from = "a/p"
+    to   = "b/p"
+  }
+  connection "app" {
+    from        = "a/p"
+    to          = "b/p"
+    realized_by = ["ethernet"]
+  }
+}
+`;
+    const fs = memoryFs({ "system.hcl": lan });
+    const recorded: ModelAction[] = [];
+    const unsubscribe = subscribeToMutations((action) => {
+      recorded.push(action);
+    });
+    try {
+      const result = await applyModelMutation(fs, "system.hcl", lan, {
+        kind: "rename_connection",
+        scopePath: "home",
+        label: "ethernet",
+        newLabel: "lan",
+      });
+      expect(result.applied).toBe(true);
+      expect(result.connectionRenames).toEqual([
+        { systems: ["home"], from: "ethernet", to: "lan" },
+      ]);
+      const content = fs.store.get("system.hcl") ?? "";
+      expect(content).toContain('connection "lan"');
+      expect(content).toContain('realized_by  = ["lan"]');
+      expect(content).not.toContain("ethernet");
+      expect(recorded).toEqual([
+        {
+          op: "rename_connection",
+          scopePath: "home",
+          label: "ethernet",
+          newLabel: "lan",
+        },
+      ]);
+
+      // A name another connection uses is refused, writing nothing.
+      const taken = await applyModelMutation(fs, "system.hcl", content, {
+        kind: "rename_connection",
+        scopePath: "home",
+        label: "lan",
+        newLabel: "app",
+      });
+      expect(taken.applied).toBe(false);
+      expect(fs.store.get("system.hcl")).toBe(content);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   it("reports instance updates against their definition", async () => {
     const fs = memoryFs();
     await seedDemo(fs);

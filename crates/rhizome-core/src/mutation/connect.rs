@@ -132,6 +132,7 @@ pub fn connect_components(
             convert_outer_to_proxy,
         }],
         port_renames: Vec::new(),
+        connection_renames: Vec::new(),
     })
 }
 

@@ -136,6 +136,19 @@ describe("actionLog", () => {
       '{"kind":"rename_port","component":"drone","label":"link","newLabel":"eth"}',
     );
     expect(
+      encodeCall(
+        {
+          op: "rename_connection",
+          scopePath: "main",
+          label: "link",
+          newLabel: "uplink",
+        },
+        "fs",
+      ),
+    ).toContain(
+      '{"kind":"rename_connection","scopePath":"main","label":"link","newLabel":"uplink"}',
+    );
+    expect(
       encodeCall({ op: "delete_component", path: "main/drone" }, "fs"),
     ).toContain('{"kind":"delete_component","path":"main/drone"}');
     expect(

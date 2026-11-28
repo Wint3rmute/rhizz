@@ -209,6 +209,35 @@ field loses focus. Escape puts the current name back.
 The MCP `rename_port` tool runs the same op and re-keys every view file on
 disk.
 
+## Renaming a connection
+
+The name at the top of the Connection Inspector is an input that renames the
+connection (its HCL label) with one `rename_connection` op
+(`rhizome-core::mutation`), committed on Enter or when the field loses focus.
+Escape puts the current name back. It is disabled while the project is
+read-only.
+
+- The op is addressed like `update_connection` (`scopePath` + `label`). A
+  connection declared in a definition is renamed there, so every copy of it in
+  the instances follows. Delegation edges can be renamed too.
+- Every `realized_by` entry that resolves to the connection is rewritten, from
+  any scope. Entries are found by resolving the model, so an entry naming
+  another connection with the same label is left alone.
+- Views key a connection's `connection` block (`hidden`) by name within their
+  system. The op reports the systems holding a copy (`connectionRenames`). The
+  open view's state is re-keyed in memory, and every other view file over
+  those systems is rewritten with `rename_connections_in_views`, so a hidden
+  connection stays hidden everywhere.
+- The field refuses an empty name, a name with `/`, or one any connection in
+  the model already uses (the New-connection dialog's rule, since views key
+  connections by name). The error shows under the field and nothing is
+  written.
+- The connection stays selected under its new name. Model and view rewrites
+  are one undo step.
+
+The MCP `rename_connection` tool runs the same op and re-keys every view file
+on disk.
+
 ## Diagnostic locations
 
 Each row of the diagnostics panel (the status bar's expanded list) shows where
