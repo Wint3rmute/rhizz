@@ -157,7 +157,7 @@ test("the view filter state survives switching tabs", async ({ page }) => {
   await expect(viewFilter(page)).toBeChecked();
 });
 
-test("the add button sits in the tab row and still creates an entity", async ({
+test("the add button sits on its own row under the tabs and still creates an entity", async ({
   page,
 }) => {
   const id = await createNewProject(page, "E2E add row");
@@ -167,15 +167,14 @@ test("the add button sits in the tab row and still creates an entity", async ({
   const addButton = page.getByTestId("inventory-add-entity");
   await expect(addButton).toBeVisible();
 
-  // Same vertical band as the tabs — the button moved into the row and did
-  // not drop below it.
+  // The tabs keep their row to themselves (so three of them fit at the small
+  // size) and the button sits on a row of its own below them.
   const tabBox = await tabRow.boundingBox();
   const buttonBox = await addButton.boundingBox();
   if (!tabBox || !buttonBox) {
     throw new Error("tab row and button should be laid out");
   }
-  expect(buttonBox.y).toBeLessThan(tabBox.y + tabBox.height);
-  expect(buttonBox.y + buttonBox.height).toBeGreaterThan(tabBox.y);
+  expect(buttonBox.y).toBeGreaterThanOrEqual(tabBox.y + tabBox.height);
 
   // Still a working creation entry point.
   await addButton.click();
